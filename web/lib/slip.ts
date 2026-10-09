@@ -29,7 +29,7 @@ export function topN(cands: Pick[], n: number, sort: SortKey): Pick[] {
 
 /**
  * The slip whose combined odds land in [target, target * (1 + slack)] with the
- * highest combined Vig estimate. For a fixed total price that is also the best
+ * highest combined Vig estimate. For a given total price that is also the best
  * expected return. Exact multiple-choice knapsack over log-odds.
  */
 export function toTarget(cands: Pick[], target: number, slack = 0.25, maxLegs = 30): Pick[] {
