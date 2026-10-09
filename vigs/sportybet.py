@@ -287,3 +287,26 @@ def build(data_dir: str, history_out: str, upcoming_out: str) -> tuple[int, int,
             w.writerow(header)
             w.writerows(rows)
     return len(hist), len(results) - len(hist), len(up)
+
+
+def snapshot_match(s: dict):
+    """A vigs Match for an odds snapshot, keyed the same way `build` keys rows."""
+    from .data import Match
+    ko = datetime.fromisoformat(s["kickoff"].replace("Z", "+00:00"))
+    return Match(0, "", int(ko.timestamp() // 60), 0, s["home"], s["away"], s["odds"],
+                 league=s["league"], kickoff=ko)
+
+
+def results_matches_row(r: dict):
+    """One results.csv row as a vigs Match (no odds), keyed like `build` rows."""
+    from .data import Match
+    ko = datetime.fromisoformat(r["kickoff"].replace("Z", "+00:00"))
+    ht = r.get("ht_hg") not in ("", None)
+    return Match(0, "", int(ko.timestamp() // 60), 0, r["home"], r["away"], {},
+                 int(r["hg"]), int(r["ag"]), int(r["ht_hg"]) if ht else None,
+                 int(r["ht_ag"]) if ht else None, r["league"], ko)
+
+
+def results_matches(path: str) -> list:
+    with open(path, newline="", encoding="utf-8") as fh:
+        return [results_matches_row(r) for r in csv.DictReader(fh)]

@@ -270,8 +270,12 @@ def cmd_ledger(a) -> None:
         return
     if a.action == "settle":
         if not a.results:
-            sys.exit("settle needs --results results.csv")
-        done, still = led.settle(load_csv(a.results))
+            sys.exit("settle needs --results (a vigs CSV or data/results.csv)")
+        from .sportybet import RESULT_COLS, results_matches
+        with open(a.results, encoding="utf-8") as fh:
+            header = fh.readline().strip().split(",")
+        matches = results_matches(a.results) if header == RESULT_COLS else load_csv(a.results)
+        done, still = led.settle(matches)
         print(f"settled {done} pick(s); {still} still open")
         return
     print(f"Ledger {a.ledger}: flat one-unit stakes, shadow mode. 90% intervals.")
@@ -349,6 +353,89 @@ def cmd_study(a) -> None:
                    "no sign the engine remembers recent results or the hour."))
 
 
+def cmd_likely(a) -> None:
+    import os
+    import time as _time
+    from collections import defaultdict
+    from datetime import timedelta
+    from . import model as md
+    from . import sportybet as sb
+    from .grading import grade_model
+    from .study import load_results
+    client = sb.Client()
+    res_path = os.path.join(a.data, "results.csv")
+    now = int(_time.time() * 1000)
+    if a.refresh:
+        sb.fetch_results(client, res_path, now - 6 * 3600 * 1000, now - 60 * 1000,
+                         log=lambda *_: None)
+    rows = load_results(res_path)
+    cutoff = rows[-1]["kickoff"]
+    start = (datetime_from_iso(cutoff) - timedelta(days=a.days)).isoformat().replace("+00:00", "Z")
+    rows = [r for r in rows if r["kickoff"] >= start]
+    main = md.fit(rows)
+    boots = md.ensemble(rows, reps=a.reps)
+    hits: dict[tuple, list[int]] = defaultdict(lambda: [0, 0])
+    for r in rows:
+        m = sb.results_matches_row(r)
+        won = m.outcome(a.market)
+        if won is None:
+            continue
+        for key in ((r["league"], r["home"], "home"), (r["league"], r["away"], "away")):
+            hits[key][0] += won
+            hits[key][1] += 1
+    horizon = sb._iso(now + int(a.hours * 3600 * 1000))
+    snaps = [s for e in client.upcoming() if (s := sb.snapshot(e, now))]
+    snaps = [s for s in snaps if sb._iso(now) < s["kickoff"] <= horizon and a.market in s["odds"]]
+    picks = []
+    for s in snaps:
+        m = sb.snapshot_match(s)
+        est = md.predict_interval(main, boots, s["league"], s["home"], s["away"], a.market)
+        if est is None or a.market not in m.fair:
+            continue
+        p, lo, hi = est
+        h, ah = hits[(s["league"], s["home"], "home")], hits[(s["league"], s["away"], "away")]
+        n = h[1] + ah[1]
+        g = grade_model(m.odds[a.market], m.fair[a.market], p, (lo, hi),
+                        (h[0] + ah[0]) / n if n else None, n)
+        picks.append((s, m, g))
+    picks.sort(key=lambda x: -x[2].estimate)
+    picks = [x for x in picks if x[2].grade != "Avoid"][: a.count]
+    print(f"{market_label(a.market)}: {len(snaps)} matches published for the next {a.hours:g} h; "
+          f"model fitted on {len(rows)} results ({a.days:g} days). Ranked by likelihood.")
+    print("All picks are Rough or Lean at best: no odds history yet to validate an edge.\n")
+    print(f"{'kickoff':<6s} {'league':<8s} {'match':<9s} {'odds':>5s} {'b-even':>7s} {'market':>7s} "
+          f"{'history (n)':>15s} {'estimate [90%]':>22s} {'edge':>7s}  grade")
+    lagos = timedelta(hours=1)
+    for s, m, g in picks:
+        lo, hi = g.interval()
+        ko = (m.kickoff + lagos).strftime("%H:%M")
+        hist = f"{g.history_rate:.1%} ({g.n})" if g.history_rate is not None else "-"
+        print(f"{ko:<6s} {s['league']:<8s} {m.home + '-' + m.away:<9s} {g.odds:>5.2f} "
+              f"{g.break_even:>7.1%} {g.market_prob:>7.1%} {hist:>15s} "
+              f"{g.estimate:>7.1%} [{lo:.1%}, {hi:.1%}] {g.edge:>+7.1%}  {g.grade}")
+    print("\nKickoff times are Lagos (UTC+1). History: this market in the home side's home games "
+          "plus the away side's away games.")
+    if a.ledger and picks:
+        os.makedirs(os.path.dirname(a.ledger) or ".", exist_ok=True)
+        led = Ledger(a.ledger)
+        for s, m, g in picks:
+            lo, hi = g.interval()
+            led.add_pick({
+                "market": a.market, "odds": g.odds, "break_even": g.break_even,
+                "market_prob": g.market_prob, "history_rate": g.history_rate, "history_n": g.n,
+                "estimate": g.estimate, "ci_low": lo, "ci_high": hi, "edge": g.edge,
+                "grade": g.grade, "grade_reasons": [vars(t) for t in g.tests],
+                "slice_key": f"model:poisson:{a.days:g}d|{a.market}", "stats_version": STATS_VERSION,
+                "sheet_id": f"likely-{sb._iso(now)}", "stake": 0, "shadow": True,
+                "event_id": s["event_id"]}, m)
+        print(f"Logged {len(picks)} picks to {a.ledger} (shadow mode, before kickoff).")
+
+
+def datetime_from_iso(s: str):
+    from datetime import datetime
+    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="vigs", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -361,6 +448,17 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--interval", type=float, default=300, help="watch: seconds between polls")
     p.add_argument("--delay", type=float, default=1.2, help="seconds between requests")
     p.set_defaults(fn=cmd_fetch)
+
+    p = sub.add_parser("likely", help="rank upcoming matches by results-model likelihood")
+    p.add_argument("--market", default="FH_O05")
+    p.add_argument("--hours", type=float, default=2)
+    p.add_argument("--count", type=int, default=20)
+    p.add_argument("--days", type=float, default=30, help="results window for the model")
+    p.add_argument("--reps", type=int, default=20, help="bootstrap refits for the interval")
+    p.add_argument("--data", default="data")
+    p.add_argument("--ledger", default="ledger/trial.jsonl")
+    p.add_argument("--no-refresh", dest="refresh", action="store_false")
+    p.set_defaults(fn=cmd_likely)
 
     p = sub.add_parser("study", help="results-only base rates and memory tests")
     p.add_argument("--results", default="data/results.csv")

@@ -20,7 +20,9 @@ The supplier behind vFootball is not named anywhere in the API.
 | Germany | 18 | 42 min |
 | France | 18 | 42 min |
 
-About 1,750 matches a day across the five leagues, 10 or 9 per round. Rounds
+About 1,750 matches a day across the five leagues, 10 or 9 per round. Each match
+plays out over about 30 minutes of real time; results appear in the archive
+roughly 50 minutes after kickoff. Rounds
 are staggered across leagues.
 
 ## Endpoints

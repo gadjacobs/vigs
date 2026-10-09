@@ -51,8 +51,11 @@ class Graded:
     tests: list[Test] = field(default_factory=list)
     _a: float = 0.0
     _b: float = 0.0
+    ci: tuple[float, float] | None = None       # set when the estimate is model-based
 
     def interval(self, level: float = 0.90) -> tuple[float, float]:
+        if self.ci is not None:
+            return self.ci
         tail = (1 - level) / 2
         return beta_ppf(tail, self._a, self._b), beta_ppf(1 - tail, self._a, self._b)
 
@@ -107,3 +110,21 @@ def grade(odds: float, market_prob: float, n: int, hits: int,
     else:
         g = "Rough"
     return Graded(g, odds, be, market_prob, rate, n, est, p_beats, est * odds - 1.0, tests, a, b)
+
+
+def grade_model(odds: float, market_prob: float, estimate: float, ci: tuple[float, float],
+                history_rate: float | None, history_n: int) -> Graded:
+    """Grade a results-model estimate before any odds history exists. Without
+    walk-forward validation on settled odds it can never be Solid."""
+    be = 1.0 / odds
+    lo, hi = ci
+    tests = [
+        Test("beats break-even", lo > be,
+             f"90% interval [{lo:.1%}, {hi:.1%}] vs break-even {be:.1%}"),
+        Test("walk-forward", False, "not tested: odds history is still being collected"),
+        Test("false discovery", False, "not tested: no odds history yet"),
+        Test("data collected", False, "odds collection started 2026-10-09"),
+    ]
+    g = "Avoid" if hi < be else "Lean" if lo > be else "Rough"
+    return Graded(g, odds, be, market_prob, history_rate, history_n, estimate,
+                  1.0 if lo > be else 0.0, estimate * odds - 1.0, tests, ci=ci)
