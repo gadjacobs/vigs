@@ -2,6 +2,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { bookSlip, type BookResult } from "./actions";
 import { rememberCode, shareUrl } from "./codes-panel";
+import { saveView } from "./profile-actions";
 import { watchBooking } from "./push-actions";
 import { CopyButton } from "./copy-button";
 import { lagos, naira, pct, PickRow, type View } from "./pick-row";
@@ -29,6 +30,7 @@ function ViewToggle({ view, setView }: { view: View; setView: (v: View) => void 
   const choose = (v: View) => {
     setView(v);
     document.cookie = `vig_view=${v}; path=/; max-age=31536000; samesite=lax`;
+    saveView(v).catch(() => undefined);
   };
   return (
     <div className="viewbar">

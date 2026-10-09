@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { saveTheme } from "./profile-actions";
 
 const OPTIONS = [
   { value: "system", label: "Auto", short: "A", scheme: "light dark", color: "" },
@@ -26,6 +27,7 @@ export function ThemeToggle({ initial }: { initial: string }) {
     if (v === "system") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = v;
     syncMeta(OPTIONS.find((o) => o.value === v)!);
+    saveTheme(v as "system" | "light" | "dark").catch(() => undefined);
   };
   return (
     <div className="segmented" role="radiogroup" aria-label="Theme">

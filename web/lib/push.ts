@@ -11,7 +11,8 @@ export type Sub = {
   keys: { p256dh: string; auth: string };
   results: boolean; // tell me when a watched code wins or loses
   tips: string[]; // "HH:MM" Lagos
-  query: string; // Tonight filters for tips, as a query string
+  query: string; // Tonight filters for tips when the account has none saved
+  user?: string; // account, whose latest filters the tips follow
   lastTip: number;
   created: number;
 };
@@ -104,6 +105,7 @@ export type TipBuilder = (query: string, now: number) => Promise<Payload>;
 /** One pass: settle watched codes, send due tips. Returns counts for the log. */
 export async function tick(buildTip: TipBuilder, now = Date.now()) {
   const out = { watches: 0, settled: 0, tips: 0, sent: 0, errors: 0 };
+  await setJson("lastTick", now);
   const subs = new Map<string, Sub>();
   for (const id of await members("subs")) {
     const s = await loadSub(id);
@@ -139,7 +141,8 @@ export async function tick(buildTip: TipBuilder, now = Date.now()) {
     if (due === null) continue;
     out.tips++;
     try {
-      if (await send(s, await buildTip(s.query, now))) out.sent++;
+      const query = (s.user && (await getJson<{ query?: string }>(`profile:${s.user}`))?.query) || s.query;
+      if (await send(s, await buildTip(query, now))) out.sent++;
       await setJson(`sub:${s.id}`, { ...s, lastTip: now });
     } catch {
       out.errors++;
@@ -148,3 +151,6 @@ export async function tick(buildTip: TipBuilder, now = Date.now()) {
   return out;
 }
 
+
+/** When the collector last called the tick, for the Alerts setup check. */
+export const lastTick = async () => (storeReady() ? await getJson<number>("lastTick") : null);

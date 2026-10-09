@@ -1,29 +1,37 @@
 "use client";
 import { useCallback, useEffect, useState, useTransition } from "react";
+import { syncCodes } from "./profile-actions";
 import { trackCodes } from "./push-actions";
 import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
+import type { SavedCode as Saved } from "@/lib/profile";
 
-export type Saved = { code: string; at: number; legs: number; odds: number; last: number };
+export type { Saved };
 export const CODES_KEY = "vig_codes";
-const KEEP = 6 * 3600 * 1000; // show a code until six hours after its last kickoff
+const SHOW = 24 * 3600 * 1000; // list a code until a day after its last kickoff
 export const shareUrl = (code: string) => `https://www.sportybet.com/ng/?shareCode=${code}`;
 
-export function readCodes(): Saved[] {
+function readAll(): Saved[] {
   try {
-    return (JSON.parse(localStorage.getItem(CODES_KEY) ?? "[]") as Saved[]).filter((c) => c.last + KEEP > Date.now());
+    return JSON.parse(localStorage.getItem(CODES_KEY) ?? "[]") as Saved[];
   } catch {
     return [];
   }
 }
 
-/** Remember a code on this device and tell the panel. */
-export function rememberCode(c: Saved) {
-  const next = [c, ...readCodes().filter((x) => x.code !== c.code)].slice(0, 10);
+function writeAll(list: Saved[]) {
   try {
-    localStorage.setItem(CODES_KEY, JSON.stringify(next));
+    localStorage.setItem(CODES_KEY, JSON.stringify(list.slice(0, 60)));
   } catch { /* private mode */ }
+}
+
+export const readCodes = (): Saved[] => readAll().filter((c) => c.last + SHOW > Date.now());
+
+/** Remember a code on this device and in the account, and tell the panel. */
+export function rememberCode(c: Saved) {
+  writeAll([c, ...readAll().filter((x) => x.code !== c.code)]);
   window.dispatchEvent(new Event("vig-codes"));
+  syncCodes([c]).catch(() => undefined);
 }
 
 const ICON: Record<string, string> = { won: "✓", lost: "✗", playing: "…", waiting: "", unknown: "?" };
@@ -50,6 +58,14 @@ export function CodesPanel() {
       refresh(list);
     };
     load();
+    // Share codes across the account's devices: merge this device's with the account's.
+    syncCodes(readAll())
+      .then((merged) => {
+        if (!merged) return;
+        writeAll(merged);
+        load();
+      })
+      .catch(() => undefined);
     window.addEventListener("vig-codes", load);
     const t = setInterval(() => document.visibilityState === "visible" && refresh(readCodes()), 60_000);
     return () => {

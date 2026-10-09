@@ -98,6 +98,9 @@ With the guard a pick reaches Lean only once a proven blend says so.
 
 ## Chance view
 
+The filters can also require a confidence level (Medium or better, High only)
+and a lowest chance per pick (50% to 85%).
+
 The app's "Chance" view shows each pick as a whole-percent chance ("68% chance,
 about 7 in 10"), what the odds need to break even, and a confidence rating from
 the width of the 90% range: High (within 5 points and tight on the odds scale),
@@ -105,6 +108,15 @@ Low (wider than 10 points, or loose on the odds scale), Medium otherwise. A wide
 range means the market price and the model disagree. A slip shows the chance
 all legs land and takes its weakest leg's rating. Every figure from the full
 view stays on the card. "Full numbers" shows the original layout.
+
+## Accounts
+
+Signing in picks the account. `ACCOUNTS="name:password,name2:password2"` in
+Vercel lists them (passwords must differ: the form asks only for the
+password); without it, `APP_PASSWORD` is one account called "me". With the
+store connected, an account's booked codes, last filters, Chance/Full view and
+theme sync across every device signed in to it; the first sync merges what
+each device already had. Push tips follow the account's latest filters.
 
 ## Your codes and notifications
 
@@ -118,8 +130,10 @@ or loses (the first lost leg ends it), and a tip slip at chosen Lagos times,
 built with that device's last Tonight filters. On iPhone, add Vig to the Home
 Screen first. Setup, once:
 
-1. Vercel → the project → Storage → connect **Upstash for Redis** (free plan).
-   It adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+1. Vercel → the project → Storage → connect **Upstash for Redis** (free plan)
+   to the Production environment. It adds `KV_REST_API_URL` and
+   `KV_REST_API_TOKEN` (a custom prefix, `UPSTASH_REDIS_REST_*` or an Upstash
+   `REDIS_URL` also work). The Alerts page's setup check shows what it found.
 2. Vercel → Settings → Environment Variables: `PUSH_TICK_SECRET`, any long
    random string. Redeploy.
 3. GitHub → Settings → Secrets and variables → Actions: secret

@@ -1,12 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { verify } from "./lib/auth";
 
-// Personal tool: everything sits behind APP_PASSWORD when it is set.
+// Personal tool: everything sits behind an account when ACCOUNTS or APP_PASSWORD is set.
 export async function proxy(request: NextRequest) {
-  const password = process.env.APP_PASSWORD;
-  if (!password) return NextResponse.next();
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`vig:${password}`));
-  const want = Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
-  if (request.cookies.get("vig_auth")?.value === want) return NextResponse.next();
+  if (await verify(request.cookies.get("vig_auth")?.value)) return NextResponse.next();
   return NextResponse.redirect(new URL("/login", request.url));
 }
 

@@ -1,6 +1,7 @@
 "use server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { accountFor, sessionValue } from "@/lib/auth";
 import { book, selection } from "@/lib/sportybet";
 
 export type Leg = { eventId: string; market: string; kickoff: number };
@@ -23,19 +24,19 @@ export async function bookSlip(legs: Leg[]): Promise<BookResult> {
   }
 }
 
-async function digest(s: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`vig:${s}`));
-  return Buffer.from(buf).toString("hex");
-}
-
 export async function login(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const adult = formData.get("adult") === "on";
-  const expected = process.env.APP_PASSWORD ?? "";
   if (!adult) redirect("/login?err=age");
-  if (!expected || password !== expected) redirect("/login?err=password");
-  (await cookies()).set("vig_auth", await digest(expected), {
-    httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30,
+  const account = accountFor(password);
+  if (!account) redirect("/login?err=password");
+  (await cookies()).set("vig_auth", await sessionValue(account), {
+    httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 90,
   });
   redirect("/");
+}
+
+export async function logout() {
+  (await cookies()).delete("vig_auth");
+  redirect("/login");
 }

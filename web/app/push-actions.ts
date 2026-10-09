@@ -2,6 +2,7 @@
 import { cookies } from "next/headers";
 import { trackCode, type Tracked } from "@/lib/codes";
 import { dropSub, loadSub, pushReady, saveSub, send, subId, watchCode } from "@/lib/push";
+import { myProfile } from "@/lib/profile";
 import { buildTip } from "@/lib/tips";
 
 export type PushPrefs = { results: boolean; tips: string[] };
@@ -14,9 +15,10 @@ export async function subscribePush(raw: Raw, prefs: PushPrefs) {
   if (!pushReady()) return { ok: false as const, error: "Notifications are not set up on the server yet." };
   if (!raw?.endpoint?.startsWith("https://") || !raw.keys?.p256dh || !raw.keys?.auth)
     return { ok: false as const, error: "The browser returned an unusable subscription." };
-  const query = decodeURIComponent((await cookies()).get("vig_q")?.value ?? "");
+  const { user, profile } = await myProfile();
+  const query = profile?.query ?? decodeURIComponent((await cookies()).get("vig_q")?.value ?? "");
   const tips = [...new Set(prefs.tips.filter((t) => TIME.test(t)))].sort().slice(0, 8);
-  await saveSub({ endpoint: raw.endpoint, keys: raw.keys, results: Boolean(prefs.results), tips, query });
+  await saveSub({ endpoint: raw.endpoint, keys: raw.keys, results: Boolean(prefs.results), tips, query, user: user ?? undefined });
   return { ok: true as const };
 }
 
@@ -34,8 +36,9 @@ export async function testPush(endpoint: string, kind: "plain" | "tip") {
   if (!pushReady()) return false;
   const s = await loadSub(await subId(endpoint));
   if (!s) return false;
+  const { profile } = await myProfile();
   return send(s, kind === "tip"
-    ? await buildTip(s.query, Date.now())
+    ? await buildTip(profile?.query ?? s.query, Date.now())
     : { title: "Vig notifications are on", body: "You will hear here when a watched code settles, and at your tip times.", url: "/alerts" });
 }
 

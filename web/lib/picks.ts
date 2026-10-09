@@ -1,6 +1,7 @@
 import { blendEstimate, guardedEstimate, type BlendFile } from "./blend";
 import { fairProbs } from "./markets";
 import { estimate, history, modelDraws, type ModelFile } from "./model";
+import { confidence, type Confidence } from "./plain";
 import type { Fixture } from "./sportybet";
 
 export type Grade = "Lean" | "Rough" | "Avoid";
@@ -41,8 +42,12 @@ export type CandidateQuery = {
   minOdds: number;
   maxOdds: number;
   minGrade: "Rough" | "Lean";
+  minConf?: Confidence;
+  minChance?: number;
   now: number;
 };
+
+const CONF_RANK: Record<Confidence, number> = { Low: 0, Medium: 1, High: 2 };
 
 /** Every (match, market) selection in the window that passes the filters, graded. */
 export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQuery, blend: BlendFile | null = null) {
@@ -69,6 +74,8 @@ export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQu
         continue;
       }
       if (q.minGrade === "Lean" && grade !== "Lean") continue;
+      if (q.minChance && est.p < q.minChance) continue;
+      if (q.minConf && CONF_RANK[confidence(est.lo, est.hi)] < CONF_RANK[q.minConf]) continue;
       const h = history(model, f.league, f.home, f.away, market);
       out.push({
         id: `${f.eventId}|${market}`, eventId: f.eventId, league: f.league, home: f.home, away: f.away,

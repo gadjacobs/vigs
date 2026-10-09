@@ -1,9 +1,37 @@
-// Small key-value store for push subscriptions and watched codes: Upstash Redis
-// over its REST API (Vercel → Storage → Upstash for Redis sets these variables).
-const URL_ = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-const TOKEN = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+// Small key-value store for accounts, push subscriptions and watched codes:
+// Upstash Redis over its REST API. Vercel's Upstash integration names the
+// variables KV_REST_API_URL / KV_REST_API_TOKEN, optionally with a custom
+// prefix (e.g. STORAGE_KV_REST_API_URL); Upstash's own are UPSTASH_REDIS_REST_*.
+// A rediss:// URL from Upstash (REDIS_URL, KV_URL) also works: its password is
+// the REST token.
 
-export const storeReady = () => Boolean(URL_ && TOKEN);
+type Found = { url: string; token: string; from: string };
+
+export function findStore(env: Record<string, string | undefined> = process.env): Found | null {
+  for (const [k, url] of Object.entries(env)) {
+    const m = /^(.*?)(KV_REST_API_URL|REDIS_REST_URL|REST_API_URL)$/.exec(k);
+    if (!m || !url || !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(url)) continue;
+    const token = env[`${m[1]}${m[2].replace("URL", "TOKEN")}`];
+    if (token) return { url, token, from: k };
+  }
+  for (const [k, v] of Object.entries(env)) {
+    if (!/(^|_)(REDIS_URL|KV_URL)$/.test(k) || !v) continue;
+    try {
+      const u = new URL(v);
+      if (u.hostname.endsWith(".upstash.io") && u.password)
+        return { url: `https://${u.hostname}`, token: decodeURIComponent(u.password), from: k };
+    } catch { /* not a URL */ }
+  }
+  return null;
+}
+
+const FOUND = findStore();
+const URL_ = FOUND?.url;
+const TOKEN = FOUND?.token;
+
+export const storeReady = () => Boolean(FOUND);
+/** Names (never values) of what the server can see, for the setup check. */
+export const storeSource = () => FOUND?.from ?? null;
 
 async function cmd<T>(...args: (string | number)[]): Promise<T> {
   if (!URL_ || !TOKEN) throw new Error("Storage is not set up");

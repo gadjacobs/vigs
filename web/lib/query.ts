@@ -13,11 +13,14 @@ export type Query = {
   count: number;
   sort: "likely" | "edge";
   minGrade: "Rough" | "Lean";
+  minConf: "Low" | "Medium" | "High"; // Low = any
+  minChance: number; // per leg, 0 = any
 };
 
 export const DEFAULT_QUERY: Query = {
   markets: ["FH_O05", "O15"], hours: 2, minOdds: 1.01, maxOdds: 100, mode: "target", target: 5, tol: 0.1,
   maxLegs: 0, count: 10, sort: "likely", minGrade: "Rough",
+  minConf: "Low", minChance: 0,
 };
 
 type Params = Record<string, string | string[] | undefined>;
@@ -43,6 +46,8 @@ export function parseQuery(sp: Params): Query {
     count: Math.round(num(one(sp.count), d.count, 1, 30)),
     sort: one(sp.sort) === "edge" ? "edge" : "likely",
     minGrade: one(sp.grade) === "lean" ? "Lean" : "Rough",
+    minConf: one(sp.conf) === "high" ? "High" : one(sp.conf) === "medium" ? "Medium" : "Low",
+    minChance: num(one(sp.chance), 0, 0, 95) / 100,
   };
 }
 
@@ -62,5 +67,7 @@ export function queryString(q: Query): string {
   if (q.minOdds > 1.01) p.set("min", String(q.minOdds));
   if (q.maxOdds < 100) p.set("max", String(q.maxOdds));
   if (q.minGrade === "Lean") p.set("grade", "lean");
+  if (q.minConf !== "Low") p.set("conf", q.minConf.toLowerCase());
+  if (q.minChance > 0) p.set("chance", String(Math.round(q.minChance * 100)));
   return p.toString();
 }

@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { MARKET_GROUPS, MARKET_LABELS, SHORT_LABELS } from "@/lib/markets";
 import { queryString, type Query } from "@/lib/query";
+import { saveQuery } from "./profile-actions";
 
 const ALL = Object.keys(MARKET_LABELS);
 const TOLERANCES = [0.05, 0.1, 0.2];
@@ -28,7 +29,10 @@ export function Filters({ initial }: { initial: Query }) {
     if (!canBuild) return;
     const qs = queryString({ ...q, target: targetOk ? target : q.target });
     document.cookie = `vig_q=${encodeURIComponent(qs)}; path=/; max-age=2592000; samesite=lax`;
-    start(() => router.push(`/?${qs}&run=${Date.now()}`));
+    start(async () => {
+      await saveQuery(qs).catch(() => undefined);
+      router.push(`/?${qs}&run=${Date.now()}`);
+    });
   };
 
   return (
@@ -79,6 +83,23 @@ export function Filters({ initial }: { initial: Query }) {
           </label>
         </div>
       )}
+
+      <div className="filter-row">
+        <div className="field">
+          <span>Confidence</span>
+          <div className="segmented" role="radiogroup" aria-label="Lowest confidence">
+            {([["Low", "Any"], ["Medium", "Medium+"], ["High", "High only"]] as const).map(([v, label]) => (
+              <button key={v} type="button" role="radio" aria-checked={q.minConf === v} onClick={() => set("minConf", v)}>{label}</button>
+            ))}
+          </div>
+        </div>
+        <label className="field">Chance per pick
+          <select value={Math.round(q.minChance * 100)} onChange={(e) => set("minChance", Number(e.target.value) / 100)}>
+            <option value={0}>Any</option>
+            {[50, 60, 70, 75, 80, 85].map((c) => <option key={c} value={c}>{c}% or more</option>)}
+          </select>
+        </label>
+      </div>
 
       <div className="markets-picker">
         <button type="button" className="summary-button" aria-expanded={marketsOpen} onClick={() => setMarketsOpen((o) => !o)}>

@@ -244,3 +244,17 @@ form.track { margin-top: 12px; align-items: flex-end; }
 .check input { width: 20px; height: 20px; }
 .field input[type="time"] { min-height: 44px; padding: 8px 12px; font: inherit; color: var(--ink);
   background: var(--paper-sunk); border: 1px solid var(--edge); border-radius: 3px; }
+.setup { margin-bottom: 16px; }
+.setup summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+.setup ul { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 20px; }
+.setup li.missing span { color: var(--house); font-weight: 800; }
+.setup li.ok span { color: var(--fair); font-weight: 800; }
+.results { scroll-margin-top: 8px; outline: none; border-radius: 10px; }
+.results.flash .slipbar, .results.flash > .note { animation: flash 1.6s ease-out; }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 3px var(--signal); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .results.flash .slipbar, .results.flash > .note { animation: none; box-shadow: 0 0 0 3px var(--signal); } }
+.account { margin-top: 24px; }
+.account h2 { margin: 0 0 4px; font-size: 18px; line-height: 24px; }
+.samsung { max-width: 960px; margin: 12px auto 0; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.samsung p { margin: 0; flex: 1 1 260px; }
+@media (max-width: 1000px) { .samsung { margin: 12px 16px 0; } }

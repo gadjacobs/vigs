@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Atkinson_Hyperlegible_Next, Big_Shoulders } from "next/font/google";
 import { cookies } from "next/headers";
+import { myProfile } from "@/lib/profile";
 import { Nav } from "./nav";
+import { SamsungHint } from "./samsung-hint";
 import { ThemeToggle } from "./theme-toggle";
 import "./globals.css";
 
@@ -17,7 +19,8 @@ export const metadata: Metadata = {
 };
 
 const savedTheme = async () => {
-  const saved = (await cookies()).get("vig_theme")?.value;
+  const { profile } = await myProfile();
+  const saved = profile?.theme ?? (await cookies()).get("vig_theme")?.value;
   return saved === "light" || saved === "dark" ? saved : undefined;
 };
 
@@ -46,6 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Nav />
           <ThemeToggle initial={theme ?? "system"} />
         </header>
+        <SamsungHint />
         {children}
       </body>
     </html>
