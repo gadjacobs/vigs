@@ -22,6 +22,11 @@ describe("markets", () => {
     expect(q["1"] + q.X + q["2"]).toBeCloseTo(1, 12);
     expect(q.O15).toBeUndefined();
   });
+  it("matches vigs.odds.devig(..., 'shin')", () => {
+    const q = fairProbs({ "1": 1.5, X: 4.2, "2": 6.0 });
+    expect(q["1"]).toBeCloseTo(0.6375127075, 9);
+    expect(q["2"]).toBeCloseTo(0.1462574343, 9);
+  });
 });
 
 describe("sportybet", () => {
@@ -116,5 +121,24 @@ describe("plain view", () => {
     expect(chance(0.999)).toBe("99%");
     expect(oneIn(0.72)).toBe("about 7 in 10");
     expect(oneIn(0.14)).toBe("about 1 in 7");
+  });
+});
+
+import { marketKey, settle } from "../lib/settle";
+
+describe("settle", () => {
+  it("matches vigs.data.settle", () => {
+    expect(settle("FH_O05", 0, 1, 0, 0)).toBe(false);
+    expect(settle("FH_O05", 0, 1, null, null)).toBeNull();
+    expect(settle("O15", 1, 1, 0, 1)).toBe(true);
+    expect(settle("U25", 1, 1, 0, 1)).toBe(true);
+    expect(settle("BY", 0, 3, 0, 2)).toBe(false);
+    expect(settle("X", 2, 2, 1, 0)).toBe(true);
+  });
+  it("inverts selection()", () => {
+    for (const m of ["1", "X", "2", "BY", "BN", "O15", "U45", "FH_O05", "FH_U25"]) {
+      const s = selection(m, "e");
+      expect(marketKey(s.marketId, s.specifier, s.outcomeId)).toBe(m);
+    }
   });
 });

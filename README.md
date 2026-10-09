@@ -18,7 +18,7 @@ the evidence clears every bar.
 | term | meaning |
 |---|---|
 | break-even | `1 / odds`: hit rate needed to not lose money |
-| market chance | implied probability with the margin removed (proportional or Shin) |
+| market chance | implied probability with the margin removed (Shin for live odds: it scored better than proportional on settled matches; the evidence tools default to proportional) |
 | history rate | observed hit rate in comparable past matches, with n |
 | Vig estimate | history rate shrunk toward market chance (Beta prior, strength k = 200) |
 | edge | `estimate × odds − 1`, also shown per ₦1,000 |
@@ -105,6 +105,32 @@ Low (wider than 10 points, or loose on the odds scale), Medium otherwise. A wide
 range means the market price and the model disagree. A slip shows the chance
 all legs land and takes its weakest leg's rating. Every figure from the full
 view stays on the card. "Full numbers" shows the original layout.
+
+## Your codes and notifications
+
+**Your codes** (Tonight page) lists codes booked on this device for six hours
+after their last kickoff, and any code typed into "Track a code". One read of
+SportyBet's share endpoint gives each leg's status and score; the panel
+refreshes every minute.
+
+**Alerts** sends web push notifications to a phone: when a booked code lands
+or loses (the first lost leg ends it), and a tip slip at chosen Lagos times,
+built with that device's last Tonight filters. On iPhone, add Vig to the Home
+Screen first. Setup, once:
+
+1. Vercel → the project → Storage → connect **Upstash for Redis** (free plan).
+   It adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+2. Vercel → Settings → Environment Variables: `PUSH_TICK_SECRET`, any long
+   random string. Redeploy.
+3. GitHub → Settings → Secrets and variables → Actions: secret
+   `PUSH_TICK_SECRET` (the same string) and variable `PUSH_TICK_URL`
+   (`https://<your app>/api/push/tick`).
+4. Open Alerts on the phone, turn notifications on, and send a test.
+
+The collector calls the tick every 4 minutes while it runs. Push signing keys
+are made on first use and kept in the store (or set `VAPID_PUBLIC_KEY` and
+`VAPID_PRIVATE_KEY`). The store holds only push subscriptions, tip times,
+filters and watched codes; no SportyBet details.
 
 ## More commands
 

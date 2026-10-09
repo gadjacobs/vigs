@@ -44,6 +44,9 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   spanning both). Never train on a match with a model that saw its day's results.
 - It reads `model.json`, `blend.json` and `record.json` from the `data` branch and odds live
   from SportyBet; it never places bets. Record maths stays in `vigs/record.py`. Booking codes are created with the `OperId: 2` header.
+- Push (`web/lib/push.ts`, `store.ts`, `/alerts`): Upstash Redis holds subscriptions,
+  tip times and watched codes only; `/api/push/tick` is called by the collector with
+  `PUSH_TICK_SECRET`. Live odds use Shin de-vig (`vigs.odds.LIVE_DEVIG`, `fairProbs`).
 
 ## Engineering rules
 - All maths in `vigs/odds.py`, `vigs/stats.py`, `vigs/grading.py`; CLI only formats.

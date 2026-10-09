@@ -97,7 +97,8 @@ class Record(unittest.TestCase):
             led = Ledger(os.path.join(d, "l.jsonl"))
             for i, m in enumerate(upcoming):
                 led.add_pick({"market": "O15", "odds": 1.5, "break_even": 1 / 1.5, "market_prob": 0.62,
-                              "estimate": 0.7, "grade": "Lean" if i < 3 else "Rough"}, m)
+                              "estimate": 0.7, "grade": "Lean" if i < 3 else "Rough",
+                              "ci_low": 0.68, "ci_high": 0.72 if i < 3 else 0.9}, m)
             for i, m in enumerate(upcoming[:3]):
                 m.hg, m.ag = (2, 1) if i < 2 else (0, 0)
             led.settle(upcoming)
@@ -109,3 +110,5 @@ class Record(unittest.TestCase):
         self.assertEqual(rec["curve"]["Lean"][-1][1], 0.0)
         self.assertTrue(rec["chain"]["verified"])
         self.assertEqual(len(rec["recent"]), 4)
+        self.assertEqual(rec["confidence"]["High"]["settled"], 3)
+        self.assertEqual(rec["confidence"]["Low"]["open"], 1)

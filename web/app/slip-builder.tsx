@@ -1,6 +1,8 @@
 "use client";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { bookSlip, type BookResult } from "./actions";
+import { rememberCode, shareUrl } from "./codes-panel";
+import { watchBooking } from "./push-actions";
 import { CopyButton } from "./copy-button";
 import { lagos, naira, pct, PickRow, type View } from "./pick-row";
 import { MARKET_LABELS } from "@/lib/markets";
@@ -10,17 +12,16 @@ import type { Query } from "@/lib/query";
 import { slipStats, smartSwitch, toTarget, topN } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
-const shareUrl = (code: string) => `https://www.sportybet.com/ng/?shareCode=${code}`;
 
 type Props = { cands: Pick[]; q: Query; now: number; initialView: View };
-type Saved = { code: string; at: number; legs: number; odds: number; last: number };
-const CODES_KEY = "vig_codes";
 
-function readCodes(): Saved[] {
+/** This device's push subscription, if notifications are on. */
+async function pushEndpoint(): Promise<string | null> {
   try {
-    return JSON.parse(localStorage.getItem(CODES_KEY) ?? "[]") as Saved[];
+    const reg = await navigator.serviceWorker?.getRegistration();
+    return (await reg?.pushManager.getSubscription())?.endpoint ?? null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -50,8 +51,7 @@ export function SlipBuilder({ cands, q, now, initialView }: Props) {
     () => (mode === "target" ? toTarget(cands, target, q.tol, q.maxLegs || 30) : topN(cands, count, sort)).map((p) => p.id),
     [cands, mode, count, target, sort, q.tol, q.maxLegs],
   );
-  const [codes, setCodes] = useState<Saved[]>([]);
-  useEffect(() => setCodes(readCodes().filter((c) => c.last > Date.now())), []);
+  const [watching, setWatching] = useState(false);
   const [ids, setIds] = useState<string[]>(initial);
   const [msg, setMsg] = useState("");
   const [result, setResult] = useState<BookResult | null>(null);
@@ -84,10 +84,9 @@ export function SlipBuilder({ cands, q, now, initialView }: Props) {
     const res = await bookSlip(legs.map((p) => ({ eventId: p.eventId, market: p.market, kickoff: p.kickoff })));
     setResult(res);
     if (res.ok) {
-      const next = [{ code: res.code, at: Date.now(), legs: res.legs, odds: s.odds, last: res.lastKickoff },
-        ...readCodes().filter((c) => c.code !== res.code)].slice(0, 10);
-      try { localStorage.setItem(CODES_KEY, JSON.stringify(next)); } catch { /* private mode */ }
-      setCodes(next.filter((c) => c.last > Date.now()));
+      rememberCode({ code: res.code, at: Date.now(), legs: res.legs, odds: s.odds, last: res.lastKickoff });
+      const endpoint = await pushEndpoint();
+      setWatching(Boolean(endpoint && (await watchBooking(res.code, endpoint, res.lastKickoff))));
     }
   });
 
@@ -161,6 +160,9 @@ export function SlipBuilder({ cands, q, now, initialView }: Props) {
             <CopyButton text={result.code} />
           </div>
           <p className="status" style={{ marginTop: 8 }}>Opens the SportyBet app if it is installed, otherwise the website. Vig never places the bet.</p>
+          <p className="status">
+            {watching ? "You will get a notification when this code lands or loses." : <>Track it under Your codes below. <a href="/alerts">Turn on notifications</a> to hear when it settles.</>}
+          </p>
         </section>
       ) : <p className="note warn" role="alert">{result.error}</p>)}
 
@@ -179,19 +181,6 @@ export function SlipBuilder({ cands, q, now, initialView }: Props) {
           <ol className="picks">
             {rest.map((p) => <PickRow key={p.id} p={p} now={now} view={view} actions={<button type="button" onClick={() => add(p)}>Add to slip</button>} />)}
           </ol>
-        </details>
-      )}
-      {codes.length > 0 && (
-        <details className="more">
-          <summary>Your recent codes ({codes.length})</summary>
-          <ul className="codes">
-            {codes.map((c) => (
-              <li key={c.code}>
-                <strong className="num">{c.code}</strong> {c.legs} legs at {c.odds.toFixed(2)}, booked {lagos(c.at)}, last kickoff {lagos(c.last)}
-                <a className="button" href={shareUrl(c.code)}>Open</a>
-              </li>
-            ))}
-          </ul>
         </details>
       )}
     </section>

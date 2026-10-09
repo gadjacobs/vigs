@@ -300,9 +300,10 @@ def build(data_dir: str, history_out: str, upcoming_out: str) -> tuple[int, int,
 def snapshot_match(s: dict):
     """A vigs Match for an odds snapshot, keyed the same way `build` keys rows."""
     from .data import Match
+    from .odds import LIVE_DEVIG
     ko = datetime.fromisoformat(s["kickoff"].replace("Z", "+00:00"))
     return Match(0, "", int(ko.timestamp() // 60), 0, s["home"], s["away"], s["odds"],
-                 league=s["league"], kickoff=ko)
+                 league=s["league"], kickoff=ko, devig_method=LIVE_DEVIG)
 
 
 def results_matches_row(r: dict):

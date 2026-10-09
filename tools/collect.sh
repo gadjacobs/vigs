@@ -38,6 +38,20 @@ publish() {
   python -m vigs export-record --ledger "$DATA/ledger.jsonl" --out "$DATA/record.json" || true
 }
 
+# Push notifications: every 4 minutes ask the web app to settle watched codes
+# and send due tips. Needs PUSH_TICK_URL and PUSH_TICK_SECRET; skipped otherwise.
+if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
+  (
+    while true; do
+      curl -sS -m 60 -X POST -H "Authorization: Bearer $PUSH_TICK_SECRET" "$PUSH_TICK_URL" > /dev/null \
+        || echo "push tick failed"
+      sleep 240
+    done
+  ) &
+  TICKER=$!
+  trap 'kill $TICKER 2>/dev/null' EXIT
+fi
+
 publish
 save
 for i in $(seq 1 "$CHUNKS"); do

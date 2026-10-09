@@ -12,6 +12,8 @@ Grades (exactly one per selection):
 """
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass, field
 
 from .stats import beta_ppf, betainc
@@ -128,3 +130,18 @@ def grade_model(odds: float, market_prob: float, estimate: float, ci: tuple[floa
     g = "Avoid" if hi < be else "Lean" if lo > be else "Rough"
     return Graded(g, odds, be, market_prob, history_rate, history_n, estimate,
                   1.0 if lo > be else 0.0, estimate * odds - 1.0, tests, ci=ci)
+
+
+def confidence(lo: float, hi: float) -> str:
+    """High / Medium / Low from the width of a 90% range (web/lib/plain.ts).
+    While estimates are guarded the range spans the market chance and the
+    results model, so a wide range means the two disagree."""
+    def lg(p: float) -> float:
+        p = min(max(p, 1e-6), 1 - 1e-6)
+        return math.log(p / (1 - p))
+    width, spread = hi - lo, lg(hi) - lg(lo)
+    if width > 0.1 or spread > 0.6:
+        return "Low"
+    if width <= 0.05 and spread <= 0.3:
+        return "High"
+    return "Medium"

@@ -5,6 +5,7 @@ import random
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from .grading import confidence
 from .ledger import Ledger
 
 
@@ -36,8 +37,11 @@ def export_record(ledger: Ledger, recent: int = 150) -> dict:
     rows = [(p, settled.get(pid)) for pid, p in picks.items()]
     by_grade: dict[str, list] = defaultdict(list)
     by_market: dict[tuple[str, str], list] = defaultdict(list)
+    by_conf: dict[str, list] = defaultdict(list)
     for p, s in rows:
         by_grade[p["grade"]].append((p, s))
+        if p.get("ci_low") is not None and p.get("ci_high") is not None:
+            by_conf[confidence(p["ci_low"], p["ci_high"])].append((p, s))
         by_market[(p["market"], p["grade"])].append((p, s))
 
     # Cumulative flat-stake profit per grade, in kickoff order.
@@ -68,6 +72,7 @@ def export_record(ledger: Ledger, recent: int = 150) -> dict:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "chain": {"records": len(ledger.records), "head": ledger.head, "verified": True},
         "grades": {g: _group(rs) for g, rs in by_grade.items()},
+        "confidence": {c: _group(rs) for c, rs in by_conf.items()},
         "markets": [dict(market=m, grade=g, **_group(rs)) for (m, g), rs in sorted(by_market.items())],
         "curve": curve,
         "calibration": calibration,

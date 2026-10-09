@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import model as md
 from .data import fair_probs, settle
+from .odds import LIVE_DEVIG
 
 MIN_MATCHES = 2000          # settled matches with odds before any blend can switch on
 TEST_SHARE = 0.30
@@ -129,7 +130,7 @@ def training_rows(data_dir: str, window_days: float = 30) -> list[dict]:
             p = md.predict(models, s["league"], s["home"], s["away"])
             if p is None:
                 continue
-            q = fair_probs(s["odds"])
+            q = fair_probs(s["odds"], LIVE_DEVIG)
             hth = int(r["ht_hg"]) if r.get("ht_hg") not in ("", None) else None
             hta = int(r["ht_ag"]) if r.get("ht_ag") not in ("", None) else None
             for mk, qv in q.items():

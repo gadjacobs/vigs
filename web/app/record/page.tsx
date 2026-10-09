@@ -117,6 +117,36 @@ function Body({ rec }: { rec: RecordFile }) {
         </div>
       </section>
 
+      {rec.confidence && Object.keys(rec.confidence).length > 0 && (
+        <section className="block" aria-labelledby="conf">
+          <h2 id="conf">By confidence</h2>
+          <p className="status">Does High confidence land closer to its chance than Low? Rated from each pick&apos;s 90% range when it was logged.</p>
+          <div className="tablewrap">
+            <table>
+              <thead><tr><th>Confidence</th><th className="n">Settled</th><th className="n">Landed</th>
+                <th className="n">Vig expected</th><th className="n">Market expected</th><th className="n">ROI (90% interval)</th></tr></thead>
+              <tbody>
+                {(["High", "Medium", "Low"] as const).filter((c) => rec.confidence![c]).map((c) => {
+                  const g = rec.confidence![c];
+                  return (
+                    <tr key={c}>
+                      <td><span className={`badge conf-${c.toLowerCase()}`}>{c}</span></td>
+                      <td className="n">{g.settled}</td><td className="n">{g.hits}</td>
+                      <td className="n">{g.expected_vig.toFixed(1)}</td><td className="n">{g.expected_market.toFixed(1)}</td>
+                      <td className={`n ${g.roi < 0 ? "loss" : ""}`}>
+                        {!g.settled ? "None" : g.settled < 30
+                          ? `${signedPct(g.roi)} (too few to judge)`
+                          : `${signedPct(g.roi)} (${signedPct(g.roi_low)} to ${signedPct(g.roi_high)})`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       <section className="block" aria-labelledby="calib">
         <h2 id="calib">Calibration</h2>
         <p className="status">When Vig said a pick had this chance, how often it landed. Close agreement means the estimates can be trusted; it does not by itself mean profit.</p>

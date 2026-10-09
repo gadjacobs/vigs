@@ -217,3 +217,30 @@ ul.codes { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-di
 ul.codes li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; background: var(--paper);
   border: 1px solid var(--rule); border-radius: 3px; padding: 8px 12px; }
 ul.codes .button { min-height: 36px; padding: 4px 12px; margin-left: auto; }
+
+/* Codes tracker */
+.codes-block { margin-top: 32px; }
+.codes-block h2 { font-size: 28px; line-height: 30px; font-family: var(--font-num); font-weight: 800; margin: 0 0 8px; }
+ul.codes li details { width: 100%; }
+ul.codes li summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; cursor: pointer; min-height: 40px; }
+ul.codes li summary strong { font-size: 18px; }
+.state-open { background: var(--paper-sunk); color: var(--ink); border: 1.5px dashed var(--edge); }
+.state-won { background: var(--ink); color: var(--paper); }
+.state-lost { background: var(--house-wash); color: var(--house); }
+ol.legs { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+ol.legs li { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: center; padding: 6px 0;
+  border: 0; border-top: 1px solid var(--rule); border-radius: 0; background: none; }
+ol.legs small { display: block; color: var(--ink-muted); font-size: 13px; line-height: 16px; }
+.legicon { font-weight: 800; text-align: center; }
+.leg-won .legicon { color: var(--fair); }
+.leg-lost .legicon, .leg-lost .legres { color: var(--house); }
+.legres { font-weight: 700; white-space: nowrap; }
+form.track { margin-top: 12px; align-items: flex-end; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Alerts */
+.alerts { display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+.check { display: flex; gap: 10px; align-items: center; font-weight: 700; min-height: 44px; }
+.check input { width: 20px; height: 20px; }
+.field input[type="time"] { min-height: 44px; padding: 8px 12px; font: inherit; color: var(--ink);
+  background: var(--paper-sunk); border: 1px solid var(--edge); border-radius: 3px; }

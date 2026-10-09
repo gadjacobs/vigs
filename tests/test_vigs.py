@@ -114,5 +114,16 @@ class Detection(unittest.TestCase):
         self.assertTrue(all(len({id(b.match) for b in r.legs}) == len(r.legs) for r in res))
 
 
+
+
+class Confidence(unittest.TestCase):
+    def test_matches_web_plain_ts(self):
+        from vigs.grading import confidence
+        self.assertEqual(confidence(0.7, 0.73), "High")
+        self.assertEqual(confidence(0.6, 0.74), "Low")
+        self.assertEqual(confidence(0.66, 0.73), "Medium")
+        self.assertEqual(confidence(0.065, 0.143), "Low")
+
+
 if __name__ == "__main__":
     unittest.main()

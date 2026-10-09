@@ -38,13 +38,29 @@ export function marketGroups(markets: Iterable<string>): string[][] {
   return groups;
 }
 
-/** Market chance: implied probabilities with the margin removed (proportional). */
+/** Shin (1993), as vigs/odds.py _shin: margin loaded more heavily onto longshots. */
+export function shin(inv: number[]): number[] {
+  const total = inv.reduce((a, b) => a + b, 0);
+  if (total <= 1) return inv.map((p) => p / total);
+  const probs = (z: number) => inv.map((p) => (Math.sqrt(z * z + (4 * (1 - z) * p * p) / total) - z) / (2 * (1 - z)));
+  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+  let lo = 0, hi = 0.5;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    if (sum(probs(mid)) > 1) lo = mid;
+    else hi = mid;
+  }
+  const ps = probs((lo + hi) / 2);
+  const s = sum(ps);
+  return ps.map((p) => p / s);
+}
+
+/** Market chance: implied probabilities with the margin removed (Shin, as vigs.odds.LIVE_DEVIG). */
 export function fairProbs(odds: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {};
   for (const g of marketGroups(Object.keys(odds))) {
-    const inv = g.map((m) => 1 / odds[m]);
-    const total = inv.reduce((a, b) => a + b, 0);
-    g.forEach((m, i) => (out[m] = inv[i] / total));
+    const ps = shin(g.map((m) => 1 / odds[m]));
+    g.forEach((m, i) => (out[m] = ps[i]));
   }
   return out;
 }

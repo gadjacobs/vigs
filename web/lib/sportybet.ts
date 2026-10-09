@@ -135,3 +135,17 @@ export async function book(selections: Selection[]): Promise<{ code: string; ver
   const verified = (back.outcomes ?? []).filter((o) => want.has(o.eventId)).length;
   return { code, verified, deadline: Number(back.deadline ?? 0) };
 }
+
+export type ShareEvent = {
+  eventId: string; estimateStartTime: number | string; homeTeamName: string; awayTeamName: string;
+  matchStatus?: string; setScore?: string; gameScore?: string[]; regularTimeScore?: string[];
+  sport?: { category?: { name?: string } };
+  markets?: { id: string | number; specifier?: string | null; desc?: string;
+    outcomes?: { id: string | number; odds?: string; desc?: string; isWinning?: number }[] }[];
+};
+
+/** A booking code's selections, with each match's status and score once played. */
+export async function decodeShare(code: string) {
+  if (!/^[A-Z0-9]{4,12}$/.test(code)) throw new Error("That is not a booking code");
+  return call<{ outcomes?: ShareEvent[]; deadline?: number; unavailableOutcomes?: unknown[] }>(`${ORDERS}/share/${code}`);
+}

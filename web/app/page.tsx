@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { CodesPanel } from "./codes-panel";
 import { Filters } from "./filters";
 import { lagos } from "./pick-row";
 import { SlipBuilder } from "./slip-builder";
@@ -73,6 +74,8 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
       {r && r.candidates.length > 0 && (
         <SlipBuilder key={now} cands={r.candidates} q={q} now={now} initialView={view} />
       )}
+
+      <CodesPanel />
 
       <p className="status" style={{ marginTop: 24 }}>
         Personal tool, 18+. Vig never places bets or asks for SportyBet details. Picks are estimates from past

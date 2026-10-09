@@ -45,4 +45,8 @@ jobs:
           git -C store config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Collect
+        env:
+          # Optional: push notifications (see README "Notifications").
+          PUSH_TICK_URL: ${{ vars.PUSH_TICK_URL }}
+          PUSH_TICK_SECRET: ${{ secrets.PUSH_TICK_SECRET }}
         run: code/tools/collect.sh store "${{ inputs.chunks || '6' }}"

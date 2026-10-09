@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   title: "Vig",
   description: "History-backed vFootball selections. Personal tool, 18+.",
   robots: { index: false, follow: false },
+  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "Vig", statusBarStyle: "black-translucent" },
 };
 
 const savedTheme = async () => {

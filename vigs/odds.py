@@ -23,6 +23,12 @@ def edge(prob: float, odds: float) -> float:
     return prob * odds - 1.0
 
 
+# Market chance for live odds. On 298 settled vFootball matches Shin scored
+# better than proportional (log loss 0.4568 vs 0.4590 per selection), mostly on
+# longshot lines such as over 4.5 and first-half over 2.5.
+LIVE_DEVIG = "shin"
+
+
 def devig(odds: Sequence[float], method: str = "proportional") -> list[float]:
     """Market chance with the margin removed, for a complete group of outcomes."""
     inv = [1.0 / o for o in odds]
