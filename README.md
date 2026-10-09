@@ -50,8 +50,12 @@ then run `build`, `evidence` and `sheet` as above.
 
 ## Web app (`web/`)
 
-Next.js app for live picks: choose a market and window, see every pick with its
-evidence, and turn the list into a SportyBet booking code. It fetches odds live
+Next.js app for live picks: choose one or more markets, a window and a per-leg
+odds range; build either a number of picks or a slip to a total price (e.g. 2,
+5 or 10: the most likely combination between that price and 25% above it); edit
+the slip (remove, smart switch to a similar-priced alternative, add); then turn
+it into a SportyBet booking code and open it in the SportyBet app (falls back
+to the website). Theme: Auto, Day or Floodlit, remembered per device. It fetches odds live
 from SportyBet on each load and reads `model.json`, which the collector
 publishes hourly to the `data` branch. No database.
 

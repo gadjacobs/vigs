@@ -5,6 +5,7 @@ import type { Fixture } from "./sportybet";
 export type Grade = "Lean" | "Rough" | "Avoid";
 
 export type Pick = {
+  id: string; // eventId|market
   eventId: string;
   league: string;
   home: string;
@@ -32,42 +33,56 @@ export function gradeOf(breakEven: number, lo: number, hi: number): { grade: Gra
   return { grade: "Rough", why: "likely, and priced for it: range straddles break-even" };
 }
 
-export type PickQuery = {
-  market: string;
+export type CandidateQuery = {
+  markets: string[];
   hours: number;
-  count: number;
-  sort: "likely" | "edge";
+  minOdds: number;
+  maxOdds: number;
   minGrade: "Rough" | "Lean";
   now: number;
 };
 
-export function buildPicks(model: ModelFile, fixtures: Fixture[], q: PickQuery) {
+/** Every (match, market) selection in the window that passes the filters, graded. */
+export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQuery) {
   const end = q.now + q.hours * 3600 * 1000;
-  const inWindow = fixtures.filter((f) => f.kickoff > q.now && f.kickoff <= end && q.market in f.odds);
-  const graded: Pick[] = [];
+  const inWindow = fixtures.filter((f) => f.kickoff > q.now && f.kickoff <= end);
+  const out: Pick[] = [];
+  let avoided = 0;
   for (const f of inWindow) {
-    const est = estimate(model, f.league, f.home, f.away, q.market);
-    const fair = fairProbs(f.odds)[q.market];
-    if (!est || fair === undefined) continue;
-    const odds = f.odds[q.market];
-    const be = 1 / odds;
-    const h = history(model, f.league, f.home, f.away, q.market);
-    const { grade, why } = gradeOf(be, est.lo, est.hi);
-    graded.push({
-      eventId: f.eventId, league: f.league, home: f.home, away: f.away, kickoff: f.kickoff,
-      market: q.market, odds, breakEven: be, marketChance: fair, estimate: est.p, lo: est.lo,
-      hi: est.hi, historyRate: h.rate, historyN: h.n, edge: est.p * odds - 1, grade, why,
-    });
+    const fair = fairProbs(f.odds);
+    for (const market of q.markets) {
+      const odds = f.odds[market];
+      if (odds === undefined || fair[market] === undefined) continue;
+      if (odds < q.minOdds || odds > q.maxOdds) continue;
+      const est = estimate(model, f.league, f.home, f.away, market);
+      if (!est) continue;
+      const be = 1 / odds;
+      const { grade, why } = gradeOf(be, est.lo, est.hi);
+      if (grade === "Avoid") {
+        avoided++;
+        continue;
+      }
+      if (q.minGrade === "Lean" && grade !== "Lean") continue;
+      const h = history(model, f.league, f.home, f.away, market);
+      out.push({
+        id: `${f.eventId}|${market}`, eventId: f.eventId, league: f.league, home: f.home, away: f.away,
+        kickoff: f.kickoff, market, odds, breakEven: be, marketChance: fair[market], estimate: est.p,
+        lo: est.lo, hi: est.hi, historyRate: h.rate, historyN: h.n, edge: est.p * odds - 1, grade, why,
+      });
+    }
   }
-  const avoided = graded.filter((p) => p.grade === "Avoid").length;
-  const keep = graded.filter((p) => (q.minGrade === "Lean" ? p.grade === "Lean" : p.grade !== "Avoid"));
-  keep.sort((a, b) => (q.sort === "edge" ? b.edge - a.edge : b.estimate - a.estimate));
-  return { picks: keep.slice(0, q.count), inWindow: inWindow.length, avoided, eligible: keep.length };
+  return { candidates: out, matches: inWindow.length, avoided };
 }
 
-export function slip(picks: Pick[]) {
-  const odds = picks.reduce((a, p) => a * p.odds, 1);
-  const model = picks.reduce((a, p) => a * p.estimate, 1);
-  const market = picks.reduce((a, p) => a * p.marketChance, 1);
-  return { odds, model, market };
+/** Backwards-compatible single-market list. */
+export function buildPicks(
+  model: ModelFile,
+  fixtures: Fixture[],
+  q: { market: string; hours: number; count: number; sort: "likely" | "edge"; minGrade: "Rough" | "Lean"; now: number },
+) {
+  const r = candidates(model, fixtures, { markets: [q.market], hours: q.hours, minOdds: 1, maxOdds: 1000, minGrade: q.minGrade, now: q.now });
+  const keep = [...r.candidates].sort((a, b) => (q.sort === "edge" ? b.edge - a.edge : b.estimate - a.estimate));
+  return { picks: keep.slice(0, q.count), inWindow: r.matches, avoided: r.avoided, eligible: keep.length };
 }
+
+export { slipStats as slip } from "./slip";

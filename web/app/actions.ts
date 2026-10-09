@@ -3,38 +3,24 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { book, selection } from "@/lib/sportybet";
 
-type SlipLeg = { id: string; kickoff: number; odds: number; est: number; mkt: number };
+export type Leg = { eventId: string; market: string; kickoff: number };
+export type BookResult =
+  | { ok: true; code: string; legs: number; verified: number; skipped: number; lastKickoff: number }
+  | { ok: false; error: string };
 
-/** Turn the picks on screen into a SportyBet booking code. Places no bet. */
-export async function bookPicks(formData: FormData) {
-  const market = String(formData.get("market"));
-  const qs = String(formData.get("qs") ?? "");
-  const legs = (JSON.parse(String(formData.get("slip") ?? "[]")) as SlipLeg[]).filter(
-    (l) => l.kickoff > Date.now() + 2 * 60 * 1000,
-  );
-  const params = new URLSearchParams(qs);
-  if (!legs.length) {
-    params.set("err", "Every pick has started or starts within 2 minutes. Refresh for the next round.");
-    redirect(`/?${params}`);
-  }
-  let target: string;
+/** Turn the slip into a SportyBet booking code. Places no bet. */
+export async function bookSlip(legs: Leg[]): Promise<BookResult> {
+  const live = legs.filter((l) => l.kickoff > Date.now() + 2 * 60 * 1000);
+  if (!live.length) return { ok: false, error: "Every leg has started or starts within 2 minutes. Refresh for the next round." };
   try {
-    const res = await book(legs.map((l) => selection(market, l.id)));
-    const prod = (f: (l: SlipLeg) => number) => legs.reduce((a, l) => a * f(l), 1);
-    params.set("code", res.code);
-    params.set("n", String(legs.length));
-    params.set("ok", String(res.verified));
-    params.set("last", String(Math.max(...legs.map((l) => l.kickoff))));
-    params.set("ao", prod((l) => l.odds).toFixed(2));
-    params.set("ae", prod((l) => l.est).toFixed(6));
-    params.set("am", prod((l) => l.mkt).toFixed(6));
-    params.delete("err");
-    target = `/?${params}`;
+    const res = await book(live.map((l) => selection(l.market, l.eventId)));
+    return {
+      ok: true, code: res.code, legs: live.length, verified: res.verified,
+      skipped: legs.length - live.length, lastKickoff: Math.max(...live.map((l) => l.kickoff)),
+    };
   } catch (e) {
-    params.set("err", `SportyBet did not create a code: ${(e as Error).message}. Try again in a minute.`);
-    target = `/?${params}`;
+    return { ok: false, error: `SportyBet did not create a code: ${(e as Error).message}. Try again in a minute.` };
   }
-  redirect(target);
 }
 
 async function digest(s: string): Promise<string> {
