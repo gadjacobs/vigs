@@ -1,4 +1,4 @@
-"""Command line: synth | mine | walkforward | forecast | power."""
+"""Command line: evidence | sheet | ledger | slip | mine | walkforward | forecast | power | synth."""
 from __future__ import annotations
 
 import argparse
@@ -6,8 +6,13 @@ import math
 import sys
 
 from . import backtest as bt
-from .data import group_weeks, load_csv, synthesize, write_csv
+from .data import group_weeks, load_csv, market_label, synthesize, write_csv
+from .evidence import STATS_VERSION, analyze, calibration, grade_obs
+from .grading import GRADES, RANK, GradeConfig
+from .ledger import Ledger, LedgerError, summarize
+from .odds import combined_odds, combined_prob, house_cut
 from .patterns import build_candidates
+from .sheet import LOW_CHANCE, SheetQuery, build_sheet
 from .stats import required_n
 
 
@@ -28,10 +33,17 @@ def _fmt(s: bt.Stats) -> str:
 
 def cmd_synth(a) -> None:
     hidden = {f"T{i:02d}": 0.35 for i in range(a.plant)} if a.plant else None
-    ms = synthesize(a.weeks, a.teams, a.seed, a.margin, hidden, a.played)
+    skew = {}
+    for item in a.skew or []:
+        mk, _, mult = item.partition("=")
+        skew[mk.upper()] = float(mult)
+    ms = synthesize(a.weeks, a.teams, a.seed, a.margin, hidden, a.played, skew, a.league,
+                    a.minutes)
     write_csv(a.out, ms)
-    print(f"wrote {len(ms)} SYNTHETIC matches ({a.weeks} weeks) to {a.out}"
-          + (f", planted edge on {a.plant} team(s)" if a.plant else ", no planted edge"))
+    planted = [f"edge on {a.plant} team(s)"] if a.plant else []
+    planted += [f"{k} odds x{v:g}" for k, v in skew.items()]
+    print(f"wrote {len(ms)} SYNTHETIC matches ({a.weeks} rounds) to {a.out}; planted: "
+          + (", ".join(planted) or "nothing"))
 
 
 def cmd_mine(a) -> None:
@@ -125,9 +137,206 @@ def cmd_power(a) -> None:
           f"about {n:,} bets.")
 
 
+def _pct(x: float | None) -> str:
+    return "-" if x is None else f"{x:.1%}"
+
+
+def _markets(arg: str | None) -> set[str] | None:
+    return {m.strip().upper() for m in arg.split(",")} if arg else None
+
+
+def _cfg(a) -> GradeConfig:
+    return GradeConfig(k=a.k, min_days=a.min_days)
+
+
+def cmd_evidence(a) -> None:
+    matches = load_csv(a.csv, devig_method=a.devig)
+    an, obs = analyze(matches, None, _cfg(a))
+    wanted = _markets(a.market)
+    obs = [o for o in obs if wanted is None or o.market in wanted]
+    settled = [o for o in obs if o.hit is not None]
+    if not settled:
+        sys.exit("no settled selections to learn from")
+    print(f"{an.n_settled_matches} settled matches, {len(settled)} selections shown, "
+          f"{an.n_tested} slices with n >= 30 tested. Walk-forward over the last "
+          f"{an.test_rounds} rounds. Contexts: {', '.join(an.dims) or 'none'}.")
+    print("\nCalibration: what the market said vs what happened")
+    print(f"  {'market chance':<14s}{'n':>7s}{'market':>9s}{'history':>9s}{'break-even':>12s}")
+    for label, n, mq, hr, be in calibration(settled):
+        print(f"  {label:<14s}{n:>7d}{mq:>9.1%}{hr:>9.1%}{be:>12.1%}")
+    hits, sq, vq = an.overall
+    z = (hits - sq) / math.sqrt(vq) if vq else 0.0
+    if abs(z) < 2:
+        print(f"  Verdict: history matches market chance (z = {z:+.1f}). Break-even sits above "
+              "both, so on average the margin decides.")
+    else:
+        print(f"  Verdict: history departs from market chance (z = {z:+.1f}). Check the slices below.")
+
+    rows = [(k, an.grade_slice(k)) for k, st in an.slices.items()
+            if st.n >= a.min_n and (wanted is None or k.split("|")[0] in wanted)]
+    counts = {g: sum(r[1].grade == g for r in rows) for g in GRADES}
+    rows.sort(key=lambda r: (-RANK[r[1].grade], -r[1].p_beats))
+    print(f"\nSlices with n >= {a.min_n}: " + ", ".join(f"{g} {counts[g]}" for g in reversed(GRADES)))
+    print(f"Top {a.top} by grade, then P(true rate > break-even):")
+    for key, g in rows[: a.top]:
+        st = an.slices[key]
+        lo, hi = g.interval()
+        wf = st.validated(an.cfg.min_n)
+        print(f"  {g.grade:<6s} {key}")
+        print(f"         n {st.n}, history {_pct(g.history_rate)}, market {st.market_mean:.1%}, "
+              f"break-even {g.break_even:.1%}, Vig {g.estimate:.1%} [{lo:.1%}, {hi:.1%}], "
+              f"P(beat) {g.p_beats:.0%}")
+        print(f"         walk-forward {'-' if wf is None else 'held' if wf else 'not proven'}"
+              f" (n {st.oos_n}, ROI {st.oos_roi:+.1%}), FDR q "
+              f"{'-' if st.q_fdr is None else f'{st.q_fdr:.2f}'}. {g.why()}")
+    if not counts["Solid"]:
+        print("\nNothing clears the Solid bar." + (
+            f" Highest grade is capped at Lean until {an.cfg.min_days:g} days are collected."
+            if (an.collected_days or 0) < an.cfg.min_days else ""))
+
+
+def _print_pick(i: int, gp, show_slice: bool = True) -> None:
+    g, o = gp.graded, gp.obs
+    lo, hi = g.interval()
+    print(f"  {i:>2d}. {o.match.label():<12s} {market_label(o.market):<22s} @ {o.odds:<5.2f} "
+          f"{g.grade}")
+    print(f"      break-even {g.break_even:.1%}, market {o.q:.1%}, history {_pct(g.history_rate)}"
+          f" (n {g.n}), Vig {g.estimate:.1%} [{lo:.1%}, {hi:.1%}], edge {g.edge:+.1%} "
+          f"(N{g.edge * 1000:+,.0f} per N1,000)")
+    if show_slice:
+        print(f"      slice {gp.slice_key} (best of {gp.slices_considered}); {g.why()}")
+
+
+def cmd_sheet(a) -> None:
+    hist = load_csv(a.history, devig_method=a.devig)
+    n_rounds = max(m.t for m in hist) + 1
+    nxt = load_csv(a.upcoming, start_t=n_rounds, devig_method=a.devig)
+    if any(m.settled for m in nxt):
+        sys.exit(f"{a.upcoming}: contains results; sheets are for fixtures not yet played")
+    rounds = sorted({m.t for m in nxt})[: a.rounds]
+    nxt = [m for m in nxt if m.t in rounds]
+    # Always test every market, so the false-discovery family can't be shrunk
+    # by narrowing the query; the market filter applies when the sheet is built.
+    an, obs = analyze(hist + nxt, None, _cfg(a))
+    wanted = _markets(a.market)
+    graded = [grade_obs(o, an) for o in obs
+              if o.hit is None and (wanted is None or o.market in wanted)]
+    lo, _, hi = a.odds.partition("-")
+    q = SheetQuery(_markets(a.market), a.count, a.min_grade.capitalize(), float(lo),
+                   float(hi or 1000), a.max_per_round, a.output)
+    sh = build_sheet(graded, q)
+    label = ", ".join(market_label(m) for m in sorted(q.markets)) if q.markets else "all markets"
+    print(f"Sheet: {label}; {q.min_grade} or better; {q.count} picks; odds {q.odds_lo:g}-{q.odds_hi:g}; "
+          f"{len(rounds)} upcoming round(s); {q.output}.")
+    if sh.mode == "Rough" and sh.picks:
+        print("This is a Rough sheet: likely outcomes, priced for it. No evidence they beat break-even.")
+    for i, gp in enumerate(sh.picks, 1):
+        _print_pick(i, gp)
+    if sh.note:
+        print("\n" + sh.note)
+    if sh.avoid:
+        print(f"\n{len(sh.avoid)} selection(s) in scope grade Avoid (history below break-even), e.g. "
+              + "; ".join(f"{g.obs.match.label()} {market_label(g.obs.market)} @ {g.obs.odds:.2f}"
+                          for g in sh.avoid[:3]))
+    if a.output == "acca" and len(sh.picks) > 1:
+        print(f"\nAccumulator: odds {sh.combined_odds:.2f}, market chance {sh.combined_market:.1%}, "
+              f"Vig estimate {sh.combined_estimate:.1%}, edge "
+              f"{sh.combined_estimate * sh.combined_odds - 1:+.1%}, house cut {sh.house_cut:.1%}.")
+        if sh.combined_estimate < LOW_CHANCE:
+            print(f"Warning: combined chance is under {LOW_CHANCE:.0%}; most slips like this lose.")
+    if a.ledger and sh.picks:
+        led = Ledger(a.ledger)
+        sheet_id = f"sheet-{len(led.records)}"
+        for gp in sh.picks:
+            g = gp.graded
+            lo_, hi_ = g.interval()
+            led.add_pick({
+                "market": gp.obs.market, "odds": gp.obs.odds, "break_even": g.break_even,
+                "market_prob": gp.obs.q, "history_rate": g.history_rate, "history_n": g.n,
+                "estimate": g.estimate, "ci_low": lo_, "ci_high": hi_, "edge": g.edge,
+                "grade": g.grade, "grade_reasons": [vars(t) for t in g.tests],
+                "slice_key": gp.slice_key, "stats_version": STATS_VERSION, "sheet_id": sheet_id,
+                "stake": 0, "shadow": True}, gp.obs.match)
+        print(f"\nLogged {len(sh.picks)} picks to {a.ledger} in shadow mode (no stakes).")
+
+
+def cmd_ledger(a) -> None:
+    try:
+        led = Ledger(a.ledger)
+    except LedgerError as e:
+        sys.exit(str(e))
+    if a.action == "verify":
+        print(f"{a.ledger}: {len(led.records)} records, hash chain intact, head {led.head[:12]}")
+        return
+    if a.action == "settle":
+        if not a.results:
+            sys.exit("settle needs --results results.csv")
+        done, still = led.settle(load_csv(a.results))
+        print(f"settled {done} pick(s); {still} still open")
+        return
+    print(f"Ledger {a.ledger}: flat one-unit stakes, shadow mode. 90% intervals.")
+    for r in summarize(led):
+        if r.n == 0:
+            print(f"  {r.grade:<6s} no settled picks ({r.open} open)")
+            continue
+        print(f"  {r.grade:<6s} n {r.n}, hits {r.hits} (market expected {r.expected_market:.1f}, "
+              f"Vig expected {r.expected_vig:.1f}), ROI {r.roi:+.1%} [{r.roi_low:+.1%}, "
+              f"{r.roi_high:+.1%}], {r.open} open")
+        if r.grade == "Solid":
+            print("         Solid ROI interval is " + ("above zero." if r.roi_low > 0 else
+                  "not above zero: no proof yet that Solid picks make money."))
+
+
+def cmd_slip(a) -> None:
+    odds = a.odds
+    chances = [c / 100 for c in a.chances] if a.chances else [1 / o for o in odds]
+    if len(chances) != len(odds):
+        sys.exit("give one chance per leg")
+    print(f"combined odds {combined_odds(odds):.2f}, chance {combined_prob(chances):.1%}, "
+          f"house cut {house_cut(odds, chances):.1%}")
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="vigs", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
+
+    def grading_args(p) -> None:
+        p.add_argument("--market", help="comma list, e.g. O15,FH_O05 (default: all)")
+        p.add_argument("--k", type=float, default=200, help="prior strength")
+        p.add_argument("--min-days", dest="min_days", type=float, default=30)
+        p.add_argument("--devig", choices=("proportional", "shin"), default="proportional")
+
+    p = sub.add_parser("evidence", help="calibration and graded slices from history")
+    p.add_argument("csv")
+    p.add_argument("--top", type=int, default=15)
+    p.add_argument("--min-n", dest="min_n", type=int, default=100)
+    grading_args(p)
+    p.set_defaults(fn=cmd_evidence)
+
+    p = sub.add_parser("sheet", help="graded picks for upcoming rounds")
+    p.add_argument("history")
+    p.add_argument("upcoming")
+    p.add_argument("--count", type=int, default=10)
+    p.add_argument("--min-grade", dest="min_grade", default="lean",
+                   choices=("solid", "lean", "rough"))
+    p.add_argument("--odds", default="1.01-1000", help="range, e.g. 1.05-1.5")
+    p.add_argument("--rounds", type=int, default=2, help="upcoming rounds to cover")
+    p.add_argument("--max-per-round", dest="max_per_round", type=int)
+    p.add_argument("--output", choices=("singles", "acca"), default="singles")
+    p.add_argument("--ledger", default="ledger.jsonl", help="'' to skip logging")
+    grading_args(p)
+    p.set_defaults(fn=cmd_sheet)
+
+    p = sub.add_parser("ledger", help="verify, settle or report the pick ledger")
+    p.add_argument("action", choices=("report", "settle", "verify"))
+    p.add_argument("--ledger", default="ledger.jsonl")
+    p.add_argument("--results")
+    p.set_defaults(fn=cmd_ledger)
+
+    p = sub.add_parser("slip", help="combined odds, chance and house cut")
+    p.add_argument("odds", type=float, nargs="+")
+    p.add_argument("--chances", type=float, nargs="+", help="market chance per leg, in %%")
+    p.set_defaults(fn=cmd_slip)
 
     p = sub.add_parser("synth", help="generate SYNTHETIC data to test the pipeline")
     p.add_argument("--out", default="synthetic.csv")
@@ -136,7 +345,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--margin", type=float, default=0.06)
     p.add_argument("--plant", type=int, default=0, help="give N teams an edge the odds omit")
-    p.add_argument("--played", type=int, default=None, help="leave later weeks unsettled")
+    p.add_argument("--played", type=int, default=None, help="leave later rounds unsettled")
+    p.add_argument("--skew", nargs="*", help="mispriced market, e.g. O15=1.15")
+    p.add_argument("--league", default="England")
+    p.add_argument("--minutes", type=float, default=5.0, help="minutes between rounds")
     p.set_defaults(fn=cmd_synth)
 
     p = sub.add_parser("mine", help="rank patterns, validate on a holdout")

@@ -6,7 +6,7 @@ import math
 import random
 from dataclasses import dataclass
 
-from .data import Match, group_weeks, settle
+from .data import Match, group_weeks
 from .patterns import Candidate, State
 from .stats import (bh_qvalues, bootstrap_ci, poisson_binomial_sf, z_vs_fair)
 
@@ -47,7 +47,9 @@ def build_bets(matches: list[Match], candidates: list[Candidate]) -> dict[str, l
                 mk = c.fn(st, m)
                 if mk is None or mk not in m.fair:
                     continue
-                hit = settle(mk, m.hg, m.ag) if m.settled else None
+                hit = m.outcome(mk)
+                if m.settled and hit is None:
+                    continue                    # can't be settled from this data
                 out[c.name].append(Bet(c.name, m, mk, m.odds[mk], m.fair[mk], hit))
         st.update(week)
     return out
@@ -222,7 +224,7 @@ def summarize_walk(results: list[AccaResult], matches: list[Match], lo: float, h
                 legs = [(rng.choice("1X2"), m) for m in sel]
                 prod = math.prod(m.odds[mk] for mk, m in legs)
                 if lo <= prod <= hi:
-                    ok = all(settle(mk, m.hg, m.ag) for mk, m in legs)
+                    ok = all(m.outcome(mk) for mk, m in legs)
                     total += prod - 1 if ok else -1
                     used += 1
                     break

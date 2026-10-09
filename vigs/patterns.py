@@ -2,7 +2,7 @@
 
 Every pattern is a pure function of (state, match) -> market | None, where
 `state` only contains gameweeks strictly before the match: no look-ahead.
-All parameters are fixed here, up front, so the number of hypotheses tested
+All parameters are set here, up front, so the number of hypotheses tested
 (K) is known and can be corrected for.
 """
 from __future__ import annotations

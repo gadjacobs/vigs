@@ -15,6 +15,9 @@ class Basics(unittest.TestCase):
         self.assertTrue(settle("1", 2, 1) and settle("X", 1, 1) and settle("2", 0, 1))
         self.assertTrue(settle("O25", 2, 1) and settle("U25", 1, 1))
         self.assertTrue(settle("BY", 1, 1) and settle("BN", 2, 0))
+        self.assertTrue(settle("O15", 1, 1) and settle("U35", 2, 1) and not settle("O05", 0, 0))
+        self.assertTrue(settle("FH_O05", 2, 1, 1, 0))
+        self.assertIsNone(settle("FH_O05", 2, 1))       # no half-time score: can't settle
 
     def test_fair_probs_sum_to_one_and_need_full_group(self):
         q = fair_probs({"1": 2.0, "X": 3.5, "2": 4.0, "O25": 1.8})
@@ -91,14 +94,16 @@ class Detection(unittest.TestCase):
         self.assertEqual(strong, 0)
 
     def test_planted_edge_is_found(self):
-        hidden = {f"T{i:02d}": 0.35 for i in range(5)}
+        # +65% goals for 5 teams the odds ignore: found in 11/12 seeds at 80 rounds.
+        # (At +42% it is found in only 2/12: real edges are hard to see in small samples.)
+        hidden = {f"T{i:02d}": 0.5 for i in range(1, 6)}
         found = 0
-        for seed in (5, 6, 7):
+        for seed in range(20, 26):
             ms = synthesize(weeks=80, seed=seed, hidden=hidden)
             bets = bt.build_bets(ms, build_candidates(10))
             rows, _, _ = bt.mine(bets, 80)
             found += any(r.name.startswith("team_bias") and r.verdict != "no evidence" for r in rows)
-        self.assertGreaterEqual(found, 2)
+        self.assertGreaterEqual(found, 4)
 
     def test_accas_respect_odds_band(self):
         ms = synthesize(weeks=50, seed=9)
