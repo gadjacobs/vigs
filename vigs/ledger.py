@@ -91,6 +91,11 @@ class Ledger:
         self._append("pick", pick)
         return pick["id"]
 
+    def add_booking(self, code: str, market: str, pick_ids: list[str], deadline_ms: int) -> None:
+        """Record a SportyBet booking code made from logged picks (no stake placed)."""
+        self._append("booking", {"code": code, "market": market, "pick_ids": pick_ids,
+                                 "deadline_ms": deadline_ms, "created_at": now_utc()})
+
     def settle(self, matches: Iterable[Match]) -> tuple[int, int]:
         """Settle open picks from results. Returns (settled now, still open)."""
         done = self.settlements()

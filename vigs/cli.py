@@ -436,6 +436,42 @@ def datetime_from_iso(s: str):
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
+def cmd_book(a) -> None:
+    import time as _time
+    from . import sportybet as sb
+    led = Ledger(a.ledger)
+    picks = [p for p in led.picks().values() if p["market"] == a.market and p.get("event_id")]
+    if not picks:
+        sys.exit(f"no picks for {a.market} in {a.ledger}")
+    sheet = max(p["sheet_id"] for p in picks)
+    soon = sb._iso(int(_time.time() * 1000) + a.buffer * 60 * 1000)
+    live = [p for p in picks if p["sheet_id"] == sheet and (p.get("kickoff") or "") > soon]
+    gone = sum(p["sheet_id"] == sheet for p in picks) - len(live)
+    if not live:
+        sys.exit(f"every pick in {sheet} has kicked off or starts within {a.buffer} minutes")
+    live.sort(key=lambda p: p["kickoff"])
+    client = sb.Client()
+    sels = [sb.selection(p["market"], p["event_id"]) for p in live]
+    code = sb.create_booking(client, sels)
+    back, deadline, unavailable = sb.load_booking(client, code)
+    want = {(s["eventId"], s["marketId"], s["specifier"] or None) for s in sels}
+    got = {(b["eventId"], b["marketId"], b["specifier"] or None) for b in back}
+    print(f"{market_label(a.market)}: booking code {code} ({len(sels)} selections"
+          + (f"; {gone} skipped, already started" if gone else "") + ")")
+    print(f"  load it: https://www.sportybet.com/ng/?shareCode={code}")
+    print("  verified: code decodes to exactly these selections" if want == got else
+          f"  WARNING: decoded selections differ ({len(got & want)} of {len(want)} match)")
+    if deadline:
+        from datetime import datetime, timedelta, timezone
+        lagos = datetime.fromtimestamp(deadline / 1000, timezone.utc) + timedelta(hours=1)
+        print(f"  code works until {lagos:%H:%M} Lagos (last kickoff); each match drops off "
+              "once it starts"
+              + (f"; {unavailable} selection(s) unavailable" if unavailable else ""))
+    for b in back:
+        print(f"    {b['home']}-{b['away']}: {b['outcome']} @ {b['odds']}")
+    led.add_booking(code, a.market, [p["id"] for p in live], deadline)
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="vigs", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -459,6 +495,12 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--ledger", default="ledger/trial.jsonl")
     p.add_argument("--no-refresh", dest="refresh", action="store_false")
     p.set_defaults(fn=cmd_likely)
+
+    p = sub.add_parser("book", help="SportyBet booking code for the latest list of a market")
+    p.add_argument("--market", default="FH_O05")
+    p.add_argument("--ledger", default="ledger/trial.jsonl")
+    p.add_argument("--buffer", type=int, default=2, help="skip matches starting within N minutes")
+    p.set_defaults(fn=cmd_book)
 
     p = sub.add_parser("study", help="results-only base rates and memory tests")
     p.add_argument("--results", default="data/results.csv")

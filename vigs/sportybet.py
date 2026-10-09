@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from typing import Any, Iterator
 
 BASE = "https://www.sportybet.com/api/ng/factsCenter"
+ORDERS = "https://www.sportybet.com/api/ng/orders"
+OPER_ID = "2"                         # SportyBet Nigeria
 SPORT = "sr:sport:202120001"          # vFootball
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
@@ -41,11 +43,17 @@ class Client:
         self._last = 0.0
         self.requests = 0
 
-    def get(self, path: str, **params: Any) -> Any:
-        url = f"{BASE}/{path}?{urllib.parse.urlencode(params)}"
-        req = urllib.request.Request(url, headers={
-            "User-Agent": UA, "Accept": "application/json",
-            "Referer": "https://www.sportybet.com/ng/sport/vFootball"})
+    def get(self, path: str, base: str = BASE, body: Any = None, **params: Any) -> Any:
+        url = f"{base}/{path}" + (f"?{urllib.parse.urlencode(params)}" if params else "")
+        headers = {"User-Agent": UA, "Accept": "application/json",
+                   "Referer": "https://www.sportybet.com/ng/sport/vFootball"}
+        data = None
+        if base == ORDERS:
+            headers["OperId"] = OPER_ID       # orders calls fail validation without it
+        if body is not None:
+            data = json.dumps(body).encode()
+            headers["Content-Type"] = "application/json;charset=UTF-8"
+        req = urllib.request.Request(url, data=data, headers=headers)
         for attempt in range(self.retries + 1):
             wait = self.delay - (time.monotonic() - self._last)
             if wait > 0:
@@ -310,3 +318,45 @@ def results_matches_row(r: dict):
 def results_matches(path: str) -> list:
     with open(path, newline="", encoding="utf-8") as fh:
         return [results_matches_row(r) for r in csv.DictReader(fh)]
+
+
+# ---------------------------------------------------------------- booking --
+# A booking code ("Book a bet") is a shareable list of selections. Creating one
+# needs no login and places nothing; the user loads it in SportyBet and decides.
+
+def selection(market: str, event_id: str) -> dict:
+    """The SportyBet selection for a vigs market key."""
+    if market in ("1", "X", "2"):
+        return {"eventId": event_id, "marketId": "1", "specifier": None,
+                "outcomeId": {"1": "1", "X": "2", "2": "3"}[market]}
+    if market in ("BY", "BN"):
+        return {"eventId": event_id, "marketId": "29", "specifier": None,
+                "outcomeId": "74" if market == "BY" else "76"}
+    fh = market.startswith("FH_")
+    key = market[3:] if fh else market
+    side, line = key[0], f"{key[1]}.{key[2]}"
+    return {"eventId": event_id, "marketId": "68" if fh else "18",
+            "specifier": f"total={line}", "outcomeId": "12" if side == "O" else "13"}
+
+
+def create_booking(client: Client, selections: list[dict]) -> str:
+    data = client.get("share", base=ORDERS, body={"selections": selections})
+    code = data.get("shareCode")
+    if not code:
+        raise ApiError(f"no booking code returned: {data}")
+    return code
+
+
+def load_booking(client: Client, code: str) -> tuple[list[dict], int, int]:
+    """Decode a booking code: its selections (eventId, home, away, market,
+    specifier, outcome, odds), its deadline in ms, and how many are unavailable."""
+    data = client.get(f"share/{code}", base=ORDERS)
+    out = []
+    for e in data.get("outcomes") or []:
+        m = (e.get("markets") or [{}])[0]
+        o = (m.get("outcomes") or [{}])[0]
+        out.append({"eventId": e.get("eventId"), "home": e.get("homeTeamName"),
+                    "away": e.get("awayTeamName"), "marketId": str(m.get("id")),
+                    "specifier": m.get("specifier"), "outcome": o.get("desc"),
+                    "odds": o.get("odds")})
+    return out, int(data.get("deadline") or 0), len(data.get("unavailableOutcomes") or [])
