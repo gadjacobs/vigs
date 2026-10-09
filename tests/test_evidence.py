@@ -150,6 +150,10 @@ class BannedWords(unittest.TestCase):
         files = [os.path.join(ROOT, "README.md")]
         pkg = os.path.join(ROOT, "vigs")
         files += [os.path.join(pkg, f) for f in os.listdir(pkg) if f.endswith(".py")]
+        for sub in ("web/app", "web/lib", "web/app/login"):
+            d = os.path.join(ROOT, sub)
+            if os.path.isdir(d):
+                files += [os.path.join(d, f) for f in os.listdir(d) if f.endswith((".ts", ".tsx"))]
         hits = []
         for path in files:
             with open(path, encoding="utf-8") as fh:

@@ -123,3 +123,35 @@ def predict_interval(main: dict[str, LeagueModel], boots: list[dict[str, LeagueM
     lo = draws[int(tail * (len(draws) - 1))]
     hi = draws[int(math.ceil((1 - tail) * (len(draws) - 1)))]
     return p[market], lo, hi
+
+
+HISTORY_MARKETS = ("1", "X", "2", "BY", "BN") + tuple(
+    f"{pre}{side}{ln}" for pre in ("", "FH_") for side in "OU" for ln in LINES)
+
+
+def export(rows: list[dict], reps: int = 20, seed: int = 0) -> dict:
+    """Everything the web app needs to price a match: per-league strengths,
+    bootstrap refits for intervals, and each team's home/away hit counts."""
+    from .sportybet import results_matches_row
+    main = fit(rows)
+    boots = ensemble(rows, reps=reps, seed=seed)
+    leagues = {}
+    for lg, m in main.items():
+        leagues[lg] = {
+            "home": m.home, "fh_share": m.fh_share, "attack": m.attack, "defence": m.defence,
+            "reps": [{"home": b[lg].home, "fh_share": b[lg].fh_share, "attack": b[lg].attack,
+                      "defence": b[lg].defence} for b in boots if lg in b],
+        }
+    history: dict = {}
+    for r in rows:
+        match = results_matches_row(r)
+        for team, venue in ((r["home"], "home"), (r["away"], "away")):
+            h = history.setdefault(r["league"], {}).setdefault(team, {}).setdefault(
+                venue, {"n": 0, **{mk: 0 for mk in HISTORY_MARKETS}})
+            h["n"] += 1
+            for mk in HISTORY_MARKETS:
+                if match.outcome(mk):
+                    h[mk] += 1
+    kicks = [r["kickoff"] for r in rows]
+    return {"version": 1, "fitted_on": len(rows), "from": min(kicks), "to": max(kicks),
+            "leagues": leagues, "history": history}

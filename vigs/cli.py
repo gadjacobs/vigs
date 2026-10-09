@@ -461,15 +461,34 @@ def cmd_book(a) -> None:
     print(f"  load it: https://www.sportybet.com/ng/?shareCode={code}")
     print("  verified: code decodes to exactly these selections" if want == got else
           f"  WARNING: decoded selections differ ({len(got & want)} of {len(want)} match)")
-    if deadline:
-        from datetime import datetime, timedelta, timezone
-        lagos = datetime.fromtimestamp(deadline / 1000, timezone.utc) + timedelta(hours=1)
-        print(f"  code works until {lagos:%H:%M} Lagos (last kickoff); each match drops off "
+    if live:
+        from datetime import timedelta
+        last = datetime_from_iso(max(p["kickoff"] for p in live)) + timedelta(hours=1)
+        print(f"  last match kicks off at {last:%H:%M} Lagos; each match drops off the slip "
               "once it starts"
               + (f"; {unavailable} selection(s) unavailable" if unavailable else ""))
     for b in back:
         print(f"    {b['home']}-{b['away']}: {b['outcome']} @ {b['odds']}")
     led.add_booking(code, a.market, [p["id"] for p in live], deadline)
+
+
+def cmd_export_model(a) -> None:
+    import json
+    import os
+    from datetime import timedelta
+    from . import model as md
+    from .study import load_results
+    rows = load_results(os.path.join(a.data, "results.csv"))
+    start = (datetime_from_iso(rows[-1]["kickoff"]) - timedelta(days=a.days)).isoformat()
+    rows = [r for r in rows if r["kickoff"] >= start.replace("+00:00", "Z")]
+    out = md.export(rows, reps=a.reps)
+    out["window_days"] = a.days
+    from datetime import datetime, timezone
+    out["exported_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with open(a.out, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, separators=(",", ":"))
+    print(f"wrote {a.out}: {len(rows)} results, {len(out['leagues'])} leagues, "
+          f"{os.path.getsize(a.out) // 1024} KB")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -501,6 +520,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--ledger", default="ledger/trial.jsonl")
     p.add_argument("--buffer", type=int, default=2, help="skip matches starting within N minutes")
     p.set_defaults(fn=cmd_book)
+
+    p = sub.add_parser("export-model", help="write the fitted model as JSON for the web app")
+    p.add_argument("--data", default="data")
+    p.add_argument("--out", default="data/model.json")
+    p.add_argument("--days", type=float, default=30)
+    p.add_argument("--reps", type=int, default=20)
+    p.set_defaults(fn=cmd_export_model)
 
     p = sub.add_parser("study", help="results-only base rates and memory tests")
     p.add_argument("--results", default="data/results.csv")

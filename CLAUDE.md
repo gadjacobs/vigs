@@ -33,6 +33,14 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 - The `data` branch is written only by `.github/workflows/collect.yml`. Never
   push to it or rewrite it by hand. `data/` is git-ignored on code branches.
 
+## Web app
+- `web/` is Next.js 16 (read `web/node_modules/next/dist/docs` before changing
+  framework code: `proxy.ts` replaces middleware; `searchParams` and `cookies()` are async).
+- `web/lib` ports the model maths from `vigs/model.py`; `web/tests` pins it to
+  Python output. Change both together.
+- It reads `model.json` from the `data` branch and odds live from SportyBet; it
+  never places bets. Booking codes are created with the `OperId: 2` header.
+
 ## Engineering rules
 - All maths in `vigs/odds.py`, `vigs/stats.py`, `vigs/grading.py`; CLI only formats.
 - Point-in-time: anything describing a match uses earlier rounds only (tests enforce it).

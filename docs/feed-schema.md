@@ -77,7 +77,7 @@ on every call; without it vFootball codes fail with "All selections are not vali
 - Create: `POST share` with `{"selections": [{"eventId", "marketId", "specifier", "outcomeId"}]}`
   → `data.shareCode`. No login. Identical selection sets return the same code.
 - Decode: `GET share/<code>` → `data.outcomes[]` (events with the chosen market),
-  `data.deadline` (ms, the last kickoff), `data.unavailableOutcomes`.
+  `data.deadline` (ms, code expiry: last kickoff plus 24 hours), `data.unavailableOutcomes`.
 - Selections: 1X2 `1` / outcomes `1` `2` `3`; total goals `18` + `total=1.5`,
   outcome `12` over, `13` under; first-half total `68`; GG/NG `29`, `74` yes, `76` no.
 - Load in the app or site with the code, or `https://www.sportybet.com/ng/?shareCode=<code>`.

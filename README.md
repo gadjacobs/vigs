@@ -48,6 +48,28 @@ public: the collected data is visible to anyone.
 To use the collected data: `git fetch origin data && git worktree add data origin/data`,
 then run `build`, `evidence` and `sheet` as above.
 
+## Web app (`web/`)
+
+Next.js app for live picks: choose a market and window, see every pick with its
+evidence, and turn the list into a SportyBet booking code. It fetches odds live
+from SportyBet on each load and reads `model.json`, which the collector
+publishes hourly to the `data` branch. No database.
+
+Deploy on Vercel:
+1. vercel.com → Add New → Project → import `gadjacobs/vigs`.
+2. Root Directory: `web` (framework detected as Next.js).
+3. Environment variable `APP_PASSWORD`: anything you choose. Every page sits
+   behind it, with an 18+ confirmation. Optional: `MODEL_URL` to read the model elsewhere.
+4. Deploy. Pushes to the branch redeploy automatically.
+
+Local: `cd web && npm install && MODEL_PATH=../data/model.json npm run dev`
+(`npm test` checks the TypeScript model against the Python one).
+
+Grades in the app top out at Lean until odds history can validate an edge.
+The collector also logs the coming hour's top picks per market to
+`ledger.jsonl` on the `data` branch and settles them, so the method is scored
+whether or not anyone opens the app.
+
 ## More commands
 
 ```

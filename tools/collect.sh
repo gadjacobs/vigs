@@ -23,8 +23,22 @@ if [ ! -f "$DATA/results.csv" ]; then
   python -m vigs fetch results --data "$DATA" --days 30 --delay 1.5
   save
 fi
+publish() {
+  # Model for the web app, then log the coming hour's picks (shadow mode) and
+  # settle earlier ones, so every list the method produces is scored.
+  python -m vigs export-model --data "$DATA" --out "$DATA/model.json" || true
+  for m in FH_O05 BY O15; do
+    python -m vigs likely --market "$m" --hours 1 --count 20 --data "$DATA" \
+      --ledger "$DATA/ledger.jsonl" --no-refresh > /dev/null || true
+  done
+  python -m vigs ledger settle --ledger "$DATA/ledger.jsonl" --results "$DATA/results.csv" || true
+}
+
+publish
+save
 for i in $(seq 1 "$CHUNKS"); do
   echo "chunk $i/$CHUNKS"
   python -u -m vigs fetch watch --data "$DATA" --minutes "$MINUTES" --interval 240
+  publish
   save
 done
