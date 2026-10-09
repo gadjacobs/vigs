@@ -19,14 +19,14 @@ const cands = [
   pick("e6", "O15", 1.2, 0.85), pick("e7", "BY", 1.8, 0.6),
 ];
 
-function brute(target: number, slack: number) {
+function brute(target: number, slack: number, low = target) {
   let best: { p: number; legs: Pick[] } | null = null;
   const byEvent = [...new Set(cands.map((c) => c.eventId))].map((e) => cands.filter((c) => c.eventId === e));
   const walk = (i: number, legs: Pick[]) => {
     if (i === byEvent.length) {
       const o = legs.reduce((a, l) => a * l.odds, 1);
       const p = legs.reduce((a, l) => a * l.estimate, 1);
-      if (legs.length && o >= target && o <= target * (1 + slack) && (!best || p > best.p)) best = { p, legs: [...legs] };
+      if (legs.length && o >= low && o <= target * (1 + slack) && (!best || p > best.p)) best = { p, legs: [...legs] };
       return;
     }
     walk(i + 1, legs);
@@ -43,17 +43,24 @@ describe("slip building", () => {
     expect(s[0].estimate).toBeGreaterThanOrEqual(s[s.length - 1].estimate);
   });
 
-  it("toTarget matches brute force within rounding", () => {
-    for (const target of [2, 3, 5, 10]) {
-      const s = toTarget(cands, target, 0.25);
-      const b = brute(target * 1.01, 0.23); // grid rounding: compare on a slightly inner band
+  it("toTarget lands within target ± tolerance and matches brute force", () => {
+    for (const [target, tol] of [[2, 0.1], [3, 0.1], [5, 0.1], [10, 0.2], [20.2, 0.1]] as const) {
+      const s = toTarget(cands, target, tol);
+      // grid rounding: compare against brute force on a slightly inner band
+      const b = brute(target * (1 - tol) * 1.01, (target * (1 + tol) * 0.99) / (target * (1 - tol) * 1.01) - 1, target * (1 - tol) * 1.01);
+      if (!s.length) { expect(b).toBeNull(); continue; }
       const odds = s.reduce((a, l) => a * l.odds, 1);
       const p = s.reduce((a, l) => a * l.estimate, 1);
-      expect(odds).toBeGreaterThanOrEqual(target * 0.985);
-      expect(odds).toBeLessThanOrEqual(target * 1.25 * 1.015);
+      expect(odds).toBeGreaterThanOrEqual(target * (1 - tol) * 0.985);
+      expect(odds).toBeLessThanOrEqual(target * (1 + tol) * 1.015);
       expect(new Set(s.map((l) => l.eventId)).size).toBe(s.length);
       if (b) expect(p).toBeGreaterThanOrEqual(b.p - 1e-9);
     }
+  });
+
+  it("respects the maximum number of legs", () => {
+    const s = toTarget(cands, 5, 0.1, 2);
+    expect(s.length).toBeLessThanOrEqual(2);
   });
 
   it("returns an empty slip when the target cannot be reached", () => {

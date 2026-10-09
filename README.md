@@ -51,8 +51,9 @@ then run `build`, `evidence` and `sheet` as above.
 ## Web app (`web/`)
 
 Next.js app for live picks: choose one or more markets, a window and a per-leg
-odds range; build either a number of picks or a slip to a total price (e.g. 2,
-5 or 10: the most likely combination between that price and 25% above it); edit
+odds range; build either a number of picks or a slip to a total price (any number, e.g.
+20.2, within ±5, 10 or 20%: the most likely combination in that band, with an
+optional cap on games); edit
 the slip (remove, smart switch to a similar-priced alternative, add); then turn
 it into a SportyBet booking code and open it in the SportyBet app (falls back
 to the website). Theme: Auto, Day or Floodlit, remembered per device. It fetches odds live

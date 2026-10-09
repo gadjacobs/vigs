@@ -48,3 +48,19 @@ export function fairProbs(odds: Record<string, number>): Record<string, number> 
   }
   return out;
 }
+
+/** Markets grouped for the picker, with short chip labels. */
+export const MARKET_GROUPS: { title: string; markets: [string, string][] }[] = [
+  { title: "Goals, full time", markets: [["O15", "Over 1.5"], ["O25", "Over 2.5"], ["O35", "Over 3.5"], ["O45", "Over 4.5"],
+    ["U15", "Under 1.5"], ["U25", "Under 2.5"], ["U35", "Under 3.5"], ["U45", "Under 4.5"]] },
+  { title: "First half", markets: [["FH_O05", "Over 0.5"], ["FH_O15", "Over 1.5"], ["FH_O25", "Over 2.5"],
+    ["FH_U05", "Under 0.5"], ["FH_U15", "Under 1.5"], ["FH_U25", "Under 2.5"]] },
+  { title: "Both teams score", markets: [["BY", "Yes"], ["BN", "No"]] },
+  { title: "Result", markets: [["1", "Home"], ["X", "Draw"], ["2", "Away"]] },
+];
+
+export const SHORT_LABELS: Record<string, string> = {
+  FH_O05: "HT O0.5", FH_O15: "HT O1.5", FH_O25: "HT O2.5", FH_U05: "HT U0.5", FH_U15: "HT U1.5", FH_U25: "HT U2.5",
+  O15: "O1.5", O25: "O2.5", O35: "O3.5", O45: "O4.5", U15: "U1.5", U25: "U2.5", U35: "U3.5", U45: "U4.5",
+  BY: "GG", BN: "NG", "1": "Home", X: "Draw", "2": "Away",
+};

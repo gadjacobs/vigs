@@ -17,11 +17,14 @@ function Bar({ p }: { p: Pick }) {
   );
 }
 
-export function PickRow({ p, actions }: { p: Pick; actions?: React.ReactNode }) {
+export function PickRow({ p, actions, now }: { p: Pick; actions?: React.ReactNode; now?: number }) {
+  const mins = now ? Math.round((p.kickoff - now) / 60000) : null;
   return (
-    <li className="pick">
+    <li className={`pick ${mins !== null && mins <= 2 ? "soon" : ""}`}>
       <div className="pick-head">
-        <div className="when"><strong className="num">{lagos(p.kickoff)}</strong>{p.league}</div>
+        <div className="when"><strong className="num">{lagos(p.kickoff)}</strong>{p.league}
+          {mins !== null && <span className={mins <= 2 ? "loss" : ""}>{mins <= 2 ? "starting" : `in ${mins} min`}</span>}
+        </div>
         <div className="match">{p.home} v {p.away}<small>{MARKET_LABELS[p.market] ?? p.market}</small></div>
         <div className="odds num" aria-label={`odds ${p.odds.toFixed(2)}`}>{p.odds.toFixed(2)}</div>
         <span className={`badge grade-${p.grade.toLowerCase()}`}>{p.grade}</span>

@@ -68,7 +68,17 @@ export function parseOdds(e: ApiEvent): Record<string, number> {
   return out;
 }
 
+let upcomingCache: { at: number; data: Fixture[] } | null = null;
+
+/** Published fixtures with odds. Odds don't move before kickoff, so 30 s of caching is safe. */
 export async function upcoming(): Promise<Fixture[]> {
+  if (upcomingCache && Date.now() - upcomingCache.at < 30_000) return upcomingCache.data;
+  const data = await fetchUpcoming();
+  upcomingCache = { at: Date.now(), data };
+  return data;
+}
+
+async function fetchUpcoming(): Promise<Fixture[]> {
   const out: Fixture[] = [];
   for (let page = 1; page < 10; page++) {
     const q = new URLSearchParams({

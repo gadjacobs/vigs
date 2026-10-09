@@ -28,15 +28,16 @@ export function topN(cands: Pick[], n: number, sort: SortKey): Pick[] {
 }
 
 /**
- * The slip whose combined odds land in [target, target * (1 + slack)] with the
- * highest combined Vig estimate. For a given total price that is also the best
- * expected return. Exact multiple-choice knapsack over log-odds.
+ * The slip whose combined odds land within target ± tolerance (20 at 10% means
+ * 18 to 22) with the highest combined Vig estimate. For a given total price
+ * that is also the best expected return. Exact multiple-choice knapsack over
+ * log-odds, at most one leg per match and at most `maxLegs` legs.
  */
-export function toTarget(cands: Pick[], target: number, slack = 0.25, maxLegs = 30): Pick[] {
+export function toTarget(cands: Pick[], target: number, tolerance = 0.1, maxLegs = 30): Pick[] {
   const R = 0.005; // log-odds resolution
-  const lo = Math.ceil(Math.log(target) / R);
-  const hi = Math.floor(Math.log(target * (1 + slack)) / R);
-  if (hi < 1) return [];
+  const lo = Math.max(1, Math.ceil(Math.log(target * (1 - tolerance)) / R));
+  const hi = Math.floor(Math.log(target * (1 + tolerance)) / R);
+  if (hi < lo) return [];
   const groups = new Map<string, Pick[]>();
   for (const p of cands) {
     if (p.odds <= 1 || p.estimate <= 0) continue;

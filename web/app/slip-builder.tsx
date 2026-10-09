@@ -1,22 +1,36 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { bookSlip, type BookResult } from "./actions";
 import { CopyButton } from "./copy-button";
 import { lagos, naira, pct, PickRow } from "./pick-row";
 import { MARKET_LABELS } from "@/lib/markets";
 import type { Pick } from "@/lib/picks";
-import { slipStats, smartSwitch, toTarget, topN, type SortKey } from "@/lib/slip";
+import type { Query } from "@/lib/query";
+import { slipStats, smartSwitch, toTarget, topN } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
 const shareUrl = (code: string) => `https://www.sportybet.com/ng/?shareCode=${code}`;
 
-type Props = { cands: Pick[]; mode: "count" | "target"; count: number; target: number; sort: SortKey };
+type Props = { cands: Pick[]; q: Query; now: number };
+type Saved = { code: string; at: number; legs: number; odds: number; last: number };
+const CODES_KEY = "vig_codes";
 
-export function SlipBuilder({ cands, mode, count, target, sort }: Props) {
+function readCodes(): Saved[] {
+  try {
+    return JSON.parse(localStorage.getItem(CODES_KEY) ?? "[]") as Saved[];
+  } catch {
+    return [];
+  }
+}
+
+export function SlipBuilder({ cands, q, now }: Props) {
+  const { mode, count, target, sort } = q;
   const initial = useMemo(
-    () => (mode === "target" ? toTarget(cands, target) : topN(cands, count, sort)).map((p) => p.id),
-    [cands, mode, count, target, sort],
+    () => (mode === "target" ? toTarget(cands, target, q.tol, q.maxLegs || 30) : topN(cands, count, sort)).map((p) => p.id),
+    [cands, mode, count, target, sort, q.tol, q.maxLegs],
   );
+  const [codes, setCodes] = useState<Saved[]>([]);
+  useEffect(() => setCodes(readCodes().filter((c) => c.last > Date.now())), []);
   const [ids, setIds] = useState<string[]>(initial);
   const [msg, setMsg] = useState("");
   const [result, setResult] = useState<BookResult | null>(null);
@@ -44,9 +58,27 @@ export function SlipBuilder({ cands, mode, count, target, sort }: Props) {
   };
   const add = (p: Pick) => edit([...ids, p.id], `Added ${p.home} v ${p.away}.`);
 
+  const book = () => start(async () => {
+    const res = await bookSlip(legs.map((p) => ({ eventId: p.eventId, market: p.market, kickoff: p.kickoff })));
+    setResult(res);
+    if (res.ok) {
+      const next = [{ code: res.code, at: Date.now(), legs: res.legs, odds: s.odds, last: res.lastKickoff },
+        ...readCodes().filter((c) => c.code !== res.code)].slice(0, 10);
+      try { localStorage.setItem(CODES_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+      setCodes(next.filter((c) => c.last > Date.now()));
+    }
+  });
+
   if (!cands.length) return null;
   return (
     <section aria-labelledby="slip-title">
+      {!legs.length ? (
+        <p className="note" role="status">
+          {mode === "target"
+            ? `Nothing in this window reaches total odds of ${target} (±${Math.round(q.tol * 100)}%)${q.maxLegs ? ` in ${q.maxLegs} games or fewer` : ""}. Widen the tolerance or window, add markets, or build from the selections below.`
+            : "Your slip is empty. Add selections from the list below."}
+        </p>
+      ) : (
       <div className="panel slipbar">
         <h2 id="slip-title" className="sliptitle">Your slip</h2>
         <dl className="stats slipstats">
@@ -56,15 +88,11 @@ export function SlipBuilder({ cands, mode, count, target, sort }: Props) {
           <div><dt>Market chance</dt><dd className="fair">{legs.length ? pct(s.market) : "None"}</dd></div>
           <div><dt>Edge per ₦1,000</dt><dd>{legs.length ? naira(s.edge) : "None"}</dd></div>
         </dl>
-        {mode === "target" && !legs.length && (
-          <p className="note">Nothing in this window reaches odds of {target} with these filters. Widen the window, add markets or relax the odds range.</p>
-        )}
         {legs.length > 1 && s.model < LOW_CHANCE && (
           <p className="note warn">As one accumulator this lands {pct(s.model)} of the time on Vig's estimate. Most slips like this lose; singles keep each leg's own odds.</p>
         )}
         <div className="row">
-          <button className={result?.ok ? "" : "primary"} type="button" disabled={!legs.length || pending}
-            onClick={() => start(async () => setResult(await bookSlip(legs.map((p) => ({ eventId: p.eventId, market: p.market, kickoff: p.kickoff })))))}>
+          <button className={result?.ok ? "" : "primary"} type="button" disabled={!legs.length || pending} onClick={book}>
             {pending ? "Booking…" : `Get booking code (${legs.length})`}
           </button>
           {result?.ok && (
@@ -74,6 +102,14 @@ export function SlipBuilder({ cands, mode, count, target, sort }: Props) {
         </div>
         <p className="status" role="status" aria-live="polite">{msg}</p>
       </div>
+      )}
+
+      {legs.length > 0 && !result?.ok && (
+        <div className="dock" role="region" aria-label="Slip summary">
+          <span><strong className="num">{s.odds.toFixed(2)}</strong> odds, {legs.length} legs, {pct(s.model)}</span>
+          <button className="primary" type="button" disabled={pending} onClick={book} aria-label={`Get booking code for ${legs.length} legs`}>{pending ? "Booking…" : "Book"}</button>
+        </div>
+      )}
 
       {result && (result.ok ? (
         <section className="receipt" aria-live="polite" aria-labelledby="code-title">
@@ -93,7 +129,7 @@ export function SlipBuilder({ cands, mode, count, target, sort }: Props) {
 
       <ol className="picks">
         {legs.map((p) => (
-          <PickRow key={p.id} p={p} actions={<>
+          <PickRow key={p.id} p={p} now={now} actions={<>
             <button type="button" onClick={() => swap(p)}>Smart switch</button>
             <button type="button" onClick={() => remove(p)}>Remove</button>
           </>} />
@@ -101,11 +137,24 @@ export function SlipBuilder({ cands, mode, count, target, sort }: Props) {
       </ol>
 
       {rest.length > 0 && (
-        <details className="more">
+        <details className="more" open={!legs.length}>
           <summary>Add from {cands.length - legs.length} other selections</summary>
           <ol className="picks">
-            {rest.map((p) => <PickRow key={p.id} p={p} actions={<button type="button" onClick={() => add(p)}>Add to slip</button>} />)}
+            {rest.map((p) => <PickRow key={p.id} p={p} now={now} actions={<button type="button" onClick={() => add(p)}>Add to slip</button>} />)}
           </ol>
+        </details>
+      )}
+      {codes.length > 0 && (
+        <details className="more">
+          <summary>Your recent codes ({codes.length})</summary>
+          <ul className="codes">
+            {codes.map((c) => (
+              <li key={c.code}>
+                <strong className="num">{c.code}</strong> {c.legs} legs at {c.odds.toFixed(2)}, booked {lagos(c.at)}, last kickoff {lagos(c.last)}
+                <a className="button" href={shareUrl(c.code)}>Open</a>
+              </li>
+            ))}
+          </ul>
         </details>
       )}
     </section>
