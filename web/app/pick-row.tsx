@@ -30,7 +30,7 @@ export function PickRow({ p, actions }: { p: Pick; actions?: React.ReactNode }) 
         <div><dt>Needs (break-even)</dt><dd>{pct(p.breakEven)}</dd></div>
         <div><dt>Market chance</dt><dd className="fair">{pct(p.marketChance)}</dd></div>
         <div><dt>History</dt><dd>{p.historyRate === null ? "None" : `${pct(p.historyRate)} of ${p.historyN.toLocaleString()}`}</dd></div>
-        <div><dt>Vig estimate, 90% range</dt><dd>{pct(p.estimate)} ({pct(p.lo)} to {pct(p.hi)})</dd></div>
+        <div><dt>Vig estimate{p.source === "blend" ? " (blend)" : ""}, 90% range</dt><dd>{pct(p.estimate)} ({pct(p.lo)} to {pct(p.hi)})</dd></div>
         <div><dt>Edge per ₦1,000</dt><dd>{naira(p.edge)}</dd></div>
       </dl>
       <Bar p={p} />

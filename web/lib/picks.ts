@@ -1,5 +1,6 @@
+import { blendEstimate, type BlendFile } from "./blend";
 import { fairProbs } from "./markets";
-import { estimate, history, type ModelFile } from "./model";
+import { estimate, history, modelDraws, type ModelFile } from "./model";
 import type { Fixture } from "./sportybet";
 
 export type Grade = "Lean" | "Rough" | "Avoid";
@@ -23,6 +24,7 @@ export type Pick = {
   edge: number;
   grade: Grade;
   why: string;
+  source: "model" | "blend";
 };
 
 /** Without odds history there is no walk-forward test, so nothing can be Solid. */
@@ -43,7 +45,7 @@ export type CandidateQuery = {
 };
 
 /** Every (match, market) selection in the window that passes the filters, graded. */
-export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQuery) {
+export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQuery, blend: BlendFile | null = null) {
   const end = q.now + q.hours * 3600 * 1000;
   const inWindow = fixtures.filter((f) => f.kickoff > q.now && f.kickoff <= end);
   const out: Pick[] = [];
@@ -54,8 +56,15 @@ export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQu
       const odds = f.odds[market];
       if (odds === undefined || fair[market] === undefined) continue;
       if (odds < q.minOdds || odds > q.maxOdds) continue;
-      const est = estimate(model, f.league, f.home, f.away, market);
+      let est = estimate(model, f.league, f.home, f.away, market);
       if (!est) continue;
+      let source: Pick["source"] = "model";
+      const draws = blend?.markets[market]?.active ? modelDraws(model, f.league, f.home, f.away, market) : null;
+      const b = draws && blendEstimate(blend, market, fair[market], draws.p, draws.reps);
+      if (b) {
+        est = b;
+        source = "blend";
+      }
       const be = 1 / odds;
       const { grade, why } = gradeOf(be, est.lo, est.hi);
       if (grade === "Avoid") {
@@ -67,7 +76,7 @@ export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQu
       out.push({
         id: `${f.eventId}|${market}`, eventId: f.eventId, league: f.league, home: f.home, away: f.away,
         kickoff: f.kickoff, market, odds, breakEven: be, marketChance: fair[market], estimate: est.p,
-        lo: est.lo, hi: est.hi, historyRate: h.rate, historyN: h.n, edge: est.p * odds - 1, grade, why,
+        lo: est.lo, hi: est.hi, historyRate: h.rate, historyN: h.n, edge: est.p * odds - 1, grade, why, source,
       });
     }
   }
@@ -80,7 +89,7 @@ export function buildPicks(
   fixtures: Fixture[],
   q: { market: string; hours: number; count: number; sort: "likely" | "edge"; minGrade: "Rough" | "Lean"; now: number },
 ) {
-  const r = candidates(model, fixtures, { markets: [q.market], hours: q.hours, minOdds: 1, maxOdds: 1000, minGrade: q.minGrade, now: q.now });
+  const r = candidates(model, fixtures, { markets: [q.market], hours: q.hours, minOdds: 1, maxOdds: 1000, minGrade: q.minGrade, now: q.now }, null);
   const keep = [...r.candidates].sort((a, b) => (q.sort === "edge" ? b.edge - a.edge : b.estimate - a.estimate));
   return { picks: keep.slice(0, q.count), inWindow: r.matches, avoided: r.avoided, eligible: keep.length };
 }

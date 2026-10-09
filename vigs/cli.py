@@ -358,11 +358,18 @@ def cmd_likely(a) -> None:
     import time as _time
     from collections import defaultdict
     from datetime import timedelta
+    import json
+    from . import blend as blend_mod
     from . import model as md
     from . import sportybet as sb
     from .grading import grade_model
     from .study import load_results
     client = sb.Client()
+    blend_path = a.blend or os.path.join(a.data, "blend.json")
+    blend_json = None
+    if os.path.exists(blend_path):
+        with open(blend_path, encoding="utf-8") as fh:
+            blend_json = json.load(fh)
     res_path = os.path.join(a.data, "results.csv")
     now = int(_time.time() * 1000)
     if a.refresh:
@@ -393,20 +400,27 @@ def cmd_likely(a) -> None:
         if est is None or a.market not in m.fair:
             continue
         p, lo, hi = est
+        source = "model"
+        bl = blend_mod.estimate(blend_json, a.market, m.fair[a.market], p,
+                                md.rep_draws(boots, s["league"], s["home"], s["away"], a.market))
+        if bl:
+            p, lo, hi, source = bl
         h, ah = hits[(s["league"], s["home"], "home")], hits[(s["league"], s["away"], "away")]
         n = h[1] + ah[1]
         g = grade_model(m.odds[a.market], m.fair[a.market], p, (lo, hi),
                         (h[0] + ah[0]) / n if n else None, n)
-        picks.append((s, m, g))
+        picks.append((s, m, g, source))
     picks.sort(key=lambda x: -x[2].estimate)
     picks = [x for x in picks if x[2].grade != "Avoid"][: a.count]
+    sources = {x[3] for x in picks}
     print(f"{market_label(a.market)}: {len(snaps)} matches published for the next {a.hours:g} h; "
           f"model fitted on {len(rows)} results ({a.days:g} days). Ranked by likelihood.")
-    print("All picks are Rough or Lean at best: no odds history yet to validate an edge.\n")
+    print("Estimates from " + (" and ".join(sorted(sources)) or "the model")
+          + ". Picks are Rough or Lean at best until the ledger validates an edge.\n")
     print(f"{'kickoff':<6s} {'league':<8s} {'match':<9s} {'odds':>5s} {'b-even':>7s} {'market':>7s} "
           f"{'history (n)':>15s} {'estimate [90%]':>22s} {'edge':>7s}  grade")
     lagos = timedelta(hours=1)
-    for s, m, g in picks:
+    for s, m, g, _src in picks:
         lo, hi = g.interval()
         ko = (m.kickoff + lagos).strftime("%H:%M")
         hist = f"{g.history_rate:.1%} ({g.n})" if g.history_rate is not None else "-"
@@ -419,15 +433,17 @@ def cmd_likely(a) -> None:
         os.makedirs(os.path.dirname(a.ledger) or ".", exist_ok=True)
         led = Ledger(a.ledger)
         logged = {(p["fixture"], p["market"]) for p in led.picks().values()}
-        fresh = [(s, m, g) for s, m, g in picks if (m.key(), a.market) not in logged]
-        for s, m, g in fresh:
+        fresh = [x for x in picks if (x[1].key(), a.market) not in logged]
+        for s, m, g, src in fresh:
             lo, hi = g.interval()
             led.add_pick({
                 "market": a.market, "odds": g.odds, "break_even": g.break_even,
                 "market_prob": g.market_prob, "history_rate": g.history_rate, "history_n": g.n,
                 "estimate": g.estimate, "ci_low": lo, "ci_high": hi, "edge": g.edge,
                 "grade": g.grade, "grade_reasons": [vars(t) for t in g.tests],
-                "slice_key": f"model:poisson:{a.days:g}d|{a.market}", "stats_version": STATS_VERSION,
+                "slice_key": (f"blend:v1|{a.market}" if src == "blend"
+                              else f"model:poisson:{a.days:g}d|{a.market}"),
+                "stats_version": STATS_VERSION, "source": src,
                 "sheet_id": f"likely-{sb._iso(now)}", "stake": 0, "shadow": True,
                 "event_id": s["event_id"]}, m)
         print(f"Logged {len(fresh)} picks to {a.ledger} (shadow mode, before kickoff)"
@@ -508,6 +524,24 @@ def cmd_export_record(a) -> None:
     print(f"wrote {a.out}: {len(led.picks())} picks, {s} settled, chain intact")
 
 
+def cmd_export_blend(a) -> None:
+    import json
+    from . import blend as bl
+    rows = bl.training_rows(a.data)
+    out = bl.evaluate(rows)
+    with open(a.out, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, separators=(",", ":"))
+    on = [m for m, e in out["markets"].items() if e["active"]]
+    print(f"wrote {a.out}: {out['matches']:,} settled matches with odds, {len(rows):,} rows; "
+          f"blend active for {', '.join(on) if on else 'no market yet'}")
+    for mk in ("FH_O05", "O15", "O25", "BY", "1"):
+        e = out["markets"].get(mk)
+        if e and "test" in e:
+            t = e["test"]
+            print(f"  {mk:<7s} held-out log loss: market {t['market']:.4f}, model {t['model']:.4f}, "
+                  f"blend {t['blend']:.4f} (n {t['n']}). {e['reason']}")
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="vigs", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -529,6 +563,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--reps", type=int, default=20, help="bootstrap refits for the interval")
     p.add_argument("--data", default="data")
     p.add_argument("--ledger", default="ledger/trial.jsonl")
+    p.add_argument("--blend", help="blend.json (default: <data>/blend.json if present)")
     p.add_argument("--no-refresh", dest="refresh", action="store_false")
     p.set_defaults(fn=cmd_likely)
 
@@ -544,6 +579,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--days", type=float, default=30)
     p.add_argument("--reps", type=int, default=20)
     p.set_defaults(fn=cmd_export_model)
+
+    p = sub.add_parser("export-blend", help="learn the market/model blend and write blend.json")
+    p.add_argument("--data", default="data")
+    p.add_argument("--out", default="data/blend.json")
+    p.set_defaults(fn=cmd_export_blend)
 
     p = sub.add_parser("export-record", help="write the ledger scorecard as JSON for the web app")
     p.add_argument("--ledger", default="data/ledger.jsonl")

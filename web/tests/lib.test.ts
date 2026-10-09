@@ -70,3 +70,21 @@ describe("picks", () => {
     for (let i = 1; i < r.picks.length; i++) expect(r.picks[i - 1].estimate).toBeGreaterThanOrEqual(r.picks[i].estimate);
   });
 });
+
+import { applyBlend, blendEstimate, type BlendFile } from "../lib/blend";
+
+describe("blend", () => {
+  it("matches the Python formula", () => {
+    // python: vigs.blend.apply([0.1, 0.8, 0.3], 0.7, 0.75)
+    expect(applyBlend([0.1, 0.8, 0.3], 0.7, 0.75)).toBeCloseTo(0.7516481755, 9);
+  });
+  it("only applies when active", () => {
+    const off: BlendFile = { version: 1, min_matches: 2000, matches: 10, generated_at: "", markets: { O15: { active: false, reason: "collecting", n_rows: 10, coef: [0, 1, 0] } } };
+    expect(blendEstimate(off, "O15", 0.7, 0.75, [0.74, 0.76])).toBeNull();
+    const on: BlendFile = { ...off, markets: { O15: { active: true, reason: "", n_rows: 5000, coef: [0, 1, 0], reps: [[0, 1, 0], [0, 0.9, 0.1]] } } };
+    const r = blendEstimate(on, "O15", 0.7, 0.75, [0.74, 0.76])!;
+    expect(r.p).toBeCloseTo(0.7, 6);
+    expect(r.lo).toBeLessThanOrEqual(r.p);
+    expect(r.hi).toBeGreaterThanOrEqual(r.p);
+  });
+});

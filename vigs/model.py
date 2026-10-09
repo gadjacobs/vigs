@@ -110,13 +110,19 @@ def ensemble(rows: list[dict], reps: int = 20, seed: int = 0, iters: int = 40) -
     return [fit(rows, iters, rng) for _ in range(reps)]
 
 
+def rep_draws(boots: list[dict[str, LeagueModel]], league: str, home: str, away: str,
+              market: str) -> list[float]:
+    """The market's probability under each bootstrap refit, in refit order."""
+    return [q[market] for b in boots if (q := predict(b, league, home, away))]
+
+
 def predict_interval(main: dict[str, LeagueModel], boots: list[dict[str, LeagueModel]],
                      league: str, home: str, away: str, market: str,
                      level: float = 0.90) -> tuple[float, float, float] | None:
     p = predict(main, league, home, away)
     if p is None:
         return None
-    draws = sorted(q[market] for b in boots if (q := predict(b, league, home, away)))
+    draws = sorted(rep_draws(boots, league, home, away, market))
     if not draws:
         return p[market], p[market], p[market]
     tail = (1 - level) / 2

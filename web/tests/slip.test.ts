@@ -8,7 +8,7 @@ function pick(eventId: string, market: string, odds: number, estimate: number): 
   return {
     id: `${eventId}|${market}`, eventId, league: "England", home: `H${seq}`, away: `A${seq}`, kickoff: 0,
     market, odds, breakEven: 1 / odds, marketChance: 0.9 / odds, estimate, lo: estimate - 0.02,
-    hi: estimate + 0.02, historyRate: null, historyN: 0, edge: estimate * odds - 1, grade: "Rough", why: "",
+    hi: estimate + 0.02, historyRate: null, historyN: 0, edge: estimate * odds - 1, grade: "Rough", why: "", source: "model",
   };
 }
 

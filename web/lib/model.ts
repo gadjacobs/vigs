@@ -46,6 +46,17 @@ function predict(p: LeagueParams, home: string, away: string): Record<string, nu
   return probs(lh, la, p.fh_share);
 }
 
+/** The model's probability, and the same under each bootstrap refit (in refit order). */
+export function modelDraws(
+  model: ModelFile, league: string, home: string, away: string, market: string,
+): { p: number; reps: number[] } | null {
+  const lg = model.leagues[league];
+  const main = lg && predict(lg, home, away);
+  if (!main || !(market in main)) return null;
+  const reps = lg.reps.map((r) => predict(r, home, away)?.[market]).filter((x): x is number => x !== undefined);
+  return { p: main[market], reps };
+}
+
 /** Model estimate with a 90% interval from the bootstrap refits. */
 export function estimate(
   model: ModelFile,

@@ -27,6 +27,7 @@ publish() {
   # Model for the web app, then log the coming hour's picks (shadow mode) and
   # settle earlier ones, so every list the method produces is scored.
   python -m vigs export-model --data "$DATA" --out "$DATA/model.json" || true
+  python -m vigs export-blend --data "$DATA" --out "$DATA/blend.json" || true
   for m in FH_O05 BY O15; do
     python -m vigs likely --market "$m" --hours 1 --count 20 --data "$DATA" \
       --ledger "$DATA/ledger.jsonl" --no-refresh > /dev/null || true

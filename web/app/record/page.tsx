@@ -1,3 +1,4 @@
+import { loadBlend, type BlendFile } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadRecord, type Group, type RecordFile } from "@/lib/record";
 import { ProfitChart } from "./profit-chart";
@@ -36,6 +37,43 @@ function Tile({ grade, s }: { grade: string; s?: Group }) {
       )}
       <p className="muted" style={{ marginTop: 8 }}>{gate(grade, s)}</p>
     </div>
+  );
+}
+
+function Accuracy({ blend }: { blend: BlendFile | null }) {
+  if (!blend) return null;
+  const rows = Object.entries(blend.markets)
+    .filter(([m]) => m in MARKET_LABELS)
+    .sort((a, b) => (b[1].test?.n ?? 0) - (a[1].test?.n ?? 0));
+  const collecting = blend.matches < blend.min_matches;
+  return (
+    <section className="block" aria-labelledby="acc">
+      <h2 id="acc">Accuracy</h2>
+      <p className="status">
+        Which estimate predicts results best on the most recent 30% of settled matches, which it did not learn from.
+        Log loss: lower is better. The blend of market price and model switches on for a market only when it beats the
+        results model here.
+        {collecting ? ` Collecting: ${blend.matches.toLocaleString()} of ${blend.min_matches.toLocaleString()} settled matches with odds.` : ""}
+      </p>
+      <div className="tablewrap">
+        <table>
+          <thead><tr><th>Market</th><th className="n">Held-out</th><th className="n">Market</th><th className="n">Model</th>
+            <th className="n">Blend</th><th>In use</th></tr></thead>
+          <tbody>
+            {rows.map(([m, e]) => (
+              <tr key={m}>
+                <td>{MARKET_LABELS[m]}</td>
+                <td className="n">{e.test ? e.test.n.toLocaleString() : "None"}</td>
+                <td className="n">{e.test ? e.test.market.toFixed(4) : "-"}</td>
+                <td className="n">{e.test ? e.test.model.toFixed(4) : "-"}</td>
+                <td className="n">{e.test ? e.test.blend.toFixed(4) : "-"}</td>
+                <td title={e.reason}>{e.active ? "Blend" : "Model"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -138,6 +176,7 @@ export default async function RecordPage() {
   } catch {
     rec = null;
   }
+  const blend = await loadBlend();
   return (
     <main>
       <h1>Record</h1>
@@ -145,7 +184,9 @@ export default async function RecordPage() {
         Every pick the collector logs before kickoff, settled automatically. Shadow mode: no money is staked.
         This page is how we find out whether the picks are any good.
       </p>
-      {rec ? <Body rec={rec} /> : (
+      {rec && <Body rec={rec} />}
+      <Accuracy blend={blend} />
+      {!rec && (
         <p className="note warn" role="alert">
           The scorecard is not published yet. The collector writes it every hour; try again shortly.
         </p>

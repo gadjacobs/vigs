@@ -76,6 +76,19 @@ as `record.json` (`python -m vigs export-record`). The **Record** page shows it:
 ROI and hit rate against expectation by grade and market, a profit curve,
 calibration, and recent picks. Intervals are hidden below 30 settled picks.
 
+## Blend of market price and model
+
+The results model ignores what the odds know. `vigs/blend.py` learns, per
+market, P(win) = sigmoid(a + b1·logit(market chance) + b2·logit(model)) from
+settled matches with captured pre-kickoff odds. The model input is
+point-in-time (fitted on results before each match's day). The collector runs
+`export-blend` hourly and publishes `blend.json`. A market's blend switches on
+only once 2,000 settled matches with odds exist **and** it beats the results
+model on the most recent 30% of matches, which it did not train on; otherwise the
+model stays in use. The app and `likely` pick this up automatically, label
+blended estimates, and the Record page's Accuracy table shows the held-out
+comparison for every market.
+
 ## More commands
 
 ```

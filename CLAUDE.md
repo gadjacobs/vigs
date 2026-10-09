@@ -38,7 +38,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   framework code: `proxy.ts` replaces middleware; `searchParams` and `cookies()` are async).
 - `web/lib` ports the model maths from `vigs/model.py`; `web/tests` pins it to
   Python output. Change both together.
-- It reads `model.json` and `record.json` from the `data` branch and odds live
+- Blend (`vigs/blend.py`, `web/lib/blend.ts`): market price + model, per market,
+  on only after 2,000 settled matches with odds and a held-out win over the
+  model. Never train on a match with a model that saw its day's results.
+- It reads `model.json`, `blend.json` and `record.json` from the `data` branch and odds live
   from SportyBet; it never places bets. Record maths stays in `vigs/record.py`. Booking codes are created with the `OperId: 2` header.
 
 ## Engineering rules

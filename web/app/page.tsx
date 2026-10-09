@@ -1,6 +1,7 @@
 import { SlipBuilder } from "./slip-builder";
 import { lagos } from "./pick-row";
 import { MARKET_LABELS } from "@/lib/markets";
+import { loadBlend } from "@/lib/blend";
 import { loadModel, type ModelFile } from "@/lib/model";
 import { candidates } from "@/lib/picks";
 import { upcoming, type Fixture } from "@/lib/sportybet";
@@ -46,7 +47,9 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
   } catch {
     error = error || "SportyBet did not answer. Try again in a minute.";
   }
-  const r = model ? candidates(model, fixtures, { ...q, now }) : null;
+  const blend = await loadBlend();
+  const r = model ? candidates(model, fixtures, { ...q, now }, blend) : null;
+  const blended = q.markets.filter((m) => blend?.markets[m]?.active).map((m) => MARKET_LABELS[m]);
   const slipKey = JSON.stringify({ ...q, n: r?.candidates.length, t: Math.floor(now / 60000) });
 
   return (
@@ -115,6 +118,11 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
           Odds live from SportyBet at {lagos(now)} Lagos. {r.matches} matches in the window, {r.candidates.length} selections
           pass your filters{r.avoided ? `; ${r.avoided} graded Avoid and left out` : ""}.
           {q.mode === "target" ? ` Building to total odds of ${q.target}: the most likely slip between ${q.target} and ${(q.target * 1.25).toFixed(2)}.` : ""}
+          {blended.length
+            ? ` Blend of market price and model in use for ${blended.join(", ")}; other markets use the results model.`
+            : blend
+              ? ` Results model only: the market/model blend switches on per market once it proves better (${blend.matches.toLocaleString()} of ${blend.min_matches.toLocaleString()} settled matches collected).`
+              : ""}
         </p>
       )}
 
