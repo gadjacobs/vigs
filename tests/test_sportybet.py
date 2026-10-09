@@ -69,3 +69,18 @@ class Build(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Study(unittest.TestCase):
+    def test_memoryless_league_shows_no_memory(self):
+        from vigs.data import synthesize
+        from vigs.study import base_rates, hour_tests, memory_tests
+        rows = [{"event_id": str(i), "league": m.league,
+                 "kickoff": m.kickoff.isoformat().replace("+00:00", "Z"), "home": m.home,
+                 "away": m.away, "hg": m.hg, "ag": m.ag, "ht_hg": m.ht_hg, "ht_ag": m.ht_ag}
+                for i, m in enumerate(synthesize(weeks=400, seed=2, minutes_per_round=40))]
+        effects = memory_tests(rows) + hour_tests(rows)
+        self.assertEqual([e.name for e in effects if e.q < 0.10], [])
+        (_, n, rates), = base_rates(rows)
+        self.assertEqual(n, 4000)
+        self.assertAlmostEqual(rates["home"] + rates["draw"] + rates["away"], 1.0)
