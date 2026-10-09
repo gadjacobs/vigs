@@ -2,16 +2,17 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { bookSlip, type BookResult } from "./actions";
 import { CopyButton } from "./copy-button";
-import { lagos, naira, pct, PickRow } from "./pick-row";
+import { lagos, naira, pct, PickRow, type View } from "./pick-row";
 import { MARKET_LABELS } from "@/lib/markets";
 import type { Pick } from "@/lib/picks";
+import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
 import type { Query } from "@/lib/query";
 import { slipStats, smartSwitch, toTarget, topN } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
 const shareUrl = (code: string) => `https://www.sportybet.com/ng/?shareCode=${code}`;
 
-type Props = { cands: Pick[]; q: Query; now: number };
+type Props = { cands: Pick[]; q: Query; now: number; initialView: View };
 type Saved = { code: string; at: number; legs: number; odds: number; last: number };
 const CODES_KEY = "vig_codes";
 
@@ -23,7 +24,27 @@ function readCodes(): Saved[] {
   }
 }
 
-export function SlipBuilder({ cands, q, now }: Props) {
+function ViewToggle({ view, setView }: { view: View; setView: (v: View) => void }) {
+  const choose = (v: View) => {
+    setView(v);
+    document.cookie = `vig_view=${v}; path=/; max-age=31536000; samesite=lax`;
+  };
+  return (
+    <div className="viewbar">
+      <span className="muted">Show</span>
+      <div className="segmented" role="radiogroup" aria-label="How picks are shown">
+        {(["simple", "detailed"] as const).map((v) => (
+          <button key={v} type="button" role="radio" aria-checked={view === v} onClick={() => choose(v)}>
+            {v === "simple" ? "Chance" : "Full numbers"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function SlipBuilder({ cands, q, now, initialView }: Props) {
+  const [view, setView] = useState<View>(initialView);
   const { mode, count, target, sort } = q;
   const initial = useMemo(
     () => (mode === "target" ? toTarget(cands, target, q.tol, q.maxLegs || 30) : topN(cands, count, sort)).map((p) => p.id),
@@ -38,6 +59,7 @@ export function SlipBuilder({ cands, q, now }: Props) {
   const byId = useMemo(() => new Map(cands.map((p) => [p.id, p])), [cands]);
   const legs = ids.map((id) => byId.get(id)).filter((p): p is Pick => !!p);
   const s = slipStats(legs);
+  const conf = slipConfidence(legs);
   const onSlip = new Set(legs.map((p) => p.eventId));
   const rest = [...cands]
     .filter((p) => !onSlip.has(p.eventId))
@@ -72,6 +94,7 @@ export function SlipBuilder({ cands, q, now }: Props) {
   if (!cands.length) return null;
   return (
     <section aria-labelledby="slip-title">
+      <ViewToggle view={view} setView={setView} />
       {!legs.length ? (
         <p className="note" role="status">
           {mode === "target"
@@ -81,6 +104,19 @@ export function SlipBuilder({ cands, q, now }: Props) {
       ) : (
       <div className="panel slipbar">
         <h2 id="slip-title" className="sliptitle">Your slip</h2>
+        {view === "simple" ? (
+          <div className="slipplain">
+            <p className="plain">
+              <strong className="num chance">{chance(s.model)}</strong>
+              <span>chance all {legs.length} {legs.length === 1 ? "leg lands" : "legs land"}, {oneIn(s.model)}.
+                Total odds <strong className="num">{s.odds.toFixed(2)}</strong> need {pct(1 / s.odds)} to break even.</span>
+            </p>
+            <p className="why">
+              <span className={`badge conf-${conf.toLowerCase()}`}>{conf} confidence</span>{" "}
+              {conf === "High" ? "Every leg: " : "At least one leg: "}{CONFIDENCE_WHY[conf]}. Bookmaker {pct(s.market)}, edge {naira(s.edge)} per ₦1,000.
+            </p>
+          </div>
+        ) : (
         <dl className="stats slipstats">
           <div><dt>Legs</dt><dd>{legs.length}</dd></div>
           <div><dt>Combined odds</dt><dd className="num bigodds">{legs.length ? s.odds.toFixed(2) : "None"}</dd></div>
@@ -88,6 +124,7 @@ export function SlipBuilder({ cands, q, now }: Props) {
           <div><dt>Market chance</dt><dd className="fair">{legs.length ? pct(s.market) : "None"}</dd></div>
           <div><dt>Edge per ₦1,000</dt><dd>{legs.length ? naira(s.edge) : "None"}</dd></div>
         </dl>
+        )}
         {legs.length > 1 && s.model < LOW_CHANCE && (
           <p className="note warn">As one accumulator this lands {pct(s.model)} of the time on Vig's estimate. Most slips like this lose; singles keep each leg's own odds.</p>
         )}
@@ -106,7 +143,7 @@ export function SlipBuilder({ cands, q, now }: Props) {
 
       {legs.length > 0 && !result?.ok && (
         <div className="dock" role="region" aria-label="Slip summary">
-          <span><strong className="num">{s.odds.toFixed(2)}</strong> odds, {legs.length} legs, {pct(s.model)}</span>
+          <span><strong className="num">{s.odds.toFixed(2)}</strong> odds, {legs.length} legs, {view === "simple" ? `${chance(s.model)} chance` : pct(s.model)}</span>
           <button className="primary" type="button" disabled={pending} onClick={book} aria-label={`Get booking code for ${legs.length} legs`}>{pending ? "Booking…" : "Book"}</button>
         </div>
       )}
@@ -129,7 +166,7 @@ export function SlipBuilder({ cands, q, now }: Props) {
 
       <ol className="picks">
         {legs.map((p) => (
-          <PickRow key={p.id} p={p} now={now} actions={<>
+          <PickRow key={p.id} p={p} now={now} view={view} actions={<>
             <button type="button" onClick={() => swap(p)}>Smart switch</button>
             <button type="button" onClick={() => remove(p)}>Remove</button>
           </>} />
@@ -140,7 +177,7 @@ export function SlipBuilder({ cands, q, now }: Props) {
         <details className="more" open={!legs.length}>
           <summary>Add from {cands.length - legs.length} other selections</summary>
           <ol className="picks">
-            {rest.map((p) => <PickRow key={p.id} p={p} now={now} actions={<button type="button" onClick={() => add(p)}>Add to slip</button>} />)}
+            {rest.map((p) => <PickRow key={p.id} p={p} now={now} view={view} actions={<button type="button" onClick={() => add(p)}>Add to slip</button>} />)}
           </ol>
         </details>
       )}

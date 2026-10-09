@@ -1,4 +1,4 @@
-import { blendEstimate, type BlendFile } from "./blend";
+import { blendEstimate, guardedEstimate, type BlendFile } from "./blend";
 import { fairProbs } from "./markets";
 import { estimate, history, modelDraws, type ModelFile } from "./model";
 import type { Fixture } from "./sportybet";
@@ -24,7 +24,7 @@ export type Pick = {
   edge: number;
   grade: Grade;
   why: string;
-  source: "model" | "blend";
+  source: "guarded" | "blend";
 };
 
 /** Without odds history there is no walk-forward test, so nothing can be Solid. */
@@ -56,15 +56,12 @@ export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQu
       const odds = f.odds[market];
       if (odds === undefined || fair[market] === undefined) continue;
       if (odds < q.minOdds || odds > q.maxOdds) continue;
-      let est = estimate(model, f.league, f.home, f.away, market);
-      if (!est) continue;
-      let source: Pick["source"] = "model";
+      const raw = estimate(model, f.league, f.home, f.away, market);
+      if (!raw) continue;
       const draws = blend?.markets[market]?.active ? modelDraws(model, f.league, f.home, f.away, market) : null;
       const b = draws && blendEstimate(blend, market, fair[market], draws.p, draws.reps);
-      if (b) {
-        est = b;
-        source = "blend";
-      }
+      const est = b ?? guardedEstimate(fair[market], raw);
+      const source: Pick["source"] = b ? "blend" : "guarded";
       const be = 1 / odds;
       const { grade, why } = gradeOf(be, est.lo, est.hi);
       if (grade === "Avoid") {

@@ -88,3 +88,33 @@ describe("blend", () => {
     expect(r.hi).toBeGreaterThanOrEqual(r.p);
   });
 });
+
+import { guardedEstimate } from "../lib/blend";
+import { chance, confidence, oneIn, slipConfidence } from "../lib/plain";
+
+describe("guarded estimate", () => {
+  it("matches vigs.blend.guarded", () => {
+    // python: vigs.blend.guarded(0.60, 0.72, 0.70, 0.74)
+    const g = guardedEstimate(0.6, { p: 0.72, lo: 0.7, hi: 0.74 });
+    expect(g.p).toBeCloseTo(0.6381085392, 9);
+    expect(g.lo).toBe(0.6);
+    expect(g.hi).toBe(0.74);
+    expect(gradeOf(1 / 1.6, g.lo, g.hi).grade).not.toBe("Lean");
+  });
+});
+
+describe("plain view", () => {
+  it("rates confidence from the range", () => {
+    expect(confidence(0.7, 0.73)).toBe("High");
+    expect(confidence(0.6, 0.74)).toBe("Low");
+    expect(confidence(0.66, 0.73)).toBe("Medium");
+    expect(confidence(0.065, 0.143)).toBe("Low"); // small in points, double on the odds scale
+    expect(slipConfidence([{ lo: 0.7, hi: 0.73 }, { lo: 0.6, hi: 0.74 }])).toBe("Low");
+  });
+  it("words chances", () => {
+    expect(chance(0.718)).toBe("72%");
+    expect(chance(0.999)).toBe("99%");
+    expect(oneIn(0.72)).toBe("about 7 in 10");
+    expect(oneIn(0.14)).toBe("about 1 in 7");
+  });
+});

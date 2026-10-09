@@ -5,7 +5,8 @@ Trained on settled matches with a pre-kickoff odds snapshot. The model input is
 point-in-time: for matches on day D it comes from a model fitted on results
 before D. A blend switches on for a market only when there is enough data and
 it beats the results model on the most recent 30% of matches, which it did not
-train on. Until then the app and `likely` keep using the results model.
+train on. Until then the app and `likely` use `guarded`: a constant 70/30 weighting
+toward the market price, with a range that spans both views.
 """
 from __future__ import annotations
 
@@ -27,6 +28,11 @@ PRIOR = (0.0, 1.0, 0.0)     # shrink toward "trust the market"
 RIDGE = 2.0                 # prior strength, in pseudo-observations
 REPS = 20
 EPS = 1e-6
+# Until a blend is proven: 0.7 * logit(market) + 0.3 * logit(model). On the first
+# 269 settled matches with odds (4,914 selections) the market price beat the
+# results model on log loss in all 10 markets checked; this weighting cut most of
+# the gap (pooled 0.4968 vs market 0.4960, model 0.5038).
+GUARD = (0.0, 0.7, 0.3)
 
 
 def logit(p: float) -> float:
@@ -198,3 +204,11 @@ def estimate(blend: dict | None, market: str, q: float, p_main: float,
     lo = draws[int(0.05 * (len(draws) - 1))]
     hi = draws[math.ceil(0.95 * (len(draws) - 1))]
     return main, min(lo, main), max(hi, main), "blend"
+
+
+def guarded(q: float, p: float, lo: float, hi: float) -> tuple[float, float, float, str]:
+    """Estimate while no blend is active for the market: weighted toward the
+    market price. The range spans the market chance and the model's 90% range,
+    because until settled odds decide between them either could be right."""
+    est = apply(list(GUARD), q, p)
+    return est, min(q, lo, est), max(q, hi, est), "guarded"

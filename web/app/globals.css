@@ -5,6 +5,7 @@
   --focus: #1f5fa8; --series-lean: #1f5fa8; --series-rough: #b26b00; --shadow-slip: 0 18px 32px -18px rgba(15, 61, 46, 0.45);
   color-scheme: light;
 }
+:root[data-theme="light"] { color-scheme: only light; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --ground: #0c2a20; --paper: #133629; --paper-sunk: #0a241b; --ink: #eef3ea;
@@ -141,7 +142,23 @@ tr:last-child td { border-bottom: 0; }
 .segmented button { min-height: 32px; padding: 4px 10px; border: 0; border-radius: 999px; background: transparent;
   font-size: 13px; line-height: 16px; color: var(--ink-muted); }
 .segmented button[aria-checked="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--edge); }
-@media (max-width: 480px) { .topbar { gap: 12px; } .mainnav { gap: 14px; } .segmented button { padding: 4px 7px; } }
+.segmented .short { display: none; }
+@media (max-width: 480px) {
+  .topbar { gap: 12px; } .mainnav { gap: 14px; }
+  .topbar .segmented button { padding: 4px 0; min-width: 34px; justify-content: center; }
+  .topbar .segmented .full { display: none; }
+  .topbar .segmented .short { display: inline; font-size: 15px; }
+}
+
+/* Chance view */
+.viewbar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 13px; }
+.plain { display: flex; gap: 12px; align-items: baseline; margin: 10px 0 0; font-size: 15px; line-height: 22px; }
+.plain .chance { font-size: 40px; line-height: 40px; font-weight: 800; flex: none; }
+.slipplain .plain { margin-top: 4px; }
+.slipplain .why { margin-bottom: 12px; }
+.conf-high { background: var(--ink); color: var(--paper); }
+.conf-medium { background: var(--paper); color: var(--ink); border: 1.5px solid var(--ink); }
+.conf-low { background: var(--house-wash); color: var(--house); }
 
 /* Slip */
 .slipbar { margin-bottom: 16px; }

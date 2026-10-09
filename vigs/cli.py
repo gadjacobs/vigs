@@ -400,11 +400,9 @@ def cmd_likely(a) -> None:
         if est is None or a.market not in m.fair:
             continue
         p, lo, hi = est
-        source = "model"
         bl = blend_mod.estimate(blend_json, a.market, m.fair[a.market], p,
                                 md.rep_draws(boots, s["league"], s["home"], s["away"], a.market))
-        if bl:
-            p, lo, hi, source = bl
+        p, lo, hi, source = bl or blend_mod.guarded(m.fair[a.market], p, lo, hi)
         h, ah = hits[(s["league"], s["home"], "home")], hits[(s["league"], s["away"], "away")]
         n = h[1] + ah[1]
         g = grade_model(m.odds[a.market], m.fair[a.market], p, (lo, hi),
@@ -442,7 +440,7 @@ def cmd_likely(a) -> None:
                 "estimate": g.estimate, "ci_low": lo, "ci_high": hi, "edge": g.edge,
                 "grade": g.grade, "grade_reasons": [vars(t) for t in g.tests],
                 "slice_key": (f"blend:v1|{a.market}" if src == "blend"
-                              else f"model:poisson:{a.days:g}d|{a.market}"),
+                              else f"guarded:70-30:{a.days:g}d|{a.market}"),
                 "stats_version": STATS_VERSION, "source": src,
                 "sheet_id": f"likely-{sb._iso(now)}", "stake": 0, "shadow": True,
                 "event_id": s["event_id"]}, m)

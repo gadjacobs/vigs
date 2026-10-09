@@ -49,6 +49,17 @@ class Switch(unittest.TestCase):
         self.assertIn("collecting", e["reason"])
         self.assertIsNone(bl.estimate(out, "FH_O05", 0.7, 0.72, [0.71, 0.73]))
 
+    def test_guarded_leans_on_the_market_and_spans_both_views(self):
+        p, lo, hi, src = bl.guarded(0.60, 0.72, 0.70, 0.74)
+        self.assertEqual(src, "guarded")
+        self.assertAlmostEqual(p, bl.apply([0, .7, .3], 0.60, 0.72))
+        self.assertTrue(0.60 < p < 0.66)               # much nearer the market
+        self.assertEqual((lo, hi), (0.60, 0.74))
+        # Market below break-even keeps the range below it too, so no Lean.
+        from vigs.grading import grade_model
+        g = grade_model(1.6, 0.60, p, (lo, hi), 0.7, 400)
+        self.assertNotEqual(g.grade, "Lean")
+
     def test_switches_on_when_the_market_knows_more(self):
         out = bl.evaluate(rows_for(4000, informative=True))
         e = out["markets"]["FH_O05"]

@@ -28,6 +28,16 @@ export function applyBlend(coef: [number, number, number], q: number, p: number)
   return sigmoid(coef[0] + coef[1] * logit(q) + coef[2] * logit(p));
 }
 
+// Mirrors vigs/blend.py GUARD and guarded(): used while no blend is active. The
+// market price beat the results model on every market checked so far.
+export const GUARD: [number, number, number] = [0, 0.7, 0.3];
+
+/** Estimate weighted toward the market; the range spans market and model views. */
+export function guardedEstimate(q: number, model: { p: number; lo: number; hi: number }) {
+  const p = applyBlend(GUARD, q, model.p);
+  return { p, lo: Math.min(q, model.lo, p), hi: Math.max(q, model.hi, p) };
+}
+
 /** Blended estimate and 90% range when active for `market`; null means use the model. */
 export function blendEstimate(
   blend: BlendFile | null, market: string, q: number, pMain: number, pReps: number[],

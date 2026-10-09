@@ -85,10 +85,26 @@ settled matches with captured pre-kickoff odds. The model input is
 point-in-time (fitted on results before each match's day). The collector runs
 `export-blend` hourly and publishes `blend.json`. A market's blend switches on
 only once 2,000 settled matches with odds exist **and** it beats the results
-model on the most recent 30% of matches, which it did not train on; otherwise the
-model stays in use. The app and `likely` pick this up automatically, label
-blended estimates, and the Record page's Accuracy table shows the held-out
-comparison for every market.
+model on the most recent 30% of matches, which it did not train on. The app and
+`likely` pick this up automatically, label blended estimates, and the Record
+page's Accuracy table shows the held-out comparison for every market.
+
+Until then the estimate is **guarded**: 0.7·logit(market chance) + 0.3·logit(model),
+with a 90% range that spans the market chance and the model's own range. On the
+first 269 settled matches with odds the market price beat the results model on
+log loss in all 10 markets checked, and Lean picks landed 28 of 52 against 35.4
+expected, so the raw model was overconfident where it disagreed with the market.
+With the guard a pick reaches Lean only once a proven blend says so.
+
+## Chance view
+
+The app's "Chance" view shows each pick as a whole-percent chance ("68% chance,
+about 7 in 10"), what the odds need to break even, and a confidence rating from
+the width of the 90% range: High (within 5 points and tight on the odds scale),
+Low (wider than 10 points, or loose on the odds scale), Medium otherwise. A wide
+range means the market price and the model disagree. A slip shows the chance
+all legs land and takes its weakest leg's rating. Every figure from the full
+view stays on the card. "Full numbers" shows the original layout.
 
 ## More commands
 

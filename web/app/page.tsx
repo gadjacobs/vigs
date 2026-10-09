@@ -15,9 +15,11 @@ type Params = Record<string, string | string[] | undefined>;
 
 export default async function Tonight({ searchParams }: { searchParams: Promise<Params> }) {
   let sp = await searchParams;
+  const jar = await cookies();
+  const view = jar.get("vig_view")?.value === "simple" ? "simple" : "detailed";
   // No filters in the URL: reuse the last ones this device built with.
   if (!Object.keys(sp).length) {
-    const saved = (await cookies()).get("vig_q")?.value;
+    const saved = jar.get("vig_q")?.value;
     if (saved) sp = Object.fromEntries(new URLSearchParams(decodeURIComponent(saved)));
   }
   const q = parseQuery(sp);
@@ -57,7 +59,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
           model fitted on {model.fitted_on.toLocaleString()} results.
           {blended.length
             ? ` Blend of market price and model in use for ${blended.join(", ")}.`
-            : blend ? ` Blend switches on once proven (${blend.matches.toLocaleString()} of ${blend.min_matches.toLocaleString()} settled matches).` : ""}
+            : ` Estimates are weighted 70/30 toward the market price, which has beaten the results model so far${blend ? `; the blend switches on once proven (${blend.matches.toLocaleString()} of ${blend.min_matches.toLocaleString()} settled matches)` : ""}.`}
         </p>
       )}
 
@@ -69,7 +71,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
       )}
 
       {r && r.candidates.length > 0 && (
-        <SlipBuilder key={now} cands={r.candidates} q={q} now={now} />
+        <SlipBuilder key={now} cands={r.candidates} q={q} now={now} initialView={view} />
       )}
 
       <p className="status" style={{ marginTop: 24 }}>

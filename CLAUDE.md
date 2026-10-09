@@ -40,7 +40,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   Python output. Change both together.
 - Blend (`vigs/blend.py`, `web/lib/blend.ts`): market price + model, per market,
   on only after 2,000 settled matches with odds and a held-out win over the
-  model. Never train on a match with a model that saw its day's results.
+  model. Until then estimates use `guarded` (70/30 toward the market, range
+  spanning both). Never train on a match with a model that saw its day's results.
 - It reads `model.json`, `blend.json` and `record.json` from the `data` branch and odds live
   from SportyBet; it never places bets. Record maths stays in `vigs/record.py`. Booking codes are created with the `OperId: 2` header.
 

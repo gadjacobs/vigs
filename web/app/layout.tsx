@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Atkinson_Hyperlegible_Next, Big_Shoulders } from "next/font/google";
 import { cookies } from "next/headers";
 import { Nav } from "./nav";
@@ -14,9 +14,28 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
+const savedTheme = async () => {
   const saved = (await cookies()).get("vig_theme")?.value;
-  const theme = saved === "light" || saved === "dark" ? saved : undefined;
+  return saved === "light" || saved === "dark" ? saved : undefined;
+};
+
+// Declaring the scheme stops Android browsers (Samsung Internet, Chrome's forced
+// dark) from repainting the page with their own dark colours.
+export async function generateViewport(): Promise<Viewport> {
+  const theme = await savedTheme();
+  return {
+    colorScheme: theme === "light" ? "only light" : theme === "dark" ? "dark" : "light dark",
+    themeColor: theme
+      ? theme === "light" ? "#fbfbf6" : "#133629"
+      : [
+          { media: "(prefers-color-scheme: light)", color: "#fbfbf6" },
+          { media: "(prefers-color-scheme: dark)", color: "#133629" },
+        ],
+  };
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const theme = await savedTheme();
   return (
     <html lang="en" className={`${text.variable} ${num.variable}`} data-theme={theme}>
       <body>
