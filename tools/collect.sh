@@ -32,6 +32,7 @@ publish() {
       --ledger "$DATA/ledger.jsonl" --no-refresh > /dev/null || true
   done
   python -m vigs ledger settle --ledger "$DATA/ledger.jsonl" --results "$DATA/results.csv" || true
+  python -m vigs export-record --ledger "$DATA/ledger.jsonl" --out "$DATA/record.json" || true
 }
 
 publish

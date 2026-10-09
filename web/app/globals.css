@@ -2,7 +2,7 @@
   --ground: #e6ebe3; --paper: #fbfbf6; --paper-sunk: #dce3d8; --ink: #0f3d2e;
   --ink-muted: #466155; --rule: #c9d2c5; --edge: #6e7f74; --signal: #f6c945;
   --on-signal: #0f3d2e; --house: #b8322a; --house-wash: #f3dad5; --fair: #1f5fa8;
-  --focus: #1f5fa8; --shadow-slip: 0 18px 32px -18px rgba(15, 61, 46, 0.45);
+  --focus: #1f5fa8; --series-lean: #1f5fa8; --series-rough: #b26b00; --shadow-slip: 0 18px 32px -18px rgba(15, 61, 46, 0.45);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -10,6 +10,7 @@
     --ground: #0c2a20; --paper: #133629; --paper-sunk: #0a241b; --ink: #eef3ea;
     --ink-muted: #a8bdb0; --rule: #28503f; --edge: #6f8f80; --on-signal: #0c2a20;
     --house: #ff8a7a; --house-wash: #3a2420; --fair: #8fb8f0; --focus: #f6c945;
+    --series-lean: #5a8fd8; --series-rough: #c4821a;
     --shadow-slip: 0 18px 32px -14px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
@@ -25,6 +26,7 @@ a { color: inherit; }
 .topbar { height: 64px; display: flex; align-items: center; gap: 24px; padding: 0 16px;
   border-bottom: 1px solid var(--rule); background: var(--paper); }
 .wordmark { font-family: var(--font-num); font-weight: 800; font-size: 28px; line-height: 30px; text-decoration: none; }
+.mainnav { display: flex; gap: 24px; }
 .topbar nav a { font-weight: 700; font-size: 14px; text-decoration: none; padding: 10px 0; }
 .topbar nav a[aria-current="page"] { border-bottom: 3px solid var(--signal); }
 
@@ -92,3 +94,36 @@ button, .button { min-height: 44px; padding: 10px 16px; font: inherit; font-weig
 .login { max-width: 420px; }
 .login label { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0; }
 .login .field { flex-direction: column; }
+
+/* Record page */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.tile { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; }
+.tile h2 { margin: 0 0 4px; font-size: 18px; line-height: 24px; display: flex; gap: 8px; align-items: center; }
+.tile .big { font-family: var(--font-num); font-weight: 800; font-size: 44px; line-height: 44px; margin: 8px 0; }
+.tile p { margin: 4px 0; font-size: 14px; line-height: 20px; }
+.muted { color: var(--ink-muted); }
+.loss { color: var(--house); }
+section.block { margin: 0 0 32px; }
+section.block h2 { font-size: 28px; line-height: 30px; font-family: var(--font-num); font-weight: 800; margin: 0 0 12px; }
+.tablewrap { overflow-x: auto; background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; line-height: 20px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font-size: 13px; line-height: 16px; color: var(--ink-muted); font-weight: 700; }
+td.n, th.n { text-align: right; }
+tr:last-child td { border-bottom: 0; }
+.chart { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 12px 4px; position: relative; }
+.chart svg { display: block; max-width: 100%; height: auto; overflow: visible; }
+.chart .grid line { stroke: var(--rule); stroke-width: 1; }
+.chart .zero { stroke: var(--edge); stroke-width: 1; }
+.chart .axis text { fill: var(--ink-muted); font-size: 12px; }
+.chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .label { font-size: 13px; font-weight: 700; fill: var(--ink); }
+.chart .cross { stroke: var(--edge); stroke-width: 1; }
+.chart .dot { stroke: var(--paper); stroke-width: 2; }
+.legend { display: flex; gap: 16px; font-size: 13px; line-height: 16px; margin: 0 0 8px; }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.tip { position: absolute; top: 8px; pointer-events: none; background: var(--paper); border: 1px solid var(--edge);
+  border-radius: 3px; padding: 8px 10px; font-size: 13px; line-height: 18px; box-shadow: var(--shadow-slip); min-width: 160px; }
+.tip strong { display: block; }
+.won { font-weight: 700; }

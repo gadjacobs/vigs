@@ -67,8 +67,10 @@ Local: `cd web && npm install && MODEL_PATH=../data/model.json npm run dev`
 
 Grades in the app top out at Lean until odds history can validate an edge.
 The collector also logs the coming hour's top picks per market to
-`ledger.jsonl` on the `data` branch and settles them, so the method is scored
-whether or not anyone opens the app.
+`ledger.jsonl` on the `data` branch, settles them, and publishes the scorecard
+as `record.json` (`python -m vigs export-record`). The **Record** page shows it:
+ROI and hit rate against expectation by grade and market, a profit curve,
+calibration, and recent picks. Intervals are hidden below 30 settled picks.
 
 ## More commands
 

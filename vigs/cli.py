@@ -418,7 +418,9 @@ def cmd_likely(a) -> None:
     if a.ledger and picks:
         os.makedirs(os.path.dirname(a.ledger) or ".", exist_ok=True)
         led = Ledger(a.ledger)
-        for s, m, g in picks:
+        logged = {(p["fixture"], p["market"]) for p in led.picks().values()}
+        fresh = [(s, m, g) for s, m, g in picks if (m.key(), a.market) not in logged]
+        for s, m, g in fresh:
             lo, hi = g.interval()
             led.add_pick({
                 "market": a.market, "odds": g.odds, "break_even": g.break_even,
@@ -428,7 +430,8 @@ def cmd_likely(a) -> None:
                 "slice_key": f"model:poisson:{a.days:g}d|{a.market}", "stats_version": STATS_VERSION,
                 "sheet_id": f"likely-{sb._iso(now)}", "stake": 0, "shadow": True,
                 "event_id": s["event_id"]}, m)
-        print(f"Logged {len(picks)} picks to {a.ledger} (shadow mode, before kickoff).")
+        print(f"Logged {len(fresh)} picks to {a.ledger} (shadow mode, before kickoff)"
+              + (f"; {len(picks) - len(fresh)} were already logged." if len(fresh) < len(picks) else "."))
 
 
 def datetime_from_iso(s: str):
@@ -491,6 +494,20 @@ def cmd_export_model(a) -> None:
           f"{os.path.getsize(a.out) // 1024} KB")
 
 
+def cmd_export_record(a) -> None:
+    import json
+    from .record import export_record
+    try:
+        led = Ledger(a.ledger)
+    except LedgerError as e:
+        sys.exit(str(e))
+    out = export_record(led)
+    with open(a.out, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, separators=(",", ":"))
+    s = sum(g["settled"] for g in out["grades"].values())
+    print(f"wrote {a.out}: {len(led.picks())} picks, {s} settled, chain intact")
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="vigs", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -527,6 +544,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--days", type=float, default=30)
     p.add_argument("--reps", type=int, default=20)
     p.set_defaults(fn=cmd_export_model)
+
+    p = sub.add_parser("export-record", help="write the ledger scorecard as JSON for the web app")
+    p.add_argument("--ledger", default="data/ledger.jsonl")
+    p.add_argument("--out", default="data/record.json")
+    p.set_defaults(fn=cmd_export_record)
 
     p = sub.add_parser("study", help="results-only base rates and memory tests")
     p.add_argument("--results", default="data/results.csv")

@@ -84,3 +84,28 @@ class Study(unittest.TestCase):
         (_, n, rates), = base_rates(rows)
         self.assertEqual(n, 4000)
         self.assertAlmostEqual(rates["home"] + rates["draw"] + rates["away"], 1.0)
+
+
+class Record(unittest.TestCase):
+    def test_scorecard_counts_and_curve(self):
+        from vigs.data import synthesize
+        from vigs.ledger import Ledger
+        from vigs.record import export_record
+        ms = synthesize(weeks=2, played=1, seed=3)
+        upcoming = [m for m in ms if not m.settled][:4]
+        with tempfile.TemporaryDirectory() as d:
+            led = Ledger(os.path.join(d, "l.jsonl"))
+            for i, m in enumerate(upcoming):
+                led.add_pick({"market": "O15", "odds": 1.5, "break_even": 1 / 1.5, "market_prob": 0.62,
+                              "estimate": 0.7, "grade": "Lean" if i < 3 else "Rough"}, m)
+            for i, m in enumerate(upcoming[:3]):
+                m.hg, m.ag = (2, 1) if i < 2 else (0, 0)
+            led.settle(upcoming)
+            rec = export_record(Ledger(led.path))
+        lean = rec["grades"]["Lean"]
+        self.assertEqual((lean["settled"], lean["hits"], lean["open"]), (3, 2, 0))
+        self.assertAlmostEqual(lean["roi"], (0.5 + 0.5 - 1) / 3)
+        self.assertEqual(rec["grades"]["Rough"]["open"], 1)
+        self.assertEqual(rec["curve"]["Lean"][-1][1], 0.0)
+        self.assertTrue(rec["chain"]["verified"])
+        self.assertEqual(len(rec["recent"]), 4)

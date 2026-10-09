@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Atkinson_Hyperlegible_Next, Big_Shoulders } from "next/font/google";
+import { Nav } from "./nav";
 import "./globals.css";
 
 const text = Atkinson_Hyperlegible_Next({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-text" });
@@ -17,9 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <header className="topbar">
           <a className="wordmark" href="/">Vig</a>
-          <nav aria-label="Main">
-            <a href="/" aria-current="page">Tonight</a>
-          </nav>
+          <Nav />
         </header>
         {children}
       </body>
