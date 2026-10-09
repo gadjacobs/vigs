@@ -28,7 +28,27 @@ survives the false-discovery check (Benjamini-Hochberg 10%), ≥ 30 days of data
 Lean: estimate above break-even with P ≥ 80% but misses a Solid test (it says
 which). Rough: likely, and priced for it. Avoid: history below break-even.
 
-## Quick start
+## Quick start (real data)
+
+```
+python -m vigs fetch results --days 30      # backfill results (scores only) into data/
+python -m vigs fetch watch --minutes 120    # capture pre-match odds + new results every 4 min
+python -m vigs study                        # base rates and memory tests from results alone
+python -m vigs build                        # join results to their pre-kickoff odds
+python -m vigs evidence data/history.csv
+python -m vigs sheet data/history.csv data/upcoming.csv --market O15 --count 10
+```
+
+The data comes from SportyBet's own public web API (see `docs/feed-schema.md`).
+Results reach back a year; odds exist only for the next round, so they are
+collected live. `.github/workflows/collect.yml` does that around the clock on
+GitHub Actions and commits to the `data` branch of this repository, which is
+public: the collected data is visible to anyone.
+
+To use the collected data: `git fetch origin data && git worktree add data origin/data`,
+then run `build`, `evidence` and `sheet` as above.
+
+## More commands
 
 ```
 python -m vigs evidence history.csv                       # calibration + graded slices
@@ -52,8 +72,8 @@ Optional: `league, season, kickoff` (ISO 8601, UTC unless offset given), `hg, ag
 `odds_btts_y, odds_btts_n`, and any over/under line as `odds_o15, odds_u15,
 odds_fh_o05, odds_fh_u05`, … Record pre-match odds, not post-match.
 
-To get real data, run `tools/record_feed.py` on your own computer (see
-`docs/feed-discovery.md`). This repository contains no SportyBet data.
+`python -m vigs build` writes these files from collected data. The code
+branch contains no SportyBet data; the `data` branch does.
 
 ## How a pick earns its grade
 

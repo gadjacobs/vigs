@@ -25,6 +25,14 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
    paid release needs legal review (Nigerian gaming rules, SportyBet terms).
 7. No mocked or made-up results presented as real data. `synth` output is test-only.
 
+## Data
+- Source: SportyBet's public factsCenter API for vFootball (`docs/feed-schema.md`).
+  Results back a year, no odds; odds only for upcoming rounds, captured live.
+- `vigs/sportybet.py` fetches (1.2 s between requests, browser User-Agent) and
+  `build` joins results to the last odds snapshot taken **before** kickoff.
+- The `data` branch is written only by `.github/workflows/collect.yml`. Never
+  push to it or rewrite it by hand. `data/` is git-ignored on code branches.
+
 ## Engineering rules
 - All maths in `vigs/odds.py`, `vigs/stats.py`, `vigs/grading.py`; CLI only formats.
 - Point-in-time: anything describing a match uses earlier rounds only (tests enforce it).
@@ -37,11 +45,13 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 `vigs/data.py` CSV + markets + synthetic generator · `odds.py` odds maths ·
 `stats.py` tests, Beta functions · `grading.py` shrinkage + grades ·
 `evidence.py` contexts, slices, walk-forward, FDR · `sheet.py` sheet builder ·
-`ledger.py` ledger · `patterns.py`/`backtest.py` older hypothesis miner ·
-`tools/record_feed.py` feed recorder · `docs/feed-discovery.md`.
+`ledger.py` ledger · `sportybet.py` API client, collector, build ·
+`study.py` results-only memory tests · `patterns.py`/`backtest.py` older
+hypothesis miner · `tools/collect.sh` collector loop · `tools/record_feed.py`
+browser recorder · `docs/feed-schema.md`.
 
 ## Roadmap (from the v2 brief)
 Done here: odds maths, slices, shrinkage, walk-forward, FDR, grading, golden
-tests, sheets, ledger, recorder. Next: record the real feed and write
-`docs/feed-schema.md`; a parser from recordings to CSV; then the always-on
-collector, database, web app, booking codes and assistant.
+tests, sheets, ledger, recorder, API client, always-on collector, results study.
+Next: weeks of collected odds, then evidence on real data; then database, web
+app, booking codes and assistant.

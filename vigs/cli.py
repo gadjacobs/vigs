@@ -1,4 +1,4 @@
-"""Command line: evidence | sheet | ledger | slip | mine | walkforward | forecast | power | synth."""
+"""Command line: fetch | build | evidence | sheet | ledger | slip | mine | walkforward | forecast | power | synth."""
 from __future__ import annotations
 
 import argparse
@@ -296,9 +296,82 @@ def cmd_slip(a) -> None:
           f"house cut {house_cut(odds, chances):.1%}")
 
 
+def cmd_fetch(a) -> None:
+    import os
+    import time as _time
+    from . import sportybet as sb
+    os.makedirs(a.data, exist_ok=True)
+    client = sb.Client(delay=a.delay)
+    if a.what == "results":
+        now = int(_time.time() * 1000) - 5 * 60 * 1000
+        added = sb.fetch_results(client, os.path.join(a.data, "results.csv"),
+                                 now - int(a.days * 86400000), now)
+        print(f"added {added} results in {client.requests} requests")
+    elif a.what == "odds":
+        n = sb.capture_odds(client, a.data)
+        print(f"captured odds for {n} upcoming matches")
+    else:
+        sb.watch(client, a.data, a.minutes, a.interval, log=lambda m: print(m, flush=True))
+
+
+def cmd_build(a) -> None:
+    from .sportybet import build
+    h, missing, u = build(a.data, a.history, a.upcoming)
+    print(f"{a.history}: {h} settled matches with pre-kickoff odds "
+          f"({missing} results have no odds captured); {a.upcoming}: {u} upcoming")
+
+
+def cmd_study(a) -> None:
+    from . import study as st
+    rows = st.load_results(a.results)
+    print(f"{len(rows)} results, {rows[0]['kickoff'][:16]} to {rows[-1]['kickoff'][:16]} UTC\n")
+    print("Base rates by league")
+    print(f"  {'league':<9s}{'n':>7s}" + "".join(f"{k:>9s}" for k in
+          ("home", "draw", "away", "goals", "O1.5", "O2.5", "BTTS", "FH O0.5")))
+    for lg, n, r in st.base_rates(rows):
+        print(f"  {lg:<9s}{n:>7d}" + "".join(
+            f"{v:>9.2f}" if k == "goals" else f"{v:>9.1%}" for k, v in r.items()))
+    print("\nTeam strength stability (home-win rate, first vs second half of the window)")
+    for lg, n, corr in st.stability(rows):
+        print(f"  {lg:<9s} {n} teams, correlation {corr:+.2f}")
+    eff = st.memory_tests(rows)
+    print(f"\nMemory tests: {len(eff)} tested, strongest first (z vs the team's own base rate)")
+    for e in eff[: a.top]:
+        print(f"  {e.name:<46s} n {e.n:>6d}  {e.observed:6.1%} vs {e.expected:6.1%}  "
+              f"z {e.z:+5.1f}  FDR q {e.q:.2f}")
+    hrs = st.hour_tests(rows)
+    worst = max(hrs, key=lambda e: abs(e.z))
+    print(f"\nHour of day: strongest is {worst.name} {worst.observed:.2f} vs {worst.expected:.2f} "
+          f"(z {worst.z:+.1f}, FDR q {worst.q:.2f}) across {len(hrs)} hours")
+    sig = [e for e in eff + hrs if e.q < 0.10]
+    print("\n" + (f"{len(sig)} effect(s) pass the false-discovery check at 10%."
+                   if sig else "No effect passes the false-discovery check at 10%: "
+                   "no sign the engine remembers recent results or the hour."))
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="vigs", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("fetch", help="pull SportyBet vFootball results or odds")
+    p.add_argument("what", choices=("results", "odds", "watch"))
+    p.add_argument("--data", default="data")
+    p.add_argument("--days", type=float, default=7, help="results: how far back")
+    p.add_argument("--minutes", type=float, default=60, help="watch: how long")
+    p.add_argument("--interval", type=float, default=300, help="watch: seconds between polls")
+    p.add_argument("--delay", type=float, default=1.2, help="seconds between requests")
+    p.set_defaults(fn=cmd_fetch)
+
+    p = sub.add_parser("study", help="results-only base rates and memory tests")
+    p.add_argument("--results", default="data/results.csv")
+    p.add_argument("--top", type=int, default=12)
+    p.set_defaults(fn=cmd_study)
+
+    p = sub.add_parser("build", help="join results and odds into vigs CSVs")
+    p.add_argument("--data", default="data")
+    p.add_argument("--history", default="data/history.csv")
+    p.add_argument("--upcoming", default="data/upcoming.csv")
+    p.set_defaults(fn=cmd_build)
 
     def grading_args(p) -> None:
         p.add_argument("--market", help="comma list, e.g. O15,FH_O05 (default: all)")

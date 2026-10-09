@@ -1,0 +1,48 @@
+name: Collect vFootball data
+
+# Polls SportyBet every 4 minutes for pre-match odds (published only for the
+# next round) and results, and commits them to the `data` branch.
+# Each run lasts just under 6 hours; runs start every 6 hours.
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      chunks:
+        description: "Number of 55-minute collection chunks"
+        default: "6"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: code
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check out the data branch
+        env:
+          REPO_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: |
+          if ! git clone -q --depth 1 --branch data "$REPO_URL" store; then
+            mkdir store
+            git -C store init -q -b data
+            git -C store remote add origin "$REPO_URL"
+          fi
+          git -C store config user.name "github-actions[bot]"
+          git -C store config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Collect
+        run: code/tools/collect.sh store "${{ inputs.chunks || '6' }}"
