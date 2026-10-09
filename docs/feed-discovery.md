@@ -18,6 +18,21 @@ rounds in each league. Results pages and standings help. Stop with Ctrl+C. Then:
 python tools/record_feed.py --summarize feed.jsonl
 ```
 
+### Capture the results archive too (backfill instead of waiting)
+
+While recording, also open SportyBet's **Results** page, choose virtual football,
+and page back through every day and league it offers. That captures the
+endpoint behind the results history, so a backfill script can pull past rounds
+in minutes instead of waiting for them to be played. Results pages usually
+carry scores but not pre-match odds, so live recording is still needed for
+odds; check whether a pairing's odds repeat across a season (if they do, past
+odds can be matched from recorded ones).
+
+If another bookmaker runs the same virtual product, record it in a second
+window for an hour and compare kickoff times and scores. Identical matches mean
+a shared feed (no extra data); different matches mean an independent sample of
+the same engine, which multiplies the data rate.
+
 The recorder captures WebSocket frames from the page and its cross-site
 iframes (tested against a local stand-in), plus JSON HTTP responses. It never
 logs in or places bets.
