@@ -56,15 +56,41 @@ export async function watchBooking(code: string, endpoint: string, lastKickoff: 
   return true;
 }
 
-/** Live status of recent codes (one SportyBet read each). */
+/** Live status of recent codes (one SportyBet read each). Codes the account
+ * tracks that Vig has not logged yet are logged now, with Vig's estimate for
+ * every leg still to kick off, so the record analyses all of them. */
 export async function trackCodes(codes: string[]): Promise<(Tracked | { code: string; error: string })[]> {
-  return Promise.all(codes.slice(0, 12).map(async (code) => {
+  const out = await Promise.all(codes.slice(0, 12).map(async (code) => {
     try {
       return await trackWithPrematch(code);
     } catch (e) {
       return { code, error: (e as Error).message };
     }
   }));
+  await logTracked(out.flatMap((t) => ("legs" in t ? [t] : []))).catch(() => undefined);
+  return out;
+}
+
+async function logTracked(ts: Tracked[]) {
+  const { storeReady, has } = await import("@/lib/store");
+  const { user } = await myProfile();
+  if (!user || !storeReady()) return;
+  const now = Date.now();
+  const fresh = [];
+  for (const t of ts) if (t.legs.some((l) => l.kickoff > now) && !(await has(`logged:${user}`, t.code))) fresh.push(t);
+  if (!fresh.length) return;
+  const [{ loadModel }, { loadBlend }, { upcoming }, { candidates }, { DEFAULT_QUERY }, { MARKET_LABELS }, { logOnce }, { rememberEstimates }] =
+    await Promise.all([import("@/lib/model"), import("@/lib/blend"), import("@/lib/sportybet"), import("@/lib/picks"),
+      import("@/lib/query"), import("@/lib/markets"), import("@/lib/codelog"), import("@/lib/codes")]);
+  const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
+  const picks = new Map(candidates(model, fixtures, { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, includeAvoid: true, now }, blend)
+    .candidates.map((p) => [p.id, p]));
+  for (const t of fresh) {
+    const legs = t.legs.filter((l) => l.kickoff > now).map((l) => picks.get(`${l.eventId}|${l.market}`)).filter((p) => !!p);
+    if (!legs.length) continue;
+    await logOnce(t.code, legs, "tracked", user);
+    await rememberEstimates(t.code, Object.fromEntries(legs.map((p) => [p.eventId, p.estimate])));
+  }
 }
 
 /** A cooked slip the user opened or copied: log it once as theirs, so Codes and Record show it. */
@@ -73,12 +99,9 @@ export async function adoptCode(code: string, style: string) {
   const { user } = await myProfile();
   if (!user) return false;
   const { currentSlates } = await import("@/lib/kitchen");
-  const { logBooking } = await import("@/lib/codelog");
-  const { addTo, storeReady } = await import("@/lib/store");
-  if (!storeReady()) return false;
+  const { logOnce } = await import("@/lib/codelog");
   const slate = (await currentSlates().catch(() => null))?.slates.find((s) => s.code === code);
   if (!slate) return false;
-  if (Number(await addTo(`adopted:${user}`, code)) !== 1) return true;   // already logged
-  await logBooking(code, slate.legs, `cooked:${style}`, user);
+  await logOnce(code, slate.legs, `cooked:${style}`, user);
   return true;
 }

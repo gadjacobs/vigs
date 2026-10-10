@@ -81,6 +81,15 @@ export async function trackWithPrematch(code: string, now = Date.now()): Promise
   return t;
 }
 
+/** Vig's estimate per leg when the code was made, for share cards and the record. */
+export async function rememberEstimates(code: string, est: Record<string, number>) {
+  if (!storeReady()) return;
+  const pre = (await getJson<Record<string, number>>(`codeest:${code}`).catch(() => null)) ?? {};
+  await setJson(`codeest:${code}`, { ...est, ...pre });
+}
+export const loadEstimates = async (code: string) =>
+  (storeReady() ? await getJson<Record<string, number>>(`codeest:${code}`).catch(() => null) : null) ?? {};
+
 export async function rememberPrematch(code: string, odds: Record<string, number>) {
   if (!storeReady()) return;
   const key = `codeodds:${code}`;

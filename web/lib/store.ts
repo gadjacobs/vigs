@@ -107,6 +107,7 @@ export const push = (list: string, v: unknown) => cmd<number>("RPUSH", P + list,
 export async function range<T>(list: string, start: number, stop: number): Promise<T[]> {
   return (await cmd<string[]>("LRANGE", P + list, start, stop)).map((s) => JSON.parse(s) as T);
 }
+export const has = async (set: string, id: string) => Number(await cmd<number>("SISMEMBER", P + set, id)) === 1;
 export const members = (set: string) => cmd<string[]>("SMEMBERS", P + set);
 export const addTo = (set: string, id: string) => cmd("SADD", P + set, id);
 export const removeFrom = (set: string, id: string) => cmd("SREM", P + set, id);

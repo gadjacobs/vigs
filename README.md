@@ -146,7 +146,23 @@ ledger (`vigs ledger import-codes`) with the time they were booked; legs that
 had kicked off by then are not scored. The Record page scores them as codes and
 leg by leg.
 
+## Sharing
+
+Every code has **Share**: a card image (square for posts and chats, 9:16 for
+statuses and stories, `/api/share/<code>`) and text formatted for WhatsApp
+(message with bold code, or status), X (post under 280 characters, or DM),
+Instagram (story image plus caption) or plain text. Cards show prematch odds,
+results so far and Vig's chance when Vig knew every leg before kickoff, with
+"18+ · estimates, not promises". No link back to Vig yet.
+
 ## Accounts
+
+Signed-in accounts get an **Account** page (avatar, top right): display name,
+usual stake (slips and share text show what it returns), the page the
+home-screen app opens on, and saved filters (save any Tonight filters by name
+and apply them in one tap). Every code the account books, opens, copies or
+tracks is logged once to the ledger; legs Vig can price before kickoff carry
+its estimate, and Record breaks the account's legs down by market.
 
 **Google sign-in** (recommended): create an OAuth client (Google Cloud Console →
 APIs & Services → Credentials → OAuth client ID → Web application) with the
@@ -165,8 +181,9 @@ each device already had. Push tips follow the account's latest filters.
 
 ## Your codes and notifications
 
-**Codes** lists the account's booked codes for a day after their last kickoff
-(filter by in play, landed or lost; tap a card for its legs), with each leg's
+**Codes** has two tabs, like SportyBet: **Open** (in play, 10 at a time) and
+**History** (landed or lost, removable; removing hides a code, the record keeps
+it). Tap a card for its legs, with each leg's
 prematch price. SportyBet's share endpoint returns the prematch price only
 until kickoff and a different in-play price afterwards, so Vig keeps the
 prematch prices from booking time or from before kickoff, and shows none

@@ -4,7 +4,9 @@ export type Group = {
   picks: number; settled: number; open: number; hits: number;
   expected_vig: number; expected_market: number; roi: number; roi_low: number; roi_high: number;
 };
+export type LegStats = { settled: number; hits: number; expected_vig: number; expected_market: number };
 export type CodeGroup = {
+  markets?: Record<string, LegStats>;
   codes: number; settled: number; landed: number; expected_vig: number; expected_market: number; roi: number;
   legs: { settled: number; hits: number; expected_vig: number; expected_market: number };
   recent: { code: string; user?: string; origin?: string; booked_at: number; legs: number; scored: number;

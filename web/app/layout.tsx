@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Atkinson_Hyperlegible_Next, Big_Shoulders } from "next/font/google";
 import { cookies } from "next/headers";
 import { myProfile } from "@/lib/profile";
+import { AccountButton } from "./account-button";
 import { Nav } from "./nav";
 import { SamsungHint } from "./samsung-hint";
 import { UpdateToast } from "./update-toast";
@@ -50,6 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <a className="wordmark" href="/">Vig</a>
           <Nav />
           <ThemeToggle initial={theme ?? "system"} />
+          <AccountButton />
         </header>
         <SamsungHint />
         {children}

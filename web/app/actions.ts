@@ -2,10 +2,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { accountFor, sessionValue } from "@/lib/auth";
-import { rememberPrematch } from "@/lib/codes";
+import { rememberEstimates, rememberPrematch } from "@/lib/codes";
 import { currentUser } from "@/lib/profile";
 import { book, selection } from "@/lib/sportybet";
-import { logBooking, type BookedLeg } from "@/lib/codelog";
+import { logOnce, type BookedLeg } from "@/lib/codelog";
 
 export type Leg = BookedLeg;
 export type BookResult =
@@ -19,7 +19,9 @@ export async function bookSlip(legs: Leg[], origin = "tonight"): Promise<BookRes
   if (!legs.length) return { ok: false, error: "The slip is empty." };
   try {
     const res = await book(legs.map((l) => selection(l.market, l.eventId)));
-    await logBooking(res.code, legs, origin, await currentUser()).catch(() => undefined);
+    await logOnce(res.code, legs, origin, await currentUser()).catch(() => undefined);
+    await rememberEstimates(res.code, Object.fromEntries(legs.filter((l) => l.estimate).map((l) => [l.eventId, l.estimate as number])))
+      .catch(() => undefined);
     await rememberPrematch(res.code, Object.fromEntries(legs.filter((l) => l.odds).map((l) => [l.eventId, l.odds as number])))
       .catch(() => undefined);
     return {

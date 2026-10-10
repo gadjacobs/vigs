@@ -89,7 +89,14 @@ def export_record(ledger: Ledger, recent: int = 150) -> dict:
         done = [c for c in cs if c["won"] is not None and c["scored"]]
         profits = [c["odds"] - 1 if c["won"] else -1.0 for c in done]
         legs = [(l, w) for c in done for l, w in c["_legs"] if w is not None]
+        by_mk: dict[str, list] = defaultdict(list)
+        for leg, w in legs:
+            by_mk[leg.get("market") or "?"].append((leg, w))
         return {
+            "markets": {mk: {"settled": len(ls), "hits": sum(bool(w) for _, w in ls),
+                             "expected_vig": sum(l.get("estimate") or 0 for l, _ in ls),
+                             "expected_market": sum(l.get("market_prob") or 0 for l, _ in ls)}
+                        for mk, ls in by_mk.items()},
             "codes": len(cs), "settled": len(done), "landed": sum(bool(c["won"]) for c in done),
             "expected_vig": sum(c["estimate"] for c in done), "expected_market": sum(c["market_prob"] for c in done),
             "roi": sum(profits) / len(profits) if profits else 0.0,

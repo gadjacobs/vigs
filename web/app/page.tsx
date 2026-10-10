@@ -4,7 +4,7 @@ import { ScrollOnBuild } from "./scroll-on-build";
 import { lagos } from "./pick-row";
 import { SlipBuilder } from "./slip-builder";
 import { loadBlend } from "@/lib/blend";
-import { myProfile } from "@/lib/profile";
+import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
 import { candidates } from "@/lib/picks";
@@ -51,7 +51,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
         Upcoming vFootball selections ranked from past results. Nothing is graded above Lean until the record proves an edge.
       </p>
 
-      <Filters initial={q} />
+      <Filters initial={q} saved={user && profile ? profile.filters ?? [] : null} />
 
       <div id="results" tabIndex={-1} className="results" aria-label="Your slip and selections">
       <ScrollOnBuild key={now} target="results" />
@@ -67,7 +67,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
       )}
 
       {r && r.candidates.length > 0 && (
-        <SlipBuilder key={now} cands={r.candidates} q={q} now={now} initialView={view} />
+        <SlipBuilder key={now} cands={r.candidates} q={q} now={now} initialView={view} stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
       )}
 
       {model && r && (

@@ -1,4 +1,4 @@
-import { push, storeReady } from "./store";
+import { addTo, push, storeReady } from "./store";
 
 export type BookedLeg = {
   eventId: string; market: string; kickoff: number;
@@ -19,4 +19,13 @@ export async function logBooking(code: string, legs: BookedLeg[], origin: string
       home: String(l.home ?? ""), away: String(l.away ?? ""), league: String(l.league ?? ""),
     })),
   });
+}
+
+/** Log a code to the record once per account, however it reached them
+ * (booked, opened, copied or tracked). Returns true if it was logged now. */
+export async function logOnce(code: string, legs: BookedLeg[], origin: string, user: string | null) {
+  if (!storeReady() || !user || !legs.length) return false;
+  if (Number(await addTo(`logged:${user}`, code)) !== 1) return false;
+  await logBooking(code, legs, origin, user);
+  return true;
 }

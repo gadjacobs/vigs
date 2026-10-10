@@ -3,7 +3,7 @@ import { loadBlend, type BlendFile } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadInsights, type Insights } from "@/lib/insights";
 import { myProfile } from "@/lib/profile";
-import { loadRecord, type CodeGroup, type Group, type RecordFile } from "@/lib/record";
+import { loadRecord, type CodeGroup, type Group, type LegStats, type RecordFile } from "@/lib/record";
 import { ProfitChart } from "./profit-chart";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +97,7 @@ function Body({ rec, user, tab, n }: { rec: RecordFile; user: string | null; tab
         <section className="block" aria-labelledby="mine">
           <h2 id="mine">Your codes</h2>
           <CodeTiles g={mine} />
+          {mine.markets && Object.keys(mine.markets).length > 0 && <MarketLegs m={mine.markets} />}
           <p className="status">Every code {user ? `${user} booked` : "booked"} in Vig, copied to the ledger with the time it was booked. Legs that had already kicked off when booked are not scored. {mine.codes - mine.settled} code(s) still open.</p>
         </section>
       )}
@@ -258,6 +259,36 @@ function Body({ rec, user, tab, n }: { rec: RecordFile; user: string | null; tab
         Updated {lagos(rec.generated_at)} Lagos. Picks are logged before kickoff and never edited.
       </p>
 )}
+    </>
+  );
+}
+
+/** Your legs by market, against what Vig and the market expected; the
+ * takeaway names a market only once it has 20 settled legs. */
+function MarketLegs({ m }: { m: Record<string, LegStats> }) {
+  const rows = Object.entries(m).sort((a, b) => b[1].settled - a[1].settled);
+  const judged = rows.filter(([, r]) => r.settled >= 20).map(([k, r]) => ({ k, d: (r.hits - r.expected_market) / r.settled }));
+  const best = judged.sort((a, b) => b.d - a.d)[0];
+  return (
+    <>
+      <h3 className="subhead">Your legs by market</h3>
+      <div className="tablewrap">
+        <table>
+          <thead><tr><th>Market</th><th className="n">Settled</th><th className="n">Landed</th><th className="n">Vig expected</th><th className="n">Market expected</th></tr></thead>
+          <tbody>
+            {rows.map(([k, r]) => (
+              <tr key={k}>
+                <td>{MARKET_LABELS[k] ?? k}</td><td className="n">{r.settled}</td><td className="n">{r.hits}</td>
+                <td className="n">{r.expected_vig.toFixed(1)}</td><td className="n">{r.expected_market.toFixed(1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="status">
+        {best ? `${MARKET_LABELS[best.k] ?? best.k} is where your legs have run furthest ${best.d >= 0 ? "above" : "below"} the market's expectation (${(best.d * 100).toFixed(1)} points per leg). Over few legs this is mostly luck.`
+          : "A market gets a verdict once it has 20 settled legs; until then the differences are mostly luck."}
+      </p>
     </>
   );
 }

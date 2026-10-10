@@ -6,6 +6,7 @@ import { shareUrl } from "@/lib/share";
 import { saveView } from "./profile-actions";
 import { watchBooking } from "./push-actions";
 import { CopyButton } from "./copy-button";
+import { ShareButton } from "./share-sheet";
 import { lagos, naira, pct, PickRow, type View } from "./pick-row";
 import { MARKET_LABELS } from "@/lib/markets";
 import type { Pick } from "@/lib/picks";
@@ -16,7 +17,7 @@ import { slipStats, smartSwitch, toTarget, topN } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
 
-type Props = { cands: Pick[]; q: Query; now: number; initialView: View; initialIds?: string[]; title?: string; flex?: boolean };
+type Props = { cands: Pick[]; q: Query; now: number; initialView: View; initialIds?: string[]; title?: string; flex?: boolean; stake?: number };
 
 /** This device's push subscription, if notifications are on. */
 async function pushEndpoint(): Promise<string | null> {
@@ -65,7 +66,7 @@ function FlexTable({ legs }: { legs: Pick[] }) {
   );
 }
 
-export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip", flex = false }: Props) {
+export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip", flex = false, stake = 1000 }: Props) {
   const [view, setView] = useState<View>(initialView);
   const { mode, count, target, sort } = q;
   const initial = useMemo(
@@ -148,6 +149,9 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
           <div><dt>Edge per ₦1,000</dt><dd>{legs.length ? naira(s.edge) : "None"}</dd></div>
         </dl>
         )}
+        {stake > 0 && legs.length > 0 && (
+          <p className="returns">₦{stake.toLocaleString("en-NG")} returns <strong className="num">₦{Math.round(stake * s.odds).toLocaleString("en-NG")}</strong> if every leg lands.</p>
+        )}
         {flex && legs.length > 1 && <FlexTable legs={legs} />}
         {legs.length > 1 && s.model < LOW_CHANCE && (
           <p className="note warn">As one accumulator this lands {pct(s.model)} of the time on Vig's estimate. Most slips like this lose; singles keep each leg's own odds.</p>
@@ -183,6 +187,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
           </p>
           <div className="row">
             <CopyButton text={result.code} />
+            <ShareButton code={result.code} />
           </div>
           <p className="status" style={{ marginTop: 8 }}>Opens the SportyBet app if it is installed, otherwise the website. Vig never places the bet.</p>
           <p className="status">

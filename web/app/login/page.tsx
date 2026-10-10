@@ -1,38 +1,33 @@
-import { login } from "../actions";
+import { LoginPanel } from "./login-panel";
 import { accounts, googleEnabled } from "@/lib/auth";
+
+const ERRORS: Record<string, string> = {
+  age: "Vig is for people aged 18 and over.",
+  password: "That password is not right. Try again.",
+  google: "Google sign-in did not complete. Try again.",
+  notallowed: "That Google account is not on this app's list. Ask the owner to add it.",
+};
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ err?: string }> }) {
   const { err } = await searchParams;
-  const google = googleEnabled();
-  const passwords = accounts().length > 0;
   return (
-    <main>
-      <h1>Sign in</h1>
-      {err === "age" && <p className="note warn" role="alert">Vig is for people aged 18 and over.</p>}
-      {err === "password" && <p className="note warn" role="alert">That password is not right. Try again.</p>}
-      {err === "google" && <p className="note warn" role="alert">Google sign-in did not complete. Try again.</p>}
-      {err === "notallowed" && <p className="note warn" role="alert">That Google account is not on this app&apos;s list. Ask the owner to add it.</p>}
-      {google && (
-        <form action="/api/auth/google" method="get" className="panel login">
-          <label>
-            <input type="checkbox" name="adult" required /> <span>I am 18 or older</span>
-          </label>
-          <button className="primary" type="submit">Continue with Google</button>
-        </form>
-      )}
-      {google && passwords && <p className="status orline">or use a password</p>}
-      {passwords && (
-        <form action={login} className="panel login">
-          <label className="field" htmlFor="password">
-            <span>Password</span>
-            <input id="password" name="password" type="password" autoComplete="current-password" required />
-          </label>
-          <label>
-            <input type="checkbox" name="adult" required /> <span>I am 18 or older</span>
-          </label>
-          <button className={google ? "" : "primary"} type="submit">Sign in</button>
-        </form>
-      )}
+    <main className="login-page">
+      <div className="login-brand">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/icon-192.png" alt="" width={72} height={72} />
+        <h1>Vig</h1>
+        <p className="login-tag">vFootball picks from the numbers, priced live.</p>
+      </div>
+      <ul className="login-points">
+        <li><strong>Cooked slips</strong> for every round, booked and ready to open in SportyBet.</li>
+        <li><strong>A chance for every pick</strong>, from the bookmaker&apos;s price and a month of results.</li>
+        <li><strong>An honest record</strong>: every pick logged before kickoff and scored after.</li>
+      </ul>
+      {err && ERRORS[err] && <p className="note warn" role="alert">{ERRORS[err]}</p>}
+      <LoginPanel google={googleEnabled()} passwords={accounts().length > 0} />
+      <p className="login-small">
+        Personal tool for adults. Vig never places bets and never asks for your SportyBet details. Chances are estimates, not promises.
+      </p>
     </main>
   );
 }

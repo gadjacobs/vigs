@@ -9,7 +9,7 @@ import { loadModel, type ModelFile } from "@/lib/model";
 import { buildSet, COUNTS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, type SetId } from "@/lib/ourpicks";
 import { candidates } from "@/lib/picks";
 import { chance, oneIn } from "@/lib/plain";
-import { myProfile } from "@/lib/profile";
+import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
 import { DEFAULT_QUERY, type Query } from "@/lib/query";
 import { upcoming, type Fixture } from "@/lib/sportybet";
 import { currentSlates, type Cooked } from "@/lib/kitchen";
@@ -123,7 +123,8 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
         <ScrollOnBuild key={now} target="results" />
         {built.pool.length > 0 && (
           <SlipBuilder key={`${now}-${set}-${bar}-${target}-${n}`} cands={built.pool} q={q} now={now} initialView={view}
-            initialIds={built.slip.map((p) => p.id)} title={SETS.find((x) => x.id === set)!.label} flex={built.flex} />
+            initialIds={built.slip.map((p) => p.id)} title={SETS.find((x) => x.id === set)!.label} flex={built.flex}
+            stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
         )}
       </div>
     </main>

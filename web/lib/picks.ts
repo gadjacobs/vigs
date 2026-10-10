@@ -44,6 +44,7 @@ export type CandidateQuery = {
   minGrade: "Rough" | "Lean";
   minConf?: Confidence;
   minChance?: number;
+  includeAvoid?: boolean; // for logging codes people booked themselves
   now: number;
 };
 
@@ -69,7 +70,7 @@ export function candidates(model: ModelFile, fixtures: Fixture[], q: CandidateQu
       const source: Pick["source"] = b ? "blend" : "guarded";
       const be = 1 / odds;
       const { grade, why } = gradeOf(be, est.lo, est.hi);
-      if (grade === "Avoid") {
+      if (grade === "Avoid" && !q.includeAvoid) {
         avoided++;
         continue;
       }

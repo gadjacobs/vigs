@@ -3,12 +3,16 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { MARKET_GROUPS, MARKET_LABELS, SHORT_LABELS } from "@/lib/markets";
 import { queryString, type Query } from "@/lib/query";
-import { saveQuery } from "./profile-actions";
+import { deleteFilter, saveFilter, saveQuery } from "./profile-actions";
+import type { SavedFilter } from "@/lib/profile";
 
 const ALL = Object.keys(MARKET_LABELS);
 const TOLERANCES = [0.05, 0.1, 0.2];
 
-export function Filters({ initial }: { initial: Query }) {
+export function Filters({ initial, saved: savedInitial = null }: { initial: Query; saved?: SavedFilter[] | null }) {
+  const [saved, setSaved] = useState<SavedFilter[] | null>(savedInitial);
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState("");
   const router = useRouter();
   const [q, setQ] = useState<Query>(initial);
   const [targetText, setTargetText] = useState(String(initial.target));
@@ -24,6 +28,25 @@ export function Filters({ initial }: { initial: Query }) {
     : q.markets.length === 0 ? "No market chosen"
     : q.markets.slice(0, 3).map((m) => SHORT_LABELS[m]).join(", ") + (q.markets.length > 3 ? ` +${q.markets.length - 3}` : "");
 
+  const apply = (qs: string) => {
+    document.cookie = `vig_q=${encodeURIComponent(qs)}; path=/; max-age=2592000; samesite=lax`;
+    start(async () => {
+      await saveQuery(qs).catch(() => undefined);
+      router.push(`/?${qs}&run=${Date.now()}`);
+    });
+  };
+  const store = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const qs = queryString({ ...q, target: targetOk ? target : q.target });
+    start(async () => {
+      const next = await saveFilter(name, qs).catch(() => null);
+      if (next) setSaved(next);
+      setNaming(false);
+      setName("");
+    });
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canBuild) return;
@@ -36,6 +59,27 @@ export function Filters({ initial }: { initial: Query }) {
   };
 
   return (
+    <>
+    {saved !== null && (
+      <div className="savedfilters" aria-label="Saved filters">
+        {saved.map((f) => (
+          <span key={f.name} className="savedchip">
+            <button type="button" onClick={() => apply(f.qs)} disabled={pending}>{f.name}</button>
+            <button type="button" className="x" aria-label={`Delete ${f.name}`}
+              onClick={() => start(async () => { const n = await deleteFilter(f.name).catch(() => null); if (n) setSaved(n); })}>×</button>
+          </span>
+        ))}
+        {naming ? (
+          <form className="savename" onSubmit={store}>
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, e.g. Goals 10" maxLength={24} aria-label="Filter name" />
+            <button type="submit" className="primary" disabled={!name.trim() || pending}>Save</button>
+            <button type="button" onClick={() => setNaming(false)}>Cancel</button>
+          </form>
+        ) : (
+          <button type="button" className="savenew" onClick={() => setNaming(true)}>+ Save these filters</button>
+        )}
+      </div>
+    )}
     <form className="panel filters" onSubmit={submit} aria-busy={pending}>
       <div className="filter-row">
         <div className="segmented wide" role="radiogroup" aria-label="Build">
@@ -158,5 +202,6 @@ export function Filters({ initial }: { initial: Query }) {
         {q.mode === "target" && !targetOk && <span className="status" style={{ margin: 0 }}>Enter total odds of 1.1 or more.</span>}
       </div>
     </form>
+    </>
   );
 }

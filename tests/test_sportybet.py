@@ -140,6 +140,8 @@ class BookedCodes(unittest.TestCase):
         self.assertAlmostEqual(mc["roi"], 1.5 * 1.4 - 1)
         self.assertEqual((mc["legs"]["settled"], mc["legs"]["hits"]), (2, 2))
         self.assertEqual(mc["by_user"]["me"]["landed"], 1)
+        self.assertEqual(mc["markets"]["O15"]["hits"], 1)
+        self.assertNotIn("X", mc["markets"])                       # unscored leg
         self.assertEqual(rec["slates"]["codes"], 0)
 
 

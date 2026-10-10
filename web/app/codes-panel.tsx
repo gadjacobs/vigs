@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { syncCodes } from "./profile-actions";
+import { hideCode, syncCodes } from "./profile-actions";
+import { ShareButton } from "./share-sheet";
 import { trackCodes } from "./push-actions";
 import { CopyButton } from "./copy-button";
 import { lagos } from "./pick-row";
@@ -10,7 +11,8 @@ import { shareUrl } from "@/lib/share";
 
 export type { Saved };
 export const CODES_KEY = "vig_codes";
-const SHOW = 24 * 3600 * 1000; // list a code until a day after its last kickoff
+const PAGE = 10;
+const DAY = 24 * 3600 * 1000;
 
 function readAll(): Saved[] {
   try {
@@ -41,10 +43,28 @@ function saveFinal(ts: Tracked[]) {
   try { localStorage.setItem(FINAL_KEY, JSON.stringify(keep)); } catch { /* full or private */ }
 }
 
-export const readCodes = (): Saved[] => readAll().filter((c) => c.last + SHOW > Date.now());
+const HIDDEN_KEY = "vig_codes_hidden";
+function readHidden(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+function writeHidden(h: Set<string>) {
+  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...h].slice(-300))); } catch { /* private mode */ }
+}
+
+/** Every code on this device except removed ones, newest first. */
+export const readCodes = (): Saved[] => {
+  const hidden = readHidden();
+  return readAll().filter((c) => !hidden.has(c.code)).sort((a, b) => b.at - a.at);
+};
 
 /** Remember a code on this device and in the account, and tell the panel. */
 export function rememberCode(c: Saved) {
+  const hidden = readHidden();
+  if (hidden.delete(c.code)) { writeHidden(hidden); hideCode(c.code, true).catch(() => undefined); }
   writeAll([c, ...readAll().filter((x) => x.code !== c.code)]);
   window.dispatchEvent(new Event("vig-codes"));
   syncCodes([c]).catch(() => undefined);
@@ -58,8 +78,11 @@ export function CodesPanel() {
   const [status, setStatus] = useState<Record<string, Tracked | { code: string; error: string }>>({});
   const [entry, setEntry] = useState("");
   const [pending, start] = useTransition();
-  const [filter, setFilter] = useState<"all" | Tracked["state"]>("all");
+  const [tab, setTab] = useState<"open" | "history">("open");
+  const [filter, setFilter] = useState<"all" | "won" | "lost">("all");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [pages, setPages] = useState(1);
+  const [undo, setUndo] = useState<Saved | null>(null);
 
   // Settled codes never change, so they are kept on the device and not checked
   // again; the rest are checked in batches of 8, newest first.
@@ -112,17 +135,44 @@ export function CodesPanel() {
     });
   };
 
-  const tracked = codes.map((c) => ({ c, t: status[c.code] && "legs" in status[c.code] ? (status[c.code] as Tracked) : null }));
-  const count = (st: Tracked["state"]) => tracked.filter((x) => x.t?.state === st).length;
-  const shown = tracked.filter((x) => filter === "all" || x.t?.state === filter);
+  const now = Date.now();
+  const tracked = codes.map((c) => {
+    const st = status[c.code];
+    return { c, t: st && "legs" in st ? st : null, err: Boolean(st && "error" in st) };
+  });
+  // Open: still in play, or not checked yet. History: settled, or no longer
+  // available from SportyBet a day after the last kickoff.
+  const isHistory = (x: (typeof tracked)[number]) => (x.t ? x.t.state !== "open" : x.err && x.c.last + DAY < now);
+  const openList = tracked.filter((x) => !isHistory(x));
+  const history = tracked.filter(isHistory);
+  const shownHistory = history.filter((x) => filter === "all" || x.t?.state === filter);
+  const list = tab === "open" ? openList.slice(0, pages * PAGE) : shownHistory.slice(0, pages * PAGE);
+  const more = (tab === "open" ? openList.length : shownHistory.length) - list.length;
   const toggle = (code: string) => setOpen((o) => {
     const n = new Set(o);
     if (n.has(code)) n.delete(code);
     else n.add(code);
     return n;
   });
-  const FILTERS: [typeof filter, string][] = [["all", `All ${codes.length}`], ["open", `In play ${count("open")}`],
-    ["won", `Landed ${count("won")}`], ["lost", `Lost ${count("lost")}`]];
+  const remove = (c: Saved) => {
+    const h = readHidden();
+    h.add(c.code);
+    writeHidden(h);
+    setCodes(readCodes());
+    setUndo(c);
+    hideCode(c.code).catch(() => undefined);
+    setTimeout(() => setUndo((u) => (u?.code === c.code ? null : u)), 6000);
+  };
+  const restore = () => {
+    if (!undo) return;
+    const h = readHidden();
+    h.delete(undo.code);
+    writeHidden(h);
+    hideCode(undo.code, true).catch(() => undefined);
+    setCodes(readCodes());
+    setUndo(null);
+  };
+  const count = (st: "won" | "lost") => history.filter((x) => x.t?.state === st).length;
 
   return (
     <section id="codes" className="codes-block" aria-labelledby="codes-title">
@@ -134,20 +184,27 @@ export function CodesPanel() {
         <button type="submit" disabled={pending}>{pending ? "Checking…" : "Track"}</button>
       </form>
 
-      {codes.length > 0 && (
-        <div className="codefilters" role="radiogroup" aria-label="Show codes" id="codes-title">
-          {FILTERS.map(([v, label]) => (
-            <button key={v} type="button" role="radio" aria-checked={filter === v} onClick={() => setFilter(v)}>{label}</button>
+      <div className="codetabs" role="tablist" aria-label="Codes">
+        <button type="button" role="tab" aria-selected={tab === "open"} onClick={() => { setTab("open"); setPages(1); }}>
+          Open <span className="count">{openList.length}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "history"} onClick={() => { setTab("history"); setPages(1); }}>
+          History <span className="count">{history.length}</span>
+        </button>
+      </div>
+      {tab === "history" && history.length > 0 && (
+        <div className="codefilters" role="radiogroup" aria-label="Show settled codes">
+          {([["all", `All ${history.length}`], ["won", `Landed ${count("won")}`], ["lost", `Lost ${count("lost")}`]] as const).map(([v, label]) => (
+            <button key={v} type="button" role="radio" aria-checked={filter === v} onClick={() => { setFilter(v); setPages(1); }}>{label}</button>
           ))}
-          <span className="muted">{pending ? "Updating…" : "Updates every minute"}</span>
         </div>
       )}
-      {codes.length === 0 && <p className="note">No codes yet. Book a slip on Tonight or Our picks, or track any code above.</p>}
-
-      {codes.length > 0 && !shown.length && <p className="note">No codes here.</p>}
+      <p className="status codestatus">{pending ? "Updating…" : tab === "open" ? "Open codes update every minute." : "Settled codes. Removing one hides it here; the record keeps its result."}</p>
+      {undo && <p className="note undo" role="status">Removed {undo.code}. <button type="button" onClick={restore}>Undo</button></p>}
+      {tab === "open" && !openList.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
+      {tab === "history" && !shownHistory.length && <p className="note">Nothing settled here yet.</p>}
       <ul className="codecards">
-        {shown.map(({ c, t }) => {
-          const err = status[c.code] && "error" in status[c.code];
+        {list.map(({ c, t, err }) => {
           const legs = t?.legs ?? [];
           const next = legs.filter((l) => l.status === "waiting").sort((a, b) => a.kickoff - b.kickoff)[0];
           const left = legs.filter((l) => l.status === "waiting" || l.status === "playing").length;
@@ -172,12 +229,14 @@ export function CodesPanel() {
               )}
               <p className="codeline">
                 {t ? <>{t.won} won · {t.lost} lost · {left} to play{next ? ` · next kickoff ${lagos(next.kickoff)}` : ""}</>
-                  : err ? "SportyBet did not return this code." : "Checking…"}
+                  : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : "Checking…"}
                 <span className="muted"> · booked {lagos(c.at)}</span>
               </p>
               <div className="row codeactions">
                 <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>
                 <CopyButton text={c.code} />
+                {(t || !err) && <ShareButton code={c.code} />}
+                {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
                 {legs.length > 0 && (
                   <button type="button" className="legstoggle" aria-expanded={isOpen} onClick={() => toggle(c.code)}>
                     {isOpen ? "Hide legs ▴" : "Show legs ▾"}
@@ -205,6 +264,7 @@ export function CodesPanel() {
           );
         })}
       </ul>
+      {more > 0 && <button type="button" className="moreb" onClick={() => setPages((p) => p + 1)}>Show {Math.min(more, PAGE)} more</button>}
     </section>
   );
 }

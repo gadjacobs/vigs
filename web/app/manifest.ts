@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Vig",
     description: "History-backed vFootball selections. Personal tool, 18+.",
     id: "/",
-    start_url: "/",
+    start_url: "/start",
     scope: "/",
     display: "standalone",
     display_override: ["standalone"],

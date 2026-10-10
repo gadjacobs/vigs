@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { rememberCode } from "../codes-panel";
 import { adoptCode } from "../push-actions";
+import { ShareButton } from "../share-sheet";
 import { shareUrl } from "@/lib/share";
 
 type Props = { code: string; legs: number; odds: number; last: number; style: string };
@@ -21,6 +22,7 @@ export function SlateActions({ code, legs, odds, last, style }: Props) {
         keep();
         try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* no clipboard */ }
       }}>{copied ? "Copied" : "Copy code"}</button>
+      <span onClickCapture={keep}><ShareButton code={code} /></span>
     </>
   );
 }

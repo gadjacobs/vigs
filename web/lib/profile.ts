@@ -11,8 +11,15 @@ export type Profile = {
   view?: "simple" | "detailed";
   theme?: "system" | "light" | "dark";
   who?: { email: string; name: string; picture: string; via: "google" };
+  hidden?: string[];                       // codes removed from Codes (the record keeps them)
+  filters?: SavedFilter[];                 // named Tonight filters
+  prefs?: Prefs;
   updated: number;
 };
+
+export type SavedFilter = { name: string; qs: string };
+export type Prefs = { name?: string; stake?: number; home?: "/" | "/picks" | "/codes" };
+export const DEFAULT_STAKE = 1000;
 
 const KEEP_DAYS = 30;
 const MAX_CODES = 60;

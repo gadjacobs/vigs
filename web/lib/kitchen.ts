@@ -1,5 +1,5 @@
 import { loadBlend } from "./blend";
-import { rememberPrematch } from "./codes";
+import { rememberEstimates, rememberPrematch } from "./codes";
 import { logBooking } from "./codelog";
 import { MARKET_LABELS } from "./markets";
 import { loadModel } from "./model";
@@ -34,6 +34,7 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
         if (res.verified !== s.legs.length) continue;
         s.code = res.code;
         await rememberPrematch(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.odds])));
+        await rememberEstimates(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.estimate])));
         // Same legs give the same code; log each code to the record once.
         if (Number(await addTo("slatecodes", res.code)) === 1) await logBooking(res.code, s.legs, `slate:${s.style}`, "vig");
       } catch { /* leave this slip without a code; it can still be booked from the editor */ }

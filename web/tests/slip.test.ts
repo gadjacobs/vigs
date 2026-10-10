@@ -122,3 +122,18 @@ describe("our picks sets", () => {
     expect(s.every((x) => x.odds <= 2.2)).toBe(true);
   });
 });
+
+import { plain, whatsapp, xPost } from "../lib/sharetext";
+
+describe("share text", () => {
+  const legs = Array.from({ length: 14 }, (_, i) => ({ home: "AAA", away: "BBB", label: "Over 1.5", odds: 1.3, kickoff: 0, status: i ? "waiting" : "won", score: null }));
+  const d = { code: "ABC123", legs, odds: 39.37, chance: 0.04, state: "open" as const, stake: 1000 };
+  it("fits X and formats WhatsApp", () => {
+    expect(xPost(d).length).toBeLessThanOrEqual(280);
+    expect(xPost(d)).toContain("ABC123");
+    expect(whatsapp(d)).toContain("*SportyBet code: ABC123*");
+    expect(whatsapp(d)).toContain("+2 more");
+    expect(plain(d)).toContain("₦1,000 returns ₦39,370 if all land.");
+    expect(plain(d)).not.toContain("*");
+  });
+});

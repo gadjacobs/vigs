@@ -6,7 +6,7 @@ import { currentSlates } from "@/lib/kitchen";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel } from "@/lib/model";
 import { candidates } from "@/lib/picks";
-import { myProfile } from "@/lib/profile";
+import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
 import { DEFAULT_QUERY, type Query } from "@/lib/query";
 import { upcoming } from "@/lib/sportybet";
 
@@ -37,7 +37,7 @@ export default async function EditSlate({ searchParams }: { searchParams: Promis
             {ids.length < slate.legs.length ? ` ${slate.legs.length - ids.length} leg(s) have kicked off and were left out.` : ""}
           </p>
           <SlipBuilder key={now} cands={cands} q={q} now={now} initialView={view} initialIds={ids}
-            title={slate.name} flex={slate.style === "draws"} />
+            title={slate.name} flex={slate.style === "draws"} stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
         </>
       )}
     </main>
