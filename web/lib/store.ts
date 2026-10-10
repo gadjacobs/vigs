@@ -76,6 +76,10 @@ export async function getJson<T>(key: string): Promise<T | null> {
 export const setJson = (key: string, v: unknown) => cmd("SET", P + key, JSON.stringify(v));
 export const setJsonIfAbsent = (key: string, v: unknown) => cmd("SET", P + key, JSON.stringify(v), "NX");
 export const del = (key: string) => cmd("DEL", P + key);
+export const push = (list: string, v: unknown) => cmd<number>("RPUSH", P + list, JSON.stringify(v));
+export async function range<T>(list: string, start: number, stop: number): Promise<T[]> {
+  return (await cmd<string[]>("LRANGE", P + list, start, stop)).map((s) => JSON.parse(s) as T);
+}
 export const members = (set: string) => cmd<string[]>("SMEMBERS", P + set);
 export const addTo = (set: string, id: string) => cmd("SADD", P + set, id);
 export const removeFrom = (set: string, id: string) => cmd("SREM", P + set, id);

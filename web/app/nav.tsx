@@ -1,4 +1,5 @@
 "use client";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 
 const I = (d: string) => (
@@ -14,14 +15,20 @@ const LINKS = [
   { href: "/alerts", label: "Alerts", icon: I("M6 16V11a6 6 0 1112 0v5l2 2H4zM10 20a2 2 0 004 0") },
 ];
 
+/** A thin bar under the tab while its page loads. */
+function Pending() {
+  const { pending } = useLinkStatus();
+  return <span aria-hidden="true" className={`navpending ${pending ? "on" : ""}`} />;
+}
+
 export function Nav() {
   const path = usePathname();
   return (
     <nav aria-label="Main" className="mainnav">
       {LINKS.map((l) => (
-        <a key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}>
-          {l.icon}<span>{l.label}</span>
-        </a>
+        <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}>
+          {l.icon}<span>{l.label}</span><Pending />
+        </Link>
       ))}
     </nav>
   );

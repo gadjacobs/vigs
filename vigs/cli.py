@@ -277,6 +277,27 @@ def cmd_ledger(a) -> None:
         matches = results_matches(a.results) if header == RESULT_COLS else load_csv(a.results)
         done, still = led.settle(matches)
         print(f"settled {done} pick(s); {still} still open")
+        if header == RESULT_COLS:
+            import csv
+            from .sportybet import results_matches_row
+            with open(a.results, newline="", encoding="utf-8") as fh:
+                by_id = {r["event_id"]: results_matches_row(r) for r in csv.DictReader(fh)}
+            print(f"settled {led.settle_user_codes(by_id)} booked code(s)")
+        return
+    if a.action == "import-codes":
+        import json
+        import os
+        import urllib.request
+        secret = os.environ.get("PUSH_TICK_SECRET", "")
+        if not a.url or not secret:
+            sys.exit("import-codes needs --url and PUSH_TICK_SECRET in the environment")
+        req = urllib.request.Request(a.url, headers={"Authorization": f"Bearer {secret}",
+                                                     "User-Agent": "vigs-collector"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            entries = json.load(resp).get("entries") or []
+        added = sum(led.add_user_code(e) for e in entries
+                    if isinstance(e, dict) and e.get("code") and e.get("booked_at"))
+        print(f"copied {added} booked code(s) of {len(entries)} in the app's log")
         return
     print(f"Ledger {a.ledger}: flat one-unit stakes, shadow mode. 90% intervals.")
     for r in summarize(led):
@@ -446,6 +467,15 @@ def cmd_likely(a) -> None:
                 "event_id": s["event_id"]}, m)
         print(f"Logged {len(fresh)} picks to {a.ledger} (shadow mode, before kickoff)"
               + (f"; {len(picks) - len(fresh)} were already logged." if len(fresh) < len(picks) else "."))
+
+
+def cmd_export_insights(a) -> None:
+    import json
+    from .insights import export_insights
+    out = export_insights(a.data)
+    with open(a.out, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, separators=(",", ":"))
+    print(f"wrote {a.out}: {out['matches_with_odds']} settled matches with odds, {out['results']} results")
 
 
 OUR_BAR = 0.88
@@ -635,6 +665,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--no-refresh", dest="refresh", action="store_false")
     p.set_defaults(fn=cmd_likely)
 
+    p = sub.add_parser("export-insights", help="insights.json for the Record page")
+    p.add_argument("--data", default="data")
+    p.add_argument("--out", default="data/insights.json")
+    p.set_defaults(fn=cmd_export_insights)
+
     p = sub.add_parser("ourpicks", help="best-paying ~90%% selection per published match")
     p.add_argument("--bar", type=float, default=OUR_BAR)
     p.add_argument("--hours", type=float, default=1)
@@ -706,9 +741,10 @@ def main(argv: list[str] | None = None) -> None:
     p.set_defaults(fn=cmd_sheet)
 
     p = sub.add_parser("ledger", help="verify, settle or report the pick ledger")
-    p.add_argument("action", choices=("report", "settle", "verify"))
+    p.add_argument("action", choices=("report", "settle", "verify", "import-codes"))
     p.add_argument("--ledger", default="ledger.jsonl")
     p.add_argument("--results")
+    p.add_argument("--url", help="import-codes: the app's /api/codes/log")
     p.set_defaults(fn=cmd_ledger)
 
     p = sub.add_parser("slip", help="combined odds, chance and house cut")

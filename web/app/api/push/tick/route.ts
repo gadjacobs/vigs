@@ -1,5 +1,5 @@
 import { pushReady, tick } from "@/lib/push";
-import { buildTip } from "@/lib/tips";
+import { buildOurs, buildTip } from "@/lib/tips";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,5 +10,5 @@ export async function POST(request: Request) {
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
     return Response.json({ error: "unauthorised" }, { status: 401 });
   if (!pushReady()) return Response.json({ error: "push not configured" }, { status: 503 });
-  return Response.json(await tick(buildTip));
+  return Response.json(await tick(buildTip, Date.now(), buildOurs));
 }

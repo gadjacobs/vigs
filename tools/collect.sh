@@ -35,7 +35,13 @@ publish() {
       --ledger "$DATA/ledger.jsonl" --no-refresh > /dev/null || true
   done
   python -m vigs ourpicks --hours 1 --data "$DATA" --ledger "$DATA/ledger.jsonl" > /dev/null || true
+  if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
+    # Codes booked in the app, so the Record page can score them.
+    python -m vigs ledger import-codes --ledger "$DATA/ledger.jsonl" \
+      --url "${PUSH_TICK_URL%/api/push/tick}/api/codes/log" || true
+  fi
   python -m vigs ledger settle --ledger "$DATA/ledger.jsonl" --results "$DATA/results.csv" || true
+  python -m vigs export-insights --data "$DATA" --out "$DATA/insights.json" || true
   python -m vigs export-record --ledger "$DATA/ledger.jsonl" --out "$DATA/record.json" || true
 }
 

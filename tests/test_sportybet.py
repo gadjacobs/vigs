@@ -67,8 +67,6 @@ class Build(unittest.TestCase):
             self.assertTrue(m.outcome("FH_O05"))
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class Study(unittest.TestCase):
@@ -112,3 +110,64 @@ class Record(unittest.TestCase):
         self.assertEqual(len(rec["recent"]), 4)
         self.assertEqual(rec["confidence"]["High"]["settled"], 3)
         self.assertEqual(rec["confidence"]["Low"]["open"], 1)
+
+
+class BookedCodes(unittest.TestCase):
+    def test_copied_once_scored_before_kickoff_and_settled(self):
+        from vigs.ledger import Ledger
+        from vigs.record import export_record
+        from vigs.sportybet import results_matches_row
+        booked = 1_800_000_000_000
+        entry = {"code": "ABC123", "user": "me", "origin": "tonight", "booked_at": booked, "legs": [
+            {"event_id": "e1", "market": "O15", "kickoff": booked + 60_000, "odds": 1.5, "estimate": 0.7, "market_prob": 0.65},
+            {"event_id": "e2", "market": "FH_O05", "kickoff": booked + 60_000, "odds": 1.4, "estimate": 0.72, "market_prob": 0.7},
+            {"event_id": "e3", "market": "X", "kickoff": booked - 60_000, "odds": 3.3, "estimate": 0.28, "market_prob": 0.29}]}
+        row = lambda e, hg, ag, h1, a1: {"event_id": e, "league": "England", "kickoff": "2027-01-15T08:00:00Z",
+                                         "home": "A", "away": "B", "hg": hg, "ag": ag, "ht_hg": h1, "ht_ag": a1}
+        with tempfile.TemporaryDirectory() as d:
+            led = Ledger(os.path.join(d, "l.jsonl"))
+            self.assertTrue(led.add_user_code(entry))
+            self.assertFalse(led.add_user_code(entry))               # copied once
+            legs = led.user_codes()["ABC123@1800000000000"]["legs"]
+            self.assertEqual([l["scored"] for l in legs], [True, True, False])  # e3 had kicked off
+            res = {"e1": results_matches_row(row("e1", "2", "1", "1", "0"))}
+            self.assertEqual(led.settle_user_codes(res), 0)           # e2 still open
+            res["e2"] = results_matches_row(row("e2", "0", "1", "0", "1"))
+            self.assertEqual(led.settle_user_codes(res), 1)
+            rec = export_record(Ledger(led.path))
+        mc = rec["mycodes"]
+        self.assertEqual((mc["codes"], mc["settled"], mc["landed"]), (1, 1, 1))
+        self.assertAlmostEqual(mc["roi"], 1.5 * 1.4 - 1)
+        self.assertEqual((mc["legs"]["settled"], mc["legs"]["hits"]), (2, 2))
+
+
+
+
+class Insights(unittest.TestCase):
+    def test_bands_margins_and_leagues(self):
+        import json
+        from vigs.insights import export_insights
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "odds"))
+            with open(os.path.join(d, "results.csv"), "w") as fh:
+                fh.write("event_id,league,kickoff,home,away,hg,ag,ht_hg,ht_ag\n"
+                         "e1,Spain,2026-10-10T08:00:00Z,A,B,1,1,0,1\ne2,Spain,2026-10-10T08:00:00Z,C,D,0,0,0,0\n")
+            with open(os.path.join(d, "odds", "2026-10-10.jsonl"), "w") as fh:
+                for e in ("e1", "e2"):
+                    fh.write(json.dumps({"event_id": e, "league": "Spain", "home": "A", "away": "B",
+                                         "kickoff": "2026-10-10T08:00:00Z", "captured_at": "2026-10-10T07:50:00Z",
+                                         "odds": {"1": 2.5, "X": 3.2, "2": 2.9}}) + "\n")
+            out = export_insights(d)
+        self.assertEqual(out["matches_with_odds"], 2)
+        self.assertAlmostEqual(out["margins"][0]["margin"], 1 / 2.5 + 1 / 3.2 + 1 / 2.9 - 1)
+        draws = next(b for b in out["bands"] if b["lo"] == 3.0)   # the draw at 3.2: both games drawn
+        self.assertEqual((draws["n"], draws["landed"]), (2, 1.0))
+        self.assertAlmostEqual(draws["roi"], 2.2)
+        sides = next(b for b in out["bands"] if b["lo"] == 2.0)   # home 2.5 and away 2.9: neither won
+        self.assertEqual((sides["n"], sides["landed"], sides["roi"]), (4, 0.0, -1.0))
+        self.assertEqual(out["leagues"][0]["draw"], 1.0)
+        self.assertEqual(out["leagues"][0]["nil_nil"], 0.5)
+
+
+if __name__ == "__main__":
+    unittest.main()

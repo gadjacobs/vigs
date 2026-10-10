@@ -87,3 +87,38 @@ describe("our picks", () => {
     expect(out.map((x: { id: string }) => x.id)).toEqual(["b|O05", "a|U45"]);
   });
 });
+
+import { atLeast, landedDist } from "../lib/flex";
+
+describe("flex", () => {
+  it("adds up and matches the binomial", () => {
+    const d = landedDist([0.3, 0.3, 0.3]);
+    expect(d.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+    expect(d[3]).toBeCloseTo(0.027, 12);
+    expect(atLeast([0.3, 0.3, 0.3], 2)).toBeCloseTo(0.216, 12);
+    expect(atLeast([0.5], 0)).toBe(1);
+  });
+});
+
+import { buildSet } from "../lib/ourpicks";
+
+describe("our picks sets", () => {
+  const p = (eventId: string, market: string, odds: number, estimate: number, lo = estimate - 0.01, hi = estimate + 0.01) =>
+    ({ id: `${eventId}|${market}`, eventId, market, odds, estimate, lo, hi, kickoff: 1 }) as never;
+  const cands = [p("a", "X", 3.4, 0.29), p("b", "X", 3.6, 0.27), p("c", "X", 3.2, 0.3), p("a", "O15", 1.5, 0.66),
+    p("b", "O15", 1.9, 0.52), p("c", "BY", 2.0, 0.48, 0.4, 0.55), p("d", "1", 1.6, 0.62), p("e", "2", 1.7, 0.58)];
+  const o = { bar: 0.88, target: 5, n: 2, maxSlip: 30 };
+  it("draws: likeliest first", () => {
+    expect(buildSet("draws", cands, o).slip.map((x: { eventId: string }) => x.eventId)).toEqual(["c", "a"]);
+  });
+  it("bold: High confidence only", () => {
+    expect(buildSet("bold", cands, o).pool.map((x: { id: string }) => x.id)).toEqual(["b|O15"]);
+  });
+  it("odds: short legs near the target", () => {
+    const s = buildSet("odds", cands, o).slip as unknown as { odds: number }[];
+    const total = s.reduce((a, x) => a * x.odds, 1);
+    expect(total).toBeGreaterThanOrEqual(4.5);
+    expect(total).toBeLessThanOrEqual(5.5);
+    expect(s.every((x) => x.odds <= 2.2)).toBe(true);
+  });
+});

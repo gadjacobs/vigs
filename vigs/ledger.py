@@ -96,6 +96,52 @@ class Ledger:
         self._append("booking", {"code": code, "market": market, "pick_ids": pick_ids,
                                  "deadline_ms": deadline_ms, "created_at": now_utc()})
 
+    # ---- codes people booked in the app (copied from the app's code log) ----
+
+    def user_codes(self) -> dict[str, dict[str, Any]]:
+        return {r["data"]["key"]: r["data"] for r in self.records if r["type"] == "user_code"}
+
+    def user_code_settlements(self) -> dict[str, dict[str, Any]]:
+        return {r["data"]["key"]: r["data"] for r in self.records if r["type"] == "user_code_settle"}
+
+    def add_user_code(self, entry: dict[str, Any]) -> bool:
+        """Copy one booking from the app's log. The app stamped `booked_at` (ms)
+        with its own clock when the code was made; legs that had kicked off by
+        then are kept but marked unscored. Returns False if already copied."""
+        key = f"{entry['code']}@{int(entry['booked_at'])}"
+        if key in self.user_codes():
+            return False
+        legs = []
+        for leg in entry.get("legs") or []:
+            ko = leg.get("kickoff")
+            legs.append(dict(leg, scored=bool(ko and ko > entry["booked_at"])))
+        self._append("user_code", {"key": key, "code": entry["code"], "user": entry.get("user"),
+                                   "origin": entry.get("origin"), "booked_at": int(entry["booked_at"]),
+                                   "legs": legs, "copied_at": now_utc()})
+        return True
+
+    def settle_user_codes(self, results: dict[str, Match]) -> int:
+        """Settle copied codes whose scored legs all have results (by event id)."""
+        done = self.user_code_settlements()
+        n = 0
+        for key, c in self.user_codes().items():
+            if key in done:
+                continue
+            scored = [leg for leg in c["legs"] if leg.get("scored")]
+            outcomes = []
+            for leg in scored:
+                m = results.get(leg["event_id"])
+                won = m.outcome(leg["market"]) if m else None
+                if won is None:
+                    break
+                outcomes.append({"event_id": leg["event_id"], "won": won, "score": f"{m.hg}-{m.ag}"})
+            else:
+                self._append("user_code_settle", {"key": key, "legs": outcomes,
+                                                  "won": bool(outcomes) and all(o["won"] for o in outcomes),
+                                                  "settled_at": now_utc()})
+                n += 1
+        return n
+
     def settle(self, matches: Iterable[Match]) -> tuple[int, int]:
         """Settle open picks from results. Returns (settled now, still open)."""
         done = self.settlements()

@@ -13,9 +13,12 @@ export type Sub = {
   tips: string[]; // "HH:MM" Lagos
   query: string; // Tonight filters for tips when the account has none saved
   user?: string; // account, whose latest filters the tips follow
+  ours?: OursPrefs; // Our picks on a schedule
+  lastOurs?: number;
   lastTip: number;
   created: number;
 };
+export type OursPrefs = { set: string; every: number; from: string; to: string }; // every: hours, 0 = off
 export type Watch = { code: string; subs: string[]; lastKickoff: number; created: number };
 export type Payload = { title: string; body: string; url: string; tag?: string };
 
@@ -44,7 +47,7 @@ export async function subId(endpoint: string) {
 export async function saveSub(s: Omit<Sub, "id" | "lastTip" | "created">): Promise<Sub> {
   const id = await subId(s.endpoint);
   const old = await getJson<Sub>(`sub:${id}`);
-  const sub: Sub = { ...s, id, lastTip: old?.lastTip ?? 0, created: old?.created ?? Date.now() };
+  const sub: Sub = { ...s, id, lastTip: old?.lastTip ?? 0, lastOurs: old?.lastOurs, created: old?.created ?? Date.now() };
   await setJson(`sub:${id}`, sub);
   await addTo("subs", id);
   return sub;
@@ -100,10 +103,30 @@ export function dueTip(sub: Pick<Sub, "tips" | "lastTip">, now: number): number 
   return null;
 }
 
+/** Minutes past midnight in Lagos. */
+const lagosMinutes = (now: number) => {
+  const d = new Date(now + 60 * MIN);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+};
+const mins = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+};
+
+/** True when an Our picks notification is due: inside the Lagos window and at least `every` hours since the last. */
+export function dueOurs(sub: Pick<Sub, "ours" | "lastOurs">, now: number): boolean {
+  const o = sub.ours;
+  if (!o || !(o.every > 0)) return false;
+  const t = lagosMinutes(now), a = mins(o.from), b = mins(o.to);
+  const inside = a <= b ? t >= a && t <= b : t >= a || t <= b;
+  return inside && now - (sub.lastOurs ?? 0) >= o.every * 60 * MIN - 5 * MIN;
+}
+
 export type TipBuilder = (query: string, now: number) => Promise<Payload>;
+export type OursBuilder = (set: string, now: number) => Promise<Payload>;
 
 /** One pass: settle watched codes, send due tips. Returns counts for the log. */
-export async function tick(buildTip: TipBuilder, now = Date.now()) {
+export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: OursBuilder) {
   const out = { watches: 0, settled: 0, tips: 0, sent: 0, errors: 0 };
   await setJson("lastTick", now);
   const subs = new Map<string, Sub>();
@@ -137,13 +160,24 @@ export async function tick(buildTip: TipBuilder, now = Date.now()) {
     }
   }
   for (const s of subs.values()) {
+    if (!buildOurs || !s.ours || !dueOurs(s, now)) continue;
+    out.tips++;
+    try {
+      if (await send(s, await buildOurs(s.ours.set, now))) out.sent++;
+      await setJson(`sub:${s.id}`, { ...s, lastOurs: now });
+      s.lastOurs = now;
+    } catch {
+      out.errors++;
+    }
+  }
+  for (const s of subs.values()) {
     const due = dueTip(s, now);
     if (due === null) continue;
     out.tips++;
     try {
       const query = (s.user && (await getJson<{ query?: string }>(`profile:${s.user}`))?.query) || s.query;
       if (await send(s, await buildTip(query, now))) out.sent++;
-      await setJson(`sub:${s.id}`, { ...s, lastTip: now });
+      await setJson(`sub:${s.id}`, { ...(await loadSub(s.id)) ?? s, lastTip: now });
     } catch {
       out.errors++;
     }

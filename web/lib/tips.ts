@@ -1,6 +1,8 @@
 import { loadBlend } from "./blend";
 import { SHORT_LABELS } from "./markets";
 import { loadModel } from "./model";
+import { MARKET_LABELS as LABELS } from "./markets";
+import { buildSet, SETS, type SetId } from "./ourpicks";
 import { candidates } from "./picks";
 import { chance, oneIn, slipConfidence } from "./plain";
 import type { Payload } from "./push";
@@ -30,4 +32,21 @@ export async function buildTip(qs: string, now: number): Promise<Payload> {
       `First kickoff ${lagos(first)}. ${markets}. Tap to review and book.`,
     url, tag: "tip",
   };
+}
+
+/** An Our picks notification for the chosen set, priced live. */
+export async function buildOurs(setId: string, now: number): Promise<Payload> {
+  const set = (SETS.find((x) => x.id === setId) ?? SETS[0]);
+  const url = `/picks?set=${set.id}`;
+  const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
+  const q = { ...parseQuery({}), markets: Object.keys(LABELS), hours: 4, now };
+  const cands = candidates(model, fixtures, q, blend).candidates;
+  const b = buildSet(set.id as SetId, cands, { bar: 0.88, target: 10, n: set.id === "draws" ? 4 : 3, maxSlip: 30 });
+  if (!b.slip.length) return { title: `Vig: ${set.label}`, body: "Nothing published right now fits this set.", url, tag: "ours" };
+  const s = slipStats(b.slip);
+  const first = Math.min(...b.slip.map((l) => l.kickoff));
+  const lead = set.id === "safe"
+    ? `${b.pool.length} picks at 88%+; the 5 soonest together: ${chance(slipStats(b.slip.slice(0, 5)).model)} chance.`
+    : `${b.slip.length} legs at ${s.odds.toFixed(2)}, ${chance(s.model)} chance all land (${oneIn(s.model)}).`;
+  return { title: `Vig: ${set.label}`, body: `${lead} First kickoff ${lagos(first)}. Tap to review and book.`, url, tag: "ours" };
 }

@@ -1,5 +1,6 @@
 import { loadBlend, type BlendFile } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
+import { loadInsights, type Insights } from "@/lib/insights";
 import { loadRecord, type Group, type RecordFile } from "@/lib/record";
 import { ProfitChart } from "./profit-chart";
 
@@ -84,6 +85,28 @@ function Body({ rec }: { rec: RecordFile }) {
   return (
     <>
       <div className="tiles">{GRADES.map((g) => <Tile key={g} grade={g} s={rec.grades[g]} />)}</div>
+
+      {rec.mycodes && rec.mycodes.codes > 0 && (
+        <section className="block" aria-labelledby="mine">
+          <h2 id="mine">Your codes</h2>
+          <div className="tiles">
+            <div className="tile">
+              <h2>As booked</h2>
+              <p className="big">{rec.mycodes.landed} of {rec.mycodes.settled}</p>
+              <p>codes landed. Vig expected {rec.mycodes.expected_vig.toFixed(1)}, the market {rec.mycodes.expected_market.toFixed(1)}.</p>
+              {rec.mycodes.settled > 0 && (
+                <p className={rec.mycodes.roi < 0 ? "loss" : ""}>Return at a flat stake per code {signedPct(rec.mycodes.roi)}{rec.mycodes.settled < 30 ? " (too few to judge)" : ""}.</p>
+              )}
+            </div>
+            <div className="tile">
+              <h2>Leg by leg</h2>
+              <p className="big">{rec.mycodes.legs.settled ? `${(100 * rec.mycodes.legs.hits / rec.mycodes.legs.settled).toFixed(1)}%` : "None yet"}</p>
+              <p>{rec.mycodes.legs.hits} of {rec.mycodes.legs.settled} legs landed. Vig expected {rec.mycodes.legs.expected_vig.toFixed(1)}, the market {rec.mycodes.legs.expected_market.toFixed(1)}.</p>
+            </div>
+          </div>
+          <p className="status">Every code booked in Vig, copied to the ledger with the time it was booked. Legs that had already kicked off when booked are not scored. {rec.mycodes.codes - rec.mycodes.settled} code(s) still open.</p>
+        </section>
+      )}
 
       {rec.ourpicks && rec.ourpicks.picks > 0 && (
         <section className="block" aria-labelledby="ours">
@@ -219,6 +242,61 @@ function Body({ rec }: { rec: RecordFile }) {
   );
 }
 
+function DataSays({ ins }: { ins: Insights }) {
+  const p1 = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const band = (lo: number, hi: number) => (hi >= 1000 ? `${lo}+` : `${lo}–${hi}`);
+  const lowMargin = ins.margins[0];
+  const highMargin = ins.margins[ins.margins.length - 1];
+  return (
+    <section className="block" aria-labelledby="says">
+      <h2 id="says">What the data says</h2>
+      <p className="status">
+        From {ins.matches_with_odds.toLocaleString()} settled matches with captured odds and {ins.results.toLocaleString()} results,
+        refreshed hourly. Figures with a ± are averages with one standard error; small samples move.
+      </p>
+      <h3 className="subhead">Backing every selection, by odds</h3>
+      <div className="tablewrap">
+        <table>
+          <thead><tr><th>Odds</th><th className="n">Selections</th><th className="n">Landed</th><th className="n">Needed to break even</th><th className="n">Return per bet</th></tr></thead>
+          <tbody>
+            {ins.bands.map((b) => (
+              <tr key={b.lo}>
+                <td>{band(b.lo, b.hi)}</td><td className="n">{b.n.toLocaleString()}</td><td className="n">{p1(b.landed)}</td>
+                <td className="n">{p1(b.break_even)}</td>
+                <td className={`n ${b.roi < 0 ? "loss" : ""}`}>{signedPct(b.roi)} ± {(b.se * 100).toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="status">
+        Short prices lose little and long shots lose a lot: the bookmaker loads its margin onto long odds. A total built
+        from several short legs keeps more value than one long shot, which is how Our picks &ldquo;Target odds&rdquo; builds.
+        {lowMargin && highMargin ? ` The listed margin is lowest on ${lowMargin.family} (${p1(lowMargin.margin)}) and highest on ${highMargin.family} (${p1(highMargin.margin)}).` : ""}
+      </p>
+      <h3 className="subhead">Leagues</h3>
+      <div className="tablewrap">
+        <table>
+          <thead><tr><th>League</th><th className="n">Goals</th><th className="n">Home</th><th className="n">Draw</th><th className="n">Away</th>
+            <th className="n">0-0</th><th className="n">Both score</th><th className="n">First-half goals</th></tr></thead>
+          <tbody>
+            {ins.leagues.map((l) => (
+              <tr key={l.league}>
+                <td>{l.league}</td><td className="n">{l.goals.toFixed(2)}</td><td className="n">{p1(l.home)}</td><td className="n">{p1(l.draw)}</td>
+                <td className="n">{p1(l.away)}</td><td className="n">{p1(l.nil_nil)}</td><td className="n">{p1(l.btts)}</td><td className="n">{p1(l.first_half_share)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="status">
+        The model prices each league separately, so these differences are already in every estimate. Goals split about
+        evenly between the halves, unlike real football.
+      </p>
+    </section>
+  );
+}
+
 export default async function RecordPage() {
   let rec: RecordFile | null = null;
   try {
@@ -227,6 +305,7 @@ export default async function RecordPage() {
     rec = null;
   }
   const blend = await loadBlend();
+  const ins = await loadInsights();
   return (
     <main>
       <h1>Record</h1>
@@ -236,6 +315,7 @@ export default async function RecordPage() {
       </p>
       {rec && <Body rec={rec} />}
       <Accuracy blend={blend} />
+      {ins && <DataSays ins={ins} />}
       {!rec && (
         <p className="note warn" role="alert">
           The scorecard is not published yet. The collector writes it every hour; try again shortly.

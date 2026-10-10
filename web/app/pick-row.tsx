@@ -41,6 +41,7 @@ export function PickRow({ p, actions, now, view = "detailed" }: { p: Pick; actio
           <span>chance, {oneIn(p.estimate)}. At {p.odds.toFixed(2)} it needs {pct(p.breakEven)} to break even, so
             {p.estimate > p.breakEven ? " on our numbers it pays a little more than its chance." : " the bookmaker keeps the difference."}</span>
         </p>
+        {p.odds >= 5 && <p className="why longshot">Long shot: in Vig&apos;s data, prices over 5 have returned far less than they cost (see Record).</p>}
         <p className="why">
           {conf} confidence: {CONFIDENCE_WHY[conf]}. Range {pct(p.lo)} to {pct(p.hi)}. Bookmaker {pct(p.marketChance)},
           history {p.historyRate === null ? "none" : `${pct(p.historyRate)} of ${p.historyN.toLocaleString()}`},
@@ -68,6 +69,7 @@ export function PickRow({ p, actions, now, view = "detailed" }: { p: Pick; actio
       </dl>
       <Bar p={p} />
       <p className="why">{p.grade}: {p.why}.</p>
+      {p.odds >= 5 && <p className="why longshot">Long shot: in Vig&apos;s data, prices over 5 have returned far less than they cost (see Record).</p>}
       {actions && <div className="row leg-actions">{actions}</div>}
     </li>
   );

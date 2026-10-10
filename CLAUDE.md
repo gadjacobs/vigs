@@ -46,6 +46,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   from SportyBet; it never places bets. Record maths stays in `vigs/record.py`. Booking codes are created with the `OperId: 2` header.
 - Accounts (`web/lib/auth.ts`, `profile.ts`): `ACCOUNTS` or `APP_PASSWORD`; a profile
   per account in the store syncs codes, filters, view and theme. Never store SportyBet details.
+- Our picks (`web/lib/ourpicks.ts`, `/picks`): sets safe/odds/bold/draws; `vigs ourpicks`
+  logs the safe set hourly. Booked codes go to the store's `codelog` with the server's
+  clock and are copied into the ledger by `vigs ledger import-codes`; legs that had
+  kicked off when booked are never scored. `vigs export-insights` feeds Record.
 - Push (`web/lib/push.ts`, `store.ts`, `/alerts`): Upstash Redis holds subscriptions,
   tip times, watched codes and profiles only; `/api/push/tick` is called by the collector with
   `PUSH_TICK_SECRET`. Live odds use Shin de-vig (`vigs.odds.LIVE_DEVIG`, `fairProbs`).

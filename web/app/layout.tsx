@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { myProfile } from "@/lib/profile";
 import { Nav } from "./nav";
 import { SamsungHint } from "./samsung-hint";
+import { UpdateToast } from "./update-toast";
+import { BUILD } from "@/lib/build";
 import { ThemeToggle } from "./theme-toggle";
 import "./globals.css";
 
@@ -51,6 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </header>
         <SamsungHint />
         {children}
+        <UpdateToast build={BUILD} />
       </body>
     </html>
   );

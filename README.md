@@ -111,13 +111,33 @@ view stays on the card. "Full numbers" shows the original layout.
 
 ## Our picks
 
-For every published match, the best-paying selection whose estimate is at
-least 88% (85, 90 and 93 on the page), graded Avoid excluded, ready to book or
-edit. `vigs ourpicks` logs the same list hourly in shadow mode and the Record
+Four ready-made sets, each from what the data has shown, ready to book or edit
+(graded Avoid excluded):
+
+- **Safe ~90%**: per published match, the best-paying selection with an
+  estimate of at least 88% (85, 90 and 93 on the page).
+- **Target odds** (2, 5, 10 or 20): the likeliest slip near the total, from
+  legs priced 1.25 to 2.2 with Medium or High confidence. Backing every
+  selection, short prices have lost little and long shots a lot, so several
+  short legs keep more value than one long shot.
+- **Bigger odds, High confidence**: legs at 1.8 or more where market and model agree.
+- **Draws (flex)**: the likeliest draws, with the chance that at least k of n
+  land for SportyBet's Flex option.
+
+Safe ~90%: `vigs ourpicks` logs the same list hourly in shadow mode and the Record
 page scores it. Checked on the first 762 settled matches with odds before
 launch: at the 88% bar, 701 of 762 landed (92.0%) against 90.9% estimated.
 They pay less than their chance once the bookmaker's margin is taken, and a
 long accumulator of them still lands rarely (20 legs at 90% each: about 12%).
+
+## What the data says
+
+`vigs export-insights` (hourly, `insights.json`) publishes model-free facts for
+the Record page: the margin by market, what backing every selection returned by
+odds band, and league profiles. Codes booked in the app are copied to the
+ledger (`vigs ledger import-codes`) with the time they were booked; legs that
+had kicked off by then are not scored. The Record page scores them as codes and
+leg by leg.
 
 ## Accounts
 
@@ -135,9 +155,11 @@ SportyBet's share endpoint gives each leg's status and score; the panel
 refreshes every minute.
 
 **Alerts** sends web push notifications to a phone: when a booked code lands
-or loses (the first lost leg ends it), and a tip slip at chosen Lagos times,
-built with that device's last Tonight filters. On iPhone, add Vig to the Home
-Screen first. Setup, once:
+or loses (the first lost leg ends it), a tip slip at chosen Lagos times built
+with the account's last Tonight filters, and an Our picks set on a schedule
+(every 1 to 12 hours between chosen hours). On iPhone, add Vig to the Home
+Screen first. The app also offers a reload, in a toast, when a new version is
+deployed or a new round is published. Setup, once:
 
 1. Vercel → the project → Storage → connect a Redis store (Upstash for Redis or
    Redis, free plans) to the Production environment. Either its REST pair

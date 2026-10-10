@@ -53,3 +53,18 @@ describe("accounts", () => {
     expect(m[0].at).toBe(9);
   });
 });
+
+import { dueOurs } from "../lib/push";
+
+describe("our picks schedule", () => {
+  const at = (h: number, m = 0) => Date.UTC(2026, 9, 10, h - 1, m); // Lagos h:m
+  const ours = { set: "safe", every: 2, from: "09:00", to: "23:00" };
+  it("sends inside the window, every N hours", () => {
+    expect(dueOurs({ ours, lastOurs: 0 }, at(10))).toBe(true);
+    expect(dueOurs({ ours, lastOurs: at(9) }, at(10))).toBe(false);
+    expect(dueOurs({ ours, lastOurs: at(8) }, at(10))).toBe(true);
+    expect(dueOurs({ ours, lastOurs: 0 }, at(8))).toBe(false); // before 09:00
+    expect(dueOurs({ ours: { ...ours, every: 0 }, lastOurs: 0 }, at(10))).toBe(false);
+    expect(dueOurs({ ours: { ...ours, from: "22:00", to: "02:00" }, lastOurs: 0 }, at(1))).toBe(true); // overnight
+  });
+});

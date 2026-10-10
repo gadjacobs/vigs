@@ -8,13 +8,14 @@ import { CopyButton } from "./copy-button";
 import { lagos, naira, pct, PickRow, type View } from "./pick-row";
 import { MARKET_LABELS } from "@/lib/markets";
 import type { Pick } from "@/lib/picks";
+import { atLeast } from "@/lib/flex";
 import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
 import type { Query } from "@/lib/query";
 import { slipStats, smartSwitch, toTarget, topN } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
 
-type Props = { cands: Pick[]; q: Query; now: number; initialView: View; initialIds?: string[]; title?: string };
+type Props = { cands: Pick[]; q: Query; now: number; initialView: View; initialIds?: string[]; title?: string; flex?: boolean };
 
 /** This device's push subscription, if notifications are on. */
 async function pushEndpoint(): Promise<string | null> {
@@ -46,7 +47,24 @@ function ViewToggle({ view, setView }: { view: View; setView: (v: View) => void 
   );
 }
 
-export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip" }: Props) {
+function FlexTable({ legs }: { legs: Pick[] }) {
+  const ps = legs.map((p) => p.estimate);
+  const n = legs.length;
+  const rows = [0, 1, 2].filter((m) => n - m >= 1);
+  return (
+    <table className="flextable">
+      <caption>With Flex on in SportyBet, the slip still pays a reduced amount when legs miss.</caption>
+      <thead><tr><th>Legs that must land</th><th className="n">Chance</th></tr></thead>
+      <tbody>
+        {rows.map((m) => (
+          <tr key={m}><td>{m === 0 ? `All ${n}` : `At least ${n - m} of ${n}`}</td><td className="n">{pct(atLeast(ps, n - m))}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip", flex = false }: Props) {
   const [view, setView] = useState<View>(initialView);
   const { mode, count, target, sort } = q;
   const initial = useMemo(
@@ -83,7 +101,10 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
   const add = (p: Pick) => edit([...ids, p.id], `Added ${p.home} v ${p.away}.`);
 
   const book = () => start(async () => {
-    const res = await bookSlip(legs.map((p) => ({ eventId: p.eventId, market: p.market, kickoff: p.kickoff })));
+    const res = await bookSlip(legs.map((p) => ({
+      eventId: p.eventId, market: p.market, kickoff: p.kickoff, odds: p.odds, estimate: p.estimate,
+      marketChance: p.marketChance, lo: p.lo, hi: p.hi, home: p.home, away: p.away, league: p.league,
+    })), title === "Your slip" ? "tonight" : `ourpicks:${title}`);
     setResult(res);
     if (res.ok) {
       rememberCode({ code: res.code, at: Date.now(), legs: res.legs, odds: s.odds, last: res.lastKickoff });
@@ -126,6 +147,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
           <div><dt>Edge per ₦1,000</dt><dd>{legs.length ? naira(s.edge) : "None"}</dd></div>
         </dl>
         )}
+        {flex && legs.length > 1 && <FlexTable legs={legs} />}
         {legs.length > 1 && s.model < LOW_CHANCE && (
           <p className="note warn">As one accumulator this lands {pct(s.model)} of the time on Vig's estimate. Most slips like this lose; singles keep each leg's own odds.</p>
         )}

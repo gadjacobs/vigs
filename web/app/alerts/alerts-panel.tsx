@@ -1,6 +1,11 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
 import { pushPrefs, subscribePush, testPush, unsubscribePush } from "../push-actions";
+import { SETS } from "@/lib/ourpicks";
+import type { OursPrefs } from "@/lib/push";
+
+const EVERY = [[0, "Off"], [1, "Every hour"], [2, "Every 2 hours"], [3, "Every 3 hours"], [6, "Every 6 hours"], [12, "Twice a day"]] as const;
+const OURS_DEFAULT: OursPrefs = { set: "safe", every: 0, from: "09:00", to: "23:00" };
 
 const PRESETS = ["09:00", "13:00", "18:00", "20:00", "22:00"];
 
@@ -17,6 +22,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
   const [sub, setSub] = useState<PushSubscription | null>(null);
   const [results, setResults] = useState(true);
   const [tips, setTips] = useState<string[]>([]);
+  const [ours, setOurs] = useState<OursPrefs>(OURS_DEFAULT);
   const [custom, setCustom] = useState("");
   const [msg, setMsg] = useState("");
   const [pending, start] = useTransition();
@@ -36,14 +42,15 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       if (p) {
         setResults(p.results);
         setTips(p.tips);
+        if (p.ours) setOurs(p.ours);
       }
       setState("on");
     })().catch(() => setState("unsupported"));
   }, []);
 
-  const save = (s: PushSubscription, r: boolean, t: string[], note: string) =>
+  const save = (s: PushSubscription, r: boolean, t: string[], note: string, o: OursPrefs = ours) =>
     start(async () => {
-      const res = await subscribePush(s.toJSON() as never, { results: r, tips: t });
+      const res = await subscribePush(s.toJSON() as never, { results: r, tips: t, ours: o });
       setMsg(res.ok ? note : res.error);
     });
 
@@ -57,7 +64,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       } catch (e) {
         return setMsg(`This browser could not register with its push service (${(e as Error).message}). Try again, or use Chrome.`);
       }
-      const res = await subscribePush(s.toJSON() as never, { results, tips });
+      const res = await subscribePush(s.toJSON() as never, { results, tips, ours });
       if (!res.ok) return setMsg(res.error);
       setSub(s);
       setState("on");
@@ -115,6 +122,35 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
             <label className="field">Another time<input type="time" value={custom} onChange={(e) => setCustom(e.target.value)} /></label>
             <button type="submit" disabled={pending || !custom}>Add</button>
           </form>
+          <fieldset className="oursbox">
+            <legend>Our picks</legend>
+            <div className="filter-row">
+              <label className="field">Send
+                <select value={ours.every} disabled={pending}
+                  onChange={(e) => { const o = { ...ours, every: Number(e.target.value) }; setOurs(o); if (sub) save(sub, results, tips, o.every ? "Our picks schedule saved." : "Our picks notifications off.", o); }}>
+                  {EVERY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </label>
+              <label className="field">Set
+                <select value={ours.set} disabled={pending}
+                  onChange={(e) => { const o = { ...ours, set: e.target.value }; setOurs(o); if (sub) save(sub, results, tips, "Set saved.", o); }}>
+                  {SETS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+                </select>
+              </label>
+              <label className="field">From
+                <input type="time" value={ours.from} disabled={pending}
+                  onChange={(e) => setOurs({ ...ours, from: e.target.value })}
+                  onBlur={() => sub && save(sub, results, tips, "Hours saved.")} />
+              </label>
+              <label className="field">To
+                <input type="time" value={ours.to} disabled={pending}
+                  onChange={(e) => setOurs({ ...ours, to: e.target.value })}
+                  onBlur={() => sub && save(sub, results, tips, "Hours saved.")} />
+              </label>
+            </div>
+            <p className="hint">Lagos time. Each one lists the set priced live, with a link to book it.</p>
+            <button type="button" disabled={pending} onClick={() => sub && start(async () => setMsg((await testPush(sub.endpoint, "ours")) ? "Our picks sent." : "Could not send."))}>Send Our picks now</button>
+          </fieldset>
           <p className="status">Tips use your last Tonight filters: {filters}. Build a slip on Tonight to change them, then come back and save.</p>
           <div className="row">
             <button type="button" disabled={pending} onClick={() => sub && save(sub, results, tips, "Saved with your current filters.")}>Save filters for tips</button>
