@@ -85,6 +85,26 @@ function Body({ rec }: { rec: RecordFile }) {
     <>
       <div className="tiles">{GRADES.map((g) => <Tile key={g} grade={g} s={rec.grades[g]} />)}</div>
 
+      {rec.ourpicks && rec.ourpicks.picks > 0 && (
+        <section className="block" aria-labelledby="ours">
+          <h2 id="ours">Our picks</h2>
+          <div className="tile">
+            {rec.ourpicks.settled ? (
+              <>
+                <p className="big">{(100 * rec.ourpicks.hits / rec.ourpicks.settled).toFixed(1)}%</p>
+                <p>Landed {rec.ourpicks.hits} of {rec.ourpicks.settled} settled; Vig expected {(100 * rec.ourpicks.expected_vig / rec.ourpicks.settled).toFixed(1)}%,
+                  the market {(100 * rec.ourpicks.expected_market / rec.ourpicks.settled).toFixed(1)}%.</p>
+                <p className={rec.ourpicks.roi < 0 ? "loss" : ""}>
+                  Return per single at flat stake {signedPct(rec.ourpicks.roi)}
+                  {rec.ourpicks.settled >= 30 ? ` (90% interval ${signedPct(rec.ourpicks.roi_low)} to ${signedPct(rec.ourpicks.roi_high)})` : " (too few to judge)"}.
+                </p>
+              </>
+            ) : <p>{rec.ourpicks.picks} logged, none settled yet.</p>}
+            <p className="muted">Logged hourly before kickoff: each match&apos;s best-paying selection at 88% or more.</p>
+          </div>
+        </section>
+      )}
+
       <section className="block" aria-labelledby="curve">
         <h2 id="curve">Profit over time</h2>
         <p className="status">Running total if ₦1,000 had gone on every settled pick, by grade, in kickoff order.</p>

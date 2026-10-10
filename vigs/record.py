@@ -73,6 +73,7 @@ def export_record(ledger: Ledger, recent: int = 150) -> dict:
         "chain": {"records": len(ledger.records), "head": ledger.head, "verified": True},
         "grades": {g: _group(rs) for g, rs in by_grade.items()},
         "confidence": {c: _group(rs) for c, rs in by_conf.items()},
+        "ourpicks": _group([(p, s) for p, s in rows if str(p.get("sheet_id", "")).startswith("ourpicks-")]),
         "markets": [dict(market=m, grade=g, **_group(rs)) for (m, g), rs in sorted(by_market.items())],
         "curve": curve,
         "calibration": calibration,

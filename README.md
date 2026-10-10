@@ -109,6 +109,16 @@ range means the market price and the model disagree. A slip shows the chance
 all legs land and takes its weakest leg's rating. Every figure from the full
 view stays on the card. "Full numbers" shows the original layout.
 
+## Our picks
+
+For every published match, the best-paying selection whose estimate is at
+least 88% (85, 90 and 93 on the page), graded Avoid excluded, ready to book or
+edit. `vigs ourpicks` logs the same list hourly in shadow mode and the Record
+page scores it. Checked on the first 762 settled matches with odds before
+launch: at the 88% bar, 701 of 762 landed (92.0%) against 90.9% estimated.
+They pay less than their chance once the bookmaker's margin is taken, and a
+long accumulator of them still lands rarely (20 legs at 90% each: about 12%).
+
 ## Accounts
 
 Signing in picks the account. `ACCOUNTS="name:password,name2:password2"` in
@@ -120,8 +130,7 @@ each device already had. Push tips follow the account's latest filters.
 
 ## Your codes and notifications
 
-**Your codes** (Tonight page) lists codes booked on this device for six hours
-after their last kickoff, and any code typed into "Track a code". One read of
+**Codes** lists the account's booked codes for a day after their last kickoff, and any code typed into "Track a code". One read of
 SportyBet's share endpoint gives each leg's status and score; the panel
 refreshes every minute.
 
@@ -130,10 +139,11 @@ or loses (the first lost leg ends it), and a tip slip at chosen Lagos times,
 built with that device's last Tonight filters. On iPhone, add Vig to the Home
 Screen first. Setup, once:
 
-1. Vercel → the project → Storage → connect **Upstash for Redis** (free plan)
-   to the Production environment. It adds `KV_REST_API_URL` and
-   `KV_REST_API_TOKEN` (a custom prefix, `UPSTASH_REDIS_REST_*` or an Upstash
-   `REDIS_URL` also work). The Alerts page's setup check shows what it found.
+1. Vercel → the project → Storage → connect a Redis store (Upstash for Redis or
+   Redis, free plans) to the Production environment. Either its REST pair
+   (`KV_REST_API_URL` and `KV_REST_API_TOKEN`, any prefix, or
+   `UPSTASH_REDIS_REST_*`) or a `redis://` / `rediss://` `REDIS_URL` works. The
+   Alerts page's setup check shows what it found.
 2. Vercel → Settings → Environment Variables: `PUSH_TICK_SECRET`, any long
    random string. Redeploy.
 3. GitHub → Settings → Secrets and variables → Actions: secret

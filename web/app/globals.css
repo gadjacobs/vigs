@@ -258,3 +258,47 @@ form.track { margin-top: 12px; align-items: flex-end; }
 .samsung { max-width: 960px; margin: 12px auto 0; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
 .samsung p { margin: 0; flex: 1 1 260px; }
 @media (max-width: 1000px) { .samsung { margin: 12px 16px 0; } }
+
+/* Navigation: top links on wide screens, a tab bar on phones */
+.mainnav a { display: inline-flex; align-items: center; gap: 6px; }
+.mainnav svg { display: none; }
+@media (max-width: 640px) {
+  .topbar { justify-content: space-between; }
+  .mainnav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 0; background: var(--paper); border-top: 1px solid var(--rule); padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); }
+  .topbar nav.mainnav a { flex-direction: column; gap: 2px; padding: 6px 0; font-size: 11px; line-height: 14px; font-weight: 700;
+    color: var(--ink-muted); border: 0; min-height: 52px; justify-content: center; }
+  .topbar nav.mainnav a[aria-current="page"] { color: var(--ink); border: 0; }
+  .topbar nav.mainnav a[aria-current="page"] svg { color: var(--on-signal); background: var(--signal); border-radius: 999px; padding: 2px 10px; width: 46px; }
+  .mainnav svg { display: block; }
+  body { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+  .dock { bottom: calc(64px + env(safe-area-inset-bottom)); }
+}
+
+/* Our picks */
+.barpick { margin: 0 0 12px; }
+.barpick a.button { min-height: 40px; border: 0; border-radius: 999px; background: transparent; padding: 4px 14px; font-size: 14px; color: var(--ink-muted); }
+.barpick a.button[aria-checked="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--edge); }
+
+/* Codes page */
+.codes-block { margin-top: 0; }
+.codesum { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; margin: 16px 0 12px; font-size: 14px; }
+.codesum strong { font-size: 28px; line-height: 28px; margin-right: 4px; }
+.codecards { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.codecard { background: var(--paper); border: 1px solid var(--rule); border-left: 6px solid var(--edge); border-radius: 10px; padding: 14px 16px; }
+.codecard.is-won { border-left-color: var(--fair); }
+.codecard.is-lost { border-left-color: var(--house); }
+.codecard.is-open { border-left-color: var(--signal); }
+.codehead { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.codeid { font-size: 28px; line-height: 30px; letter-spacing: 1px; }
+.codeodds { margin-left: auto; font-size: 14px; color: var(--ink-muted); }
+.codeodds .num { font-size: 18px; color: var(--ink); font-weight: 700; }
+.legbar { display: flex; gap: 3px; margin: 12px 0 8px; height: 8px; }
+.legbar .seg { flex: 1; border-radius: 2px; background: var(--paper-sunk); border: 1px solid var(--rule); }
+.legbar .seg-won { background: var(--fair); border-color: var(--fair); }
+.legbar .seg-lost { background: var(--house); border-color: var(--house); }
+.legbar .seg-playing { background: var(--signal); border-color: var(--signal); }
+.codeline { margin: 0 0 10px; font-size: 14px; line-height: 20px; }
+.codeactions .button, .codeactions button { min-height: 40px; padding: 6px 14px; font-size: 14px; }
+.legsbox summary { cursor: pointer; font-weight: 700; font-size: 14px; min-height: 36px; display: flex; align-items: center; }
+form.track { margin: 0; }

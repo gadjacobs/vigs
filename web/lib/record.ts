@@ -10,6 +10,7 @@ export type RecordFile = {
   chain: { records: number; head: string; verified: boolean };
   grades: Record<string, Group>;
   confidence?: Record<string, Group>;
+  ourpicks?: Group;
   markets: (Group & { market: string; grade: string })[];
   curve: Record<string, [string, number][]>;
   calibration: { bin: string; n: number; estimate: number; market: number; hit_rate: number }[];

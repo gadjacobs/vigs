@@ -34,6 +34,7 @@ publish() {
     python -m vigs likely --market "$m" --hours 1 --count 20 --data "$DATA" \
       --ledger "$DATA/ledger.jsonl" --no-refresh > /dev/null || true
   done
+  python -m vigs ourpicks --hours 1 --data "$DATA" --ledger "$DATA/ledger.jsonl" > /dev/null || true
   python -m vigs ledger settle --ledger "$DATA/ledger.jsonl" --results "$DATA/results.csv" || true
   python -m vigs export-record --ledger "$DATA/ledger.jsonl" --out "$DATA/record.json" || true
 }

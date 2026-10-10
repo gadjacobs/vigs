@@ -25,7 +25,9 @@ describe("store variables", () => {
     expect(findStore({ UPSTASH_REDIS_REST_URL: "https://a.upstash.io", UPSTASH_REDIS_REST_TOKEN: "t" })?.url).toBe("https://a.upstash.io");
     expect(findStore({ REDIS_URL: "rediss://default:s3cr%3Dt@b.upstash.io:6379" })).toEqual({ url: "https://b.upstash.io", token: "s3cr=t", from: "REDIS_URL" });
     expect(findStore({ KV_REST_API_URL: "https://a.upstash.io" })).toBeNull();
-    expect(findStore({ REDIS_URL: "redis://default:x@localhost:6379" })).toBeNull();
+    expect(findStore({ REDIS_URL: "redis://default:x@redis-123.cloud.redislabs.com:12345" })).toEqual(
+      { url: "redis://default:x@redis-123.cloud.redislabs.com:12345", token: "", from: "REDIS_URL", tcp: true });
+    expect(findStore({ REDIS_URL: "postgres://x@y/z" })).toBeNull();
   });
 });
 

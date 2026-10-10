@@ -75,3 +75,15 @@ describe("slip building", () => {
     expect(Math.abs(Math.log(alt.odds / 1.5))).toBeLessThanOrEqual(Math.log(1.15) + 1e-9);
   });
 });
+
+import { ourPicks } from "../lib/ourpicks";
+
+describe("our picks", () => {
+  it("takes the best-paying selection at or above the bar, one per match", () => {
+    const p = (eventId: string, market: string, odds: number, estimate: number, kickoff = 1) =>
+      ({ id: `${eventId}|${market}`, eventId, market, odds, estimate, kickoff }) as never;
+    const out = ourPicks([p("a", "FH_U35", 1.04, 0.96), p("a", "U45", 1.12, 0.9), p("a", "O15", 1.3, 0.77),
+      p("b", "O05", 1.08, 0.91, 0), p("c", "U45", 1.2, 0.85)], 0.88);
+    expect(out.map((x: { id: string }) => x.id)).toEqual(["b|O05", "a|U45"]);
+  });
+});

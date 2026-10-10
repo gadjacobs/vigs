@@ -1,11 +1,13 @@
-// Small key-value store for accounts, push subscriptions and watched codes:
-// Upstash Redis over its REST API. Vercel's Upstash integration names the
-// variables KV_REST_API_URL / KV_REST_API_TOKEN, optionally with a custom
-// prefix (e.g. STORAGE_KV_REST_API_URL); Upstash's own are UPSTASH_REDIS_REST_*.
-// A rediss:// URL from Upstash (REDIS_URL, KV_URL) also works: its password is
+import { createClient } from "redis";
+
+// Small key-value store for accounts, push subscriptions and watched codes.
+// Either Upstash over its REST API (KV_REST_API_URL / KV_REST_API_TOKEN, with
+// or without a custom prefix, or UPSTASH_REDIS_REST_*), or any Redis reached by
+// a redis:// or rediss:// URL (REDIS_URL, KV_URL), such as Vercel's Redis
+// integration. An Upstash redis URL is turned into REST, since its password is
 // the REST token.
 
-type Found = { url: string; token: string; from: string };
+type Found = { url: string; token: string; from: string; tcp?: boolean };
 
 export function findStore(env: Record<string, string | undefined> = process.env): Found | null {
   for (const [k, url] of Object.entries(env)) {
@@ -18,8 +20,10 @@ export function findStore(env: Record<string, string | undefined> = process.env)
     if (!/(^|_)(REDIS_URL|KV_URL)$/.test(k) || !v) continue;
     try {
       const u = new URL(v);
+      if (u.protocol !== "redis:" && u.protocol !== "rediss:") continue;
       if (u.hostname.endsWith(".upstash.io") && u.password)
         return { url: `https://${u.hostname}`, token: decodeURIComponent(u.password), from: k };
+      return { url: v, token: "", from: k, tcp: true };
     } catch { /* not a URL */ }
   }
   return null;
@@ -33,7 +37,24 @@ export const storeReady = () => Boolean(FOUND);
 /** Names (never values) of what the server can see, for the setup check. */
 export const storeSource = () => FOUND?.from ?? null;
 
+type Tcp = ReturnType<typeof createClient>;
+let tcp: Promise<Tcp> | null = null;
+
+/** One connection per server instance, reopened if it drops. */
+function tcpClient(): Promise<Tcp> {
+  if (!tcp) {
+    const c = createClient({ url: FOUND!.url, socket: { connectTimeout: 5000, reconnectStrategy: false } });
+    c.on("error", () => { tcp = null; });
+    tcp = c.connect().then(() => c).catch((e) => { tcp = null; throw e; });
+  }
+  return tcp;
+}
+
 async function cmd<T>(...args: (string | number)[]): Promise<T> {
+  if (FOUND?.tcp) {
+    const c = await tcpClient();
+    return (await c.sendCommand(args.map(String))) as T;
+  }
   if (!URL_ || !TOKEN) throw new Error("Storage is not set up");
   const res = await fetch(URL_, {
     method: "POST",

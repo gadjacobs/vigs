@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { CodesPanel } from "./codes-panel";
 import { Filters } from "./filters";
 import { ScrollOnBuild } from "./scroll-on-build";
 import { lagos } from "./pick-row";
@@ -82,8 +81,6 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
         </p>
       )}
       </div>
-
-      <CodesPanel />
 
       <p className="status" style={{ marginTop: 24 }}>
         {profile && <>Signed in as <strong>{user}</strong>; codes, filters, view and theme sync across your devices. </>}

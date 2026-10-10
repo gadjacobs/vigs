@@ -14,7 +14,7 @@ import { slipStats, smartSwitch, toTarget, topN } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
 
-type Props = { cands: Pick[]; q: Query; now: number; initialView: View };
+type Props = { cands: Pick[]; q: Query; now: number; initialView: View; initialIds?: string[]; title?: string };
 
 /** This device's push subscription, if notifications are on. */
 async function pushEndpoint(): Promise<string | null> {
@@ -46,12 +46,12 @@ function ViewToggle({ view, setView }: { view: View; setView: (v: View) => void 
   );
 }
 
-export function SlipBuilder({ cands, q, now, initialView }: Props) {
+export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip" }: Props) {
   const [view, setView] = useState<View>(initialView);
   const { mode, count, target, sort } = q;
   const initial = useMemo(
-    () => (mode === "target" ? toTarget(cands, target, q.tol, q.maxLegs || 30) : topN(cands, count, sort)).map((p) => p.id),
-    [cands, mode, count, target, sort, q.tol, q.maxLegs],
+    () => initialIds ?? (mode === "target" ? toTarget(cands, target, q.tol, q.maxLegs || 30) : topN(cands, count, sort)).map((p) => p.id),
+    [cands, mode, count, target, sort, q.tol, q.maxLegs, initialIds],
   );
   const [watching, setWatching] = useState(false);
   const [ids, setIds] = useState<string[]>(initial);
@@ -104,7 +104,7 @@ export function SlipBuilder({ cands, q, now, initialView }: Props) {
         </p>
       ) : (
       <div className="panel slipbar">
-        <h2 id="slip-title" className="sliptitle">Your slip</h2>
+        <h2 id="slip-title" className="sliptitle">{title}</h2>
         {view === "simple" ? (
           <div className="slipplain">
             <p className="plain">
@@ -155,7 +155,7 @@ export function SlipBuilder({ cands, q, now, initialView }: Props) {
           <p className="code">{result.code}</p>
           <p className="status">
             {result.legs} selections. {result.verified === result.legs ? "Checked: the code loads exactly these legs." : `Only ${result.verified} of ${result.legs} loaded back; check the slip in SportyBet.`}
-            {result.skipped ? ` ${result.skipped} leg(s) left out because they start within 2 minutes.` : ""}
+            {result.started ? ` ${result.started} leg${result.started > 1 ? "s have" : " has"} already kicked off: the code includes ${result.started > 1 ? "them" : "it"}, but SportyBet may not take bets on ${result.started > 1 ? "them" : "it"} any more.` : ""}
             {` Last match kicks off at ${lagos(result.lastKickoff)} Lagos; each match drops off once it starts.`}
           </p>
           <div className="row">
@@ -163,7 +163,7 @@ export function SlipBuilder({ cands, q, now, initialView }: Props) {
           </div>
           <p className="status" style={{ marginTop: 8 }}>Opens the SportyBet app if it is installed, otherwise the website. Vig never places the bet.</p>
           <p className="status">
-            {watching ? "You will get a notification when this code lands or loses." : <>Track it under Your codes below. <a href="/alerts">Turn on notifications</a> to hear when it settles.</>}
+            {watching ? <>You will get a notification when this code lands or loses. <a href="/codes">Follow it in Codes</a>.</> : <><a href="/codes">Follow it in Codes</a>. <a href="/alerts">Turn on notifications</a> to hear when it settles.</>}
           </p>
         </section>
       ) : <p className="note warn" role="alert">{result.error}</p>)}

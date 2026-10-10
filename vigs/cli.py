@@ -448,6 +448,76 @@ def cmd_likely(a) -> None:
               + (f"; {len(picks) - len(fresh)} were already logged." if len(fresh) < len(picks) else "."))
 
 
+OUR_BAR = 0.88
+
+
+def cmd_ourpicks(a) -> None:
+    """Our picks: per published match, the best-paying selection whose guarded
+    estimate is at least the bar (web/lib/ourpicks.ts). Logged in shadow mode so
+    the Record page can show how often they land."""
+    import json
+    import os
+    import time as _time
+    from datetime import timedelta
+    from . import blend as blend_mod
+    from . import model as md
+    from . import sportybet as sb
+    from .grading import grade_model
+    from .study import load_results
+    client = sb.Client()
+    blend_json = None
+    bp = os.path.join(a.data, "blend.json")
+    if os.path.exists(bp):
+        with open(bp, encoding="utf-8") as fh:
+            blend_json = json.load(fh)
+    rows = load_results(os.path.join(a.data, "results.csv"))
+    start = (datetime_from_iso(rows[-1]["kickoff"]) - timedelta(days=a.days)).isoformat().replace("+00:00", "Z")
+    rows = [r for r in rows if r["kickoff"] >= start]
+    main, boots = md.fit(rows), md.ensemble(rows, reps=a.reps)
+    now = int(_time.time() * 1000)
+    horizon = sb._iso(now + int(a.hours * 3600 * 1000))
+    snaps = [s for e in client.upcoming() if (s := sb.snapshot(e, now)) and sb._iso(now) < s["kickoff"] <= horizon]
+    picks = []
+    for s in snaps:
+        m = sb.snapshot_match(s)
+        p_all = md.predict(main, s["league"], s["home"], s["away"]) or {}
+        best = None
+        for mk, q in m.fair.items():
+            if mk not in p_all:
+                continue
+            p, lo, hi = md.predict_interval(main, boots, s["league"], s["home"], s["away"], mk)
+            bl = blend_mod.estimate(blend_json, mk, q, p, md.rep_draws(boots, s["league"], s["home"], s["away"], mk))
+            p, lo, hi, src = bl or blend_mod.guarded(q, p, lo, hi)
+            if p < a.bar:
+                continue
+            g = grade_model(m.odds[mk], q, p, (lo, hi), None, 0)
+            if g.grade == "Avoid":
+                continue
+            key = (m.odds[mk], p)
+            if best is None or key > best[0]:
+                best = (key, mk, g, src)
+        if best:
+            picks.append((s, m, best[1], best[2], best[3]))
+    picks.sort(key=lambda x: x[0]["kickoff"])
+    print(f"Our picks: {len(picks)} of {len(snaps)} matches in the next {a.hours:g} h at {a.bar:.0%} or more.")
+    for s, m, mk, g, _src in picks:
+        print(f"  {s['kickoff'][11:16]} {s['league']:<8s} {m.home + '-' + m.away:<9s} {mk:<7s} {g.odds:5.2f} "
+              f"chance {g.estimate:.1%} [{g.interval()[0]:.1%}, {g.interval()[1]:.1%}] {g.grade}")
+    if a.ledger and picks:
+        led = Ledger(a.ledger)
+        logged = {(p["fixture"], p["market"]) for p in led.picks().values()}
+        fresh = [x for x in picks if (x[1].key(), x[2]) not in logged]
+        for s, m, mk, g, src in fresh:
+            lo, hi = g.interval()
+            led.add_pick({
+                "market": mk, "odds": g.odds, "break_even": g.break_even, "market_prob": g.market_prob,
+                "history_rate": None, "history_n": 0, "estimate": g.estimate, "ci_low": lo, "ci_high": hi,
+                "edge": g.edge, "grade": g.grade, "grade_reasons": [vars(t) for t in g.tests],
+                "slice_key": f"ourpicks:{src}:{a.bar:g}|{mk}", "stats_version": STATS_VERSION, "source": src,
+                "sheet_id": f"ourpicks-{sb._iso(now)}", "stake": 0, "shadow": True, "event_id": s["event_id"]}, m)
+        print(f"Logged {len(fresh)} to {a.ledger} (shadow mode, before kickoff).")
+
+
 def datetime_from_iso(s: str):
     from datetime import datetime
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
@@ -564,6 +634,15 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--blend", help="blend.json (default: <data>/blend.json if present)")
     p.add_argument("--no-refresh", dest="refresh", action="store_false")
     p.set_defaults(fn=cmd_likely)
+
+    p = sub.add_parser("ourpicks", help="best-paying ~90%% selection per published match")
+    p.add_argument("--bar", type=float, default=OUR_BAR)
+    p.add_argument("--hours", type=float, default=1)
+    p.add_argument("--days", type=float, default=30)
+    p.add_argument("--reps", type=int, default=20)
+    p.add_argument("--data", default="data")
+    p.add_argument("--ledger", default="")
+    p.set_defaults(fn=cmd_ourpicks)
 
     p = sub.add_parser("book", help="SportyBet booking code for the latest list of a market")
     p.add_argument("--market", default="FH_O05")
