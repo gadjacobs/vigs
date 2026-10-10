@@ -6,7 +6,7 @@ import { SETS } from "@/lib/ourpicks";
 import { myProfile } from "@/lib/profile";
 import { buildOurs, buildTip } from "@/lib/tips";
 
-export type PushPrefs = { results: boolean; tips: string[]; ours?: OursPrefs };
+export type PushPrefs = { results: boolean; tips: string[]; ours?: OursPrefs; swings?: boolean };
 type Raw = { endpoint: string; keys: { p256dh: string; auth: string } };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -22,14 +22,14 @@ export async function subscribePush(raw: Raw, prefs: PushPrefs) {
   const o = prefs.ours;
   const ours = o && (o.set === "cooked" || SETS.some((x) => x.id === o.set)) && TIME.test(o.from) && TIME.test(o.to)
     ? { set: o.set, every: Math.min(24, Math.max(0, Math.round(Number(o.every) || 0))), from: o.from, to: o.to } : undefined;
-  await saveSub({ endpoint: raw.endpoint, keys: raw.keys, results: Boolean(prefs.results), tips, query, user: user ?? undefined, ours });
+  await saveSub({ endpoint: raw.endpoint, keys: raw.keys, results: Boolean(prefs.results), swings: prefs.swings !== false, tips, query, user: user ?? undefined, ours });
   return { ok: true as const };
 }
 
 export async function pushPrefs(endpoint: string) {
   if (!pushReady()) return null;
   const s = await loadSub(await subId(endpoint));
-  return s ? { results: s.results, tips: s.tips, query: s.query, ours: s.ours } : null;
+  return s ? { results: s.results, swings: s.swings !== false, tips: s.tips, query: s.query, ours: s.ours } : null;
 }
 
 export async function unsubscribePush(endpoint: string) {
@@ -44,14 +44,15 @@ export async function testPush(endpoint: string, kind: "plain" | "tip" | "ours")
   if (kind === "ours") return send(s, await buildOurs(s.ours?.set ?? "cooked", Date.now()));
   return send(s, kind === "tip"
     ? await buildTip(profile?.query ?? s.query, Date.now())
-    : { title: "Vig notifications are on", body: "You will hear here when a watched code settles, and at your tip times.", url: "/alerts" });
+    : { title: "Vig notifications are on", body: "You will hear here when your codes land or lose, when a goal swings one, and at your tip times.", url: "/alerts" });
 }
 
 /** Tell this device when the code wins or loses. */
 export async function watchBooking(code: string, endpoint: string, lastKickoff: number) {
   if (!pushReady() || !/^[A-Z0-9]{4,12}$/.test(code)) return false;
   const s = await loadSub(await subId(endpoint));
-  if (!s?.results) return false;
+  if (!s?.results && s?.swings === false) return false;
+  if (!s) return false;
   await watchCode(code, s.id, lastKickoff);
   return true;
 }

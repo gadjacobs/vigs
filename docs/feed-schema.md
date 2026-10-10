@@ -52,6 +52,26 @@ Base: `https://www.sportybet.com/api/ng/factsCenter/`. A browser-like
 
 **Single event**: `event?eventId=...&productId=3` returns no markets once the match is over.
 
+**Live**: `liveOrPrematchEvents?sportId=sr:sport:202120001`
+- every match in play, all leagues, in one response (about 20 to 30 at a time)
+- per event: `matchStatus` (`H1`, `H2`, …), `playedSeconds` (match clock,
+  `"61:00"`), `setScore`, `gameScore` (`[first half, second half]`), and
+  markets `1` and `18` with live `odds` and `probability` per outcome
+- a market is `status` 2 while paused (after a goal) or when one side is
+  near-certain; its probabilities are still published
+- prices update about every 13 seconds; a goal, the new prices and the closing
+  of decided lines appear in the same response
+- margins match prematch (about 3% on 1X2, 4% on totals) and, by SportyBet's own
+  probability, no outcome pays back more than it costs
+- `event?eventId=...&productId=1` gives one match in play with every market
+  (first half, both teams score, double chance `10`: outcomes `9` home or
+  draw, `10` home or away, `11` draw or away); `productId=3` before kickoff
+- booking codes accept matches in play (SportyBet sells live betting on
+  vFootball)
+- `vigs fetch watch` saves one row per match in play to `live/<day>.jsonl`
+  (score, minute, main lines with odds and probability), to test later whether
+  live prices are right for each game state
+
 ## Consequences
 
 - Results can be backfilled for months in minutes (100 per request).

@@ -21,6 +21,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
   const [state, setState] = useState<State>("checking");
   const [sub, setSub] = useState<PushSubscription | null>(null);
   const [results, setResults] = useState(true);
+  const [swings, setSwings] = useState(true);
   const [tips, setTips] = useState<string[]>([]);
   const [ours, setOurs] = useState<OursPrefs>(OURS_DEFAULT);
   const [custom, setCustom] = useState("");
@@ -41,6 +42,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       const p = await pushPrefs(s.endpoint);
       if (p) {
         setResults(p.results);
+        setSwings(p.swings);
         setTips(p.tips);
         if (p.ours) setOurs(p.ours);
       }
@@ -48,9 +50,9 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
     })().catch(() => setState("unsupported"));
   }, []);
 
-  const save = (s: PushSubscription, r: boolean, t: string[], note: string, o: OursPrefs = ours) =>
+  const save = (s: PushSubscription, r: boolean, t: string[], note: string, o: OursPrefs = ours, sw: boolean = swings) =>
     start(async () => {
-      const res = await subscribePush(s.toJSON() as never, { results: r, tips: t, ours: o });
+      const res = await subscribePush(s.toJSON() as never, { results: r, tips: t, ours: o, swings: sw });
       setMsg(res.ok ? note : res.error);
     });
 
@@ -64,7 +66,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       } catch (e) {
         return setMsg(`This browser could not register with its push service (${(e as Error).message}). Try again, or use Chrome.`);
       }
-      const res = await subscribePush(s.toJSON() as never, { results, tips, ours });
+      const res = await subscribePush(s.toJSON() as never, { results, tips, ours, swings });
       if (!res.ok) return setMsg(res.error);
       setSub(s);
       setState("on");
@@ -100,6 +102,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       {state === "off" ? (
         <>
           <label className="check"><input type="checkbox" checked={results} onChange={(e) => setResults(e.target.checked)} /> When a code I book lands or loses</label>
+          <label className="check"><input type="checkbox" checked={swings} onChange={(e) => setSwings(e.target.checked)} /> Goals that swing my codes, and when one leg is left</label>
           <button className="primary" type="button" onClick={enable} disabled={pending}>{pending ? "Turning on…" : "Turn on notifications"}</button>
         </>
       ) : (
@@ -108,6 +111,11 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
             <input type="checkbox" checked={results} disabled={pending}
               onChange={(e) => { setResults(e.target.checked); if (sub) save(sub, e.target.checked, tips, e.target.checked ? "Code results on." : "Code results off."); }} />
             When a code I book lands or loses
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={swings} disabled={pending}
+              onChange={(e) => { setSwings(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Live swings on." : "Live swings off.", ours, e.target.checked); }} />
+            Goals that swing my codes, and when one leg is left
           </label>
           <fieldset className="chipgroup">
             <legend>Send me a tip slip at (Lagos time)</legend>

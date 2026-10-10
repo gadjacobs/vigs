@@ -1,8 +1,11 @@
 "use client";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { hideCode, syncCodes } from "./profile-actions";
 import { ShareButton } from "./share-sheet";
 import { trackCodes } from "./push-actions";
+import { liveCodes } from "./live-actions";
+import { HedgeSheet, type HedgeLeg } from "./hedge-sheet";
+import type { LiveLeg } from "@/lib/live";
 import { CopyButton } from "./copy-button";
 import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
@@ -70,10 +73,61 @@ export function rememberCode(c: Saved) {
   syncCodes([c]).catch(() => undefined);
 }
 
+// Slip chance over time, per code, for the swing line. Kept on the device.
+type Swing = Record<string, [number, number][]>;
+const SWING_KEY = "vig_swing";
+function readSwing(): Swing {
+  try {
+    return JSON.parse(localStorage.getItem(SWING_KEY) ?? "{}") as Swing;
+  } catch {
+    return {};
+  }
+}
+function saveSwing(sw: Swing) {
+  const keep = Object.entries(sw).sort((a, b) => (b[1].at(-1)?.[0] ?? 0) - (a[1].at(-1)?.[0] ?? 0)).slice(0, 40);
+  try { localStorage.setItem(SWING_KEY, JSON.stringify(Object.fromEntries(keep))); } catch { /* full or private */ }
+}
+
+const legKey = (l: { eventId: string; market: string }) => `${l.eventId}|${l.market}`;
+
+/** A leg's status with live scores applied: an over that has gone over has landed. */
+function effective(l: Tracked["legs"][number], live: Record<string, LiveLeg>): Tracked["legs"][number]["status"] {
+  const x = live[legKey(l)];
+  if (l.status === "won" || l.status === "lost" || !x) return l.status;
+  if (x.chance === 1 && x.state === "playing") return "won";
+  if (x.chance === 0 && x.state === "playing") return "lost";
+  return x.state === "playing" ? "playing" : l.status;
+}
+
+/** Chance the whole code lands now; null until every open leg has one. */
+function codeChance(t: Tracked, live: Record<string, LiveLeg>): number | null {
+  let p = 1;
+  for (const l of t.legs) {
+    const st = effective(l, live);
+    if (st === "won") continue;
+    if (st === "lost") return 0;
+    const c = live[legKey(l)]?.chance;
+    if (c === undefined || c === null) return null;
+    p *= c;
+  }
+  return p;
+}
+
+function Spark({ points }: { points: [number, number][] }) {
+  if (points.length < 2) return null;
+  const t0 = points[0][0], t1 = points.at(-1)![0] || t0 + 1;
+  const xy = points.map(([t, c]) => `${((t - t0) / Math.max(1, t1 - t0)) * 100},${(1 - c) * 24 + 2}`).join(" ");
+  return (
+    <svg className="spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points={xy} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 const ICON: Record<string, string> = { won: "✓", lost: "✗", playing: "…", waiting: "", unknown: "?" };
 const STATE: Record<Tracked["state"], string> = { open: "In play", won: "Landed", lost: "Lost" };
 
-export function CodesPanel() {
+export function CodesPanel({ stake = 1000 }: { stake?: number }) {
   const [codes, setCodes] = useState<Saved[]>([]);
   const [status, setStatus] = useState<Record<string, Tracked | { code: string; error: string }>>({});
   const [entry, setEntry] = useState("");
@@ -83,6 +137,14 @@ export function CodesPanel() {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [pages, setPages] = useState(1);
   const [undo, setUndo] = useState<Saved | null>(null);
+  const [live, setLive] = useState<Record<string, LiveLeg>>({});
+  const [swing, setSwing] = useState<Swing>({});
+  const [hedge, setHedge] = useState<{ code: string; leg: HedgeLeg; odds: number | null } | null>(null);
+  const closeHedge = useCallback(() => setHedge(null), []);
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const checked = useRef<Record<string, number>>({});
+  const lastLive = useRef(0);
 
   // Settled codes never change, so they are kept on the device and not checked
   // again; the rest are checked in batches of 8, newest first.
@@ -99,6 +161,48 @@ export function CodesPanel() {
       }
     });
   }, []);
+
+  // Live scores and chances for open codes: every 10 seconds while a leg is in
+  // play, every minute otherwise. A code whose leg has ended, or is already
+  // beaten, is read again from SportyBet so it settles without waiting.
+  const pollLive = useCallback(async (force = false) => {
+    if (document.visibilityState !== "visible") return;
+    const now = Date.now();
+    const open = Object.values(statusRef.current).filter((t): t is Tracked => "legs" in t && t.state === "open");
+    const legs = open.flatMap((t) => t.legs.filter((l) => l.status === "waiting" || l.status === "playing"));
+    if (!legs.length) return;
+    const playing = legs.some((l) => l.kickoff <= now);
+    if (!force && !playing && now - lastLive.current < 60_000) return;
+    lastLive.current = now;
+    const res = await liveCodes(legs.map((l) => ({ eventId: l.eventId, market: l.market, kickoff: l.kickoff }))).catch(() => null);
+    if (!res) return;
+    setLive(res);
+    const sw = readSwing();
+    const again: string[] = [];
+    for (const t of open) {
+      const c = codeChance(t, res);
+      const h = sw[t.code] ?? [];
+      if (c !== null && (!h.length || Math.abs(h.at(-1)![1] - c) > 0.0005)) sw[t.code] = [...h, [now, c] as [number, number]].slice(-120);
+      const ended = t.legs.some((l) => { const x = res[legKey(l)]; return x && (x.state === "ended" || (x.state === "playing" && x.chance === 0)); });
+      if (ended && now - (checked.current[t.code] ?? 0) > 30_000) { checked.current[t.code] = now; again.push(t.code); }
+    }
+    saveSwing(sw);
+    setSwing(sw);
+    if (again.length) {
+      const r = await trackCodes(again).catch(() => []);
+      setStatus((s) => ({ ...s, ...Object.fromEntries(r.map((x) => [x.code, x])) }));
+      saveFinal(r.flatMap((x) => ("legs" in x && x.state !== "open" ? [x] : [])));
+    }
+  }, []);
+
+  const haveStatus = Object.keys(status).length > 0;
+  useEffect(() => {
+    setSwing(readSwing());
+    if (!haveStatus) return;
+    pollLive(true);
+    const t = setInterval(() => pollLive(), 10_000);
+    return () => clearInterval(t);
+  }, [haveStatus, pollLive]);
 
   useEffect(() => {
     const load = () => {
@@ -199,23 +303,31 @@ export function CodesPanel() {
           ))}
         </div>
       )}
-      <p className="status codestatus">{pending ? "Updating…" : tab === "open" ? "Open codes update every minute." : "Settled codes. Removing one hides it here; the record keeps its result."}</p>
+      <p className="status codestatus">{pending ? "Updating…" : tab === "open" ? "Scores update every 10 seconds while a leg is in play." : "Settled codes. Removing one hides it here; the record keeps its result."}</p>
       {undo && <p className="note undo" role="status">Removed {undo.code}. <button type="button" onClick={restore}>Undo</button></p>}
       {tab === "open" && !openList.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
       {tab === "history" && !shownHistory.length && <p className="note">Nothing settled here yet.</p>}
       <ul className="codecards">
         {list.map(({ c, t, err }) => {
           const legs = t?.legs ?? [];
-          const next = legs.filter((l) => l.status === "waiting").sort((a, b) => a.kickoff - b.kickoff)[0];
-          const left = legs.filter((l) => l.status === "waiting" || l.status === "playing").length;
+          const eff = (l: (typeof legs)[number]) => effective(l, live);
+          const next = legs.filter((l) => eff(l) === "waiting").sort((a, b) => a.kickoff - b.kickoff)[0];
+          const left = legs.filter((l) => eff(l) === "waiting" || eff(l) === "playing").length;
+          const wonN = legs.filter((l) => eff(l) === "won").length, lostN = legs.filter((l) => eff(l) === "lost").length;
+          const chance = t && t.state === "open" ? codeChance(t, live) : null;
+          const hist = swing[c.code] ?? [];
+          const prev = hist.length > 1 ? hist.at(-2)![1] : null;
+          const delta = chance !== null && prev !== null ? Math.round((chance - prev) * 100) : 0;
+          const last = t && t.state === "open" && !lostN && left === 1 ? legs.find((l) => eff(l) === "waiting" || eff(l) === "playing") : undefined;
+          const shownState = t ? (t.state === "open" && lostN ? "lost" : t.state) : null;
           const isOpen = open.has(c.code);
           const odds = t ? t.odds : c.odds || null;
           return (
-            <li key={c.code} className={`codecard ${t ? `is-${t.state}` : ""} ${isOpen ? "open" : ""}`}
+            <li key={c.code} className={`codecard ${shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""}`}
               onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button")) toggle(c.code); }}>
               <div className="codehead">
                 <strong className="num codeid">{c.code}</strong>
-                {t && <span className={`badge state-${t.state}`}>{STATE[t.state]}</span>}
+                {shownState && <span className={`badge state-${shownState}`}>{STATE[shownState]}</span>}
                 {err && <span className="badge state-lost">Unavailable</span>}
                 <span className="codeodds">
                   {odds ? <><span className="num">{odds.toFixed(2)}</span> odds</> : <span title="Some legs were never seen before kickoff">odds unknown</span>}
@@ -223,19 +335,28 @@ export function CodesPanel() {
                 </span>
               </div>
               {legs.length > 0 && (
-                <div className="legbar" role="img" aria-label={`${t!.won} won, ${t!.lost} lost, ${left} to play`}>
-                  {legs.map((l) => <span key={l.eventId} className={`seg seg-${l.status}`} />)}
+                <div className="legbar" role="img" aria-label={`${wonN} won, ${lostN} lost, ${left} to play`}>
+                  {legs.map((l) => <span key={l.eventId} className={`seg seg-${eff(l)}`} />)}
                 </div>
               )}
               <p className="codeline">
-                {t ? <>{t.won} won · {t.lost} lost · {left} to play{next ? ` · next kickoff ${lagos(next.kickoff)}` : ""}</>
+                {t ? <>{wonN} won · {lostN} lost · {left} to play{next ? ` · next kickoff ${lagos(next.kickoff)}` : ""}</>
                   : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : "Checking…"}
                 <span className="muted"> · booked {lagos(c.at)}</span>
               </p>
+              {chance !== null && !lostN && (
+                <div className="chanceline">
+                  <span>Chance to land <strong className="num">{chance >= 0.995 && chance < 1 ? ">99" : chance > 0 && chance < 0.005 ? "<1" : Math.round(chance * 100)}%</strong>
+                    {delta !== 0 && <span className={delta > 0 ? "up" : "down"}> {delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</span>}</span>
+                  <Spark points={hist} />
+                </div>
+              )}
               <div className="row codeactions">
                 <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>
                 <CopyButton text={c.code} />
                 {(t || !err) && <ShareButton code={c.code} />}
+                {last && <button type="button" onClick={() => setHedge({ code: c.code, odds: t!.odds,
+                  leg: { eventId: last.eventId, market: last.market, kickoff: last.kickoff, home: last.home, away: last.away, label: last.label } })}>Hedge</button>}
                 {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
                 {legs.length > 0 && (
                   <button type="button" className="legstoggle" aria-expanded={isOpen} onClick={() => toggle(c.code)}>
@@ -245,25 +366,31 @@ export function CodesPanel() {
               </div>
               {isOpen && legs.length > 0 && (
                 <ol className="legs">
-                  {legs.map((l) => (
-                    <li key={l.eventId} className={`leg-${l.status}`}>
-                      <span className="legicon" aria-hidden="true">{ICON[l.status]}</span>
+                  {legs.map((l) => {
+                    const st = eff(l), x = live[legKey(l)];
+                    return (
+                    <li key={l.eventId} className={`leg-${st}`}>
+                      <span className="legicon" aria-hidden="true">{ICON[st]}</span>
                       <span>{l.home} v {l.away}
                         <small>{l.label} · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"} · {lagos(l.kickoff)}</small>
                       </span>
                       <span className="legres">
-                        {l.status === "waiting" ? lagos(l.kickoff) : l.status === "playing" ? "Playing" :
-                          `${l.score}${l.market.startsWith("FH_") && l.ht ? ` (HT ${l.ht})` : ""}`}
-                        <span className="sr-only"> {l.status}</span>
+                        {l.status === "won" || l.status === "lost" ? `${l.score}${l.market.startsWith("FH_") && l.ht ? ` (HT ${l.ht})` : ""}`
+                          : x?.state === "playing" && x.score ? <>{x.minute !== null ? <small>{x.phase === "HT" ? "HT" : `${x.minute}'`}</small> : null} {x.score}</>
+                          : l.kickoff > now ? lagos(l.kickoff) : "Playing"}
+                        {x && x.chance !== null && (st === "playing" || st === "waiting") && <small className="legchance">{Math.round(x.chance * 100)}%</small>}
+                        <span className="sr-only"> {st}</span>
                       </span>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ol>
               )}
             </li>
           );
         })}
       </ul>
+      {hedge && <HedgeSheet code={hedge.code} leg={hedge.leg} odds={hedge.odds} stake={stake} onClose={closeHedge} />}
       {more > 0 && <button type="button" className="moreb" onClick={() => setPages((p) => p + 1)}>Show {Math.min(more, PAGE)} more</button>}
     </section>
   );

@@ -84,3 +84,38 @@ describe("google sign-in", () => {
     expect(await verifyGoogle(c, { AUTH_SECRET: "s", GOOGLE_ACCOUNTS: "friend@x.com" })).toBeNull(); // removed from the list
   });
 });
+
+import { liveNews, type Watch } from "../lib/push";
+import type { LiveLeg } from "../lib/live";
+
+describe("live notifications", () => {
+  const legs = [
+    { eventId: "a", market: "O15", kickoff: 0, home: "ARS", away: "EVE", label: "Over 1.5 goals" },
+    { eventId: "b", market: "1", kickoff: 0, home: "LIV", away: "BHA", label: "Home win" },
+  ];
+  const lv = (score: string, chance: number | null, minute = 30): LiveLeg =>
+    ({ state: "playing", phase: "H1", minute, score, fh: score, chance, odds: null });
+  const w: Watch = { code: "ABC123", subs: [], lastKickoff: 0, created: 0, legs, scores: { a: "0:0", b: "0:0" }, chance: 0.3 };
+
+  it("tells about a goal that swings the code by 15 points or more", () => {
+    const n = liveNews(w, { "a|O15": lv("1:0", 0.8), "b|1": lv("0:0", 0.6) });
+    expect(n.chance).toBeCloseTo(0.48, 12);
+    expect(n.payload?.title).toBe("▲ ARS 1–0 EVE (30')");
+    expect(n.payload?.body).toBe("ABC123 now 48% to land (was 30%).");
+    expect(n.scores).toEqual({ a: "1:0", b: "0:0" });
+  });
+
+  it("stays quiet for small moves and without a goal", () => {
+    expect(liveNews(w, { "a|O15": lv("1:0", 0.55), "b|1": lv("0:0", 0.6) }).payload).toBeNull();
+    expect(liveNews(w, { "a|O15": lv("0:0", 0.9), "b|1": lv("0:0", 0.6) }).payload).toBeNull();
+  });
+
+  it("says once when one leg is left", () => {
+    const n = liveNews({ ...w, settled: { "a|O15": true } }, { "b|1": lv("0:0", 0.4) });
+    expect(n.last).toBe(true);
+    expect(n.payload?.title).toBe("ABC123: one leg left");
+    const g = liveNews({ ...w, settled: { "a|O15": true } }, { "b|1": lv("1:0", 0.7) });
+    expect([g.last, g.payload?.body]).toEqual([true, "ABC123 now 70% to land (was 30%). One leg left."]);
+    expect(liveNews({ ...w, settled: { "a|O15": true }, told: ["last"] }, { "b|1": lv("0:0", 0.7) }).payload).toBeNull();
+  });
+});

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from vigs.data import load_csv
-from vigs.sportybet import append_results, build, parse_odds, parse_result, snapshot
+from vigs.sportybet import append_results, build, live_row, parse_odds, parse_result, snapshot
 
 # Shapes follow SportyBet's factsCenter API; values are made up for the test.
 SPORT = {"id": "sr:sport:202120001", "name": "vFootball",
@@ -40,6 +40,13 @@ class Parsing(unittest.TestCase):
         self.assertEqual((odds["BY"], odds["BN"]), (1.95, 1.85))
         self.assertNotIn("O65", odds)              # an outcome was suspended
         self.assertNotIn("FH_1", odds)             # unsupported market ignored
+
+    def test_live_row_keeps_state_and_main_lines(self):
+        e = {**EVENT, "matchStatus": "H2", "playedSeconds": "61:00", "setScore": "1:1", "gameScore": ["1:0", "0:1"]}
+        r = live_row(e, 1_800_000_000_000)
+        self.assertEqual((r["phase"], r["minute"], r["score"], r["fh"]), ("H2", 61, [1, 1], [1, 0]))
+        self.assertEqual(set(r["odds"]), {"1", "X", "2", "O15", "U15"})   # FH and BTTS lines are not kept
+        self.assertIsNone(live_row({**EVENT, "matchStatus": "End", "setScore": "2:1"}, 0))
 
     def test_result_with_half_time(self):
         r = parse_result(RESULT)

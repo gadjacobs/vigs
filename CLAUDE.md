@@ -54,6 +54,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   logs the safe set hourly. Booked codes go to the store's `codelog` with the server's
   clock and are copied into the ledger by `vigs ledger import-codes`; legs that had
   kicked off when booked are never scored. `vigs export-insights` feeds Record.
+- Live (`web/lib/live.ts`, `hedge.ts`, `app/live-actions.ts`): Codes polls SportyBet's live feed
+  every 10 s while a leg plays; chance to land = SportyBet's live probability per open leg
+  (1/0 once the score decides it). Hedge only does arithmetic and books a code; never bets.
+  The tick watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
 - Push (`web/lib/push.ts`, `store.ts`, `/alerts`): Upstash Redis holds subscriptions,
   tip times, watched codes and profiles only; `/api/push/tick` is called by the collector with
   `PUSH_TICK_SECRET`. Live odds use Shin de-vig (`vigs.odds.LIVE_DEVIG`, `fairProbs`).

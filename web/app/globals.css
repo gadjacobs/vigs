@@ -454,3 +454,15 @@ button, .button, a, .chip, summary { touch-action: manipulation; }
 .login-password input[type="password"] { min-height: 48px; }
 .login-password button { justify-content: center; min-height: 48px; }
 .login-small { font-size: 13px; line-height: 18px; color: var(--ink-muted); text-align: center; margin-top: 28px; }
+
+/* Live: chance to land, swing line, hedge */
+.chanceline { display: flex; align-items: center; gap: 12px; margin: -4px 0 10px; font-size: 14px; }
+.chanceline .up { color: var(--fair); font-weight: 700; }
+.chanceline .down { color: var(--house); font-weight: 700; }
+.spark { flex: 1; max-width: 140px; height: 28px; color: var(--ink-muted); }
+.legres small { font-weight: 400; margin-right: 4px; color: var(--ink-muted); }
+.legres .legchance { display: block; text-align: right; margin: 0; }
+.hedge-inputs .field { flex: 1 1 140px; }
+.hedge-options { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+.hedge-options li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 10px; font-size: 14px; line-height: 20px; }
+.hedge-options strong { font-size: 15px; }

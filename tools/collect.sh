@@ -45,15 +45,22 @@ publish() {
 }
 
 echo "push tick: url $([ -n "${PUSH_TICK_URL:-}" ] && echo set || echo MISSING), secret $([ -n "${PUSH_TICK_SECRET:-}" ] && echo set || echo MISSING)"
-# Push notifications: every 4 minutes ask the web app to settle watched codes
-# and send due tips. Needs PUSH_TICK_URL and PUSH_TICK_SECRET; skipped otherwise.
+# Push notifications: ask the web app to follow watched codes, settle them and
+# send due tips. It answers with how soon to call again: about every 20 seconds
+# while a watched leg is in play, every 2 minutes otherwise. Needs
+# PUSH_TICK_URL and PUSH_TICK_SECRET; skipped otherwise.
 if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
   (
     while true; do
-      code=$(curl -sS -m 60 -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $PUSH_TICK_SECRET" "$PUSH_TICK_URL") \
-        || code=000
+      body=$(curl -sS -m 60 -w "\n%{http_code}" -X POST -H "Authorization: Bearer $PUSH_TICK_SECRET" "$PUSH_TICK_URL") \
+        || body=000
+      code=${body##*$'\n'}
       [ "$code" = 200 ] || echo "push tick: HTTP $code"
-      sleep 240
+      next=$(printf '%s' "$body" | grep -o '"next":[0-9]*' | grep -o '[0-9]*$' || true)
+      case "$next" in ''|*[!0-9]*) next=120 ;; esac
+      [ "$next" -lt 15 ] && next=15
+      [ "$next" -gt 300 ] && next=300
+      sleep "$next"
     done
   ) &
   TICKER=$!

@@ -188,11 +188,30 @@ prematch price. SportyBet's share endpoint returns the prematch price only
 until kickoff and a different in-play price afterwards, so Vig keeps the
 prematch prices from booking time or from before kickoff, and shows none
 rather than a wrong one, and any code typed into "Track a code". One read of
-SportyBet's share endpoint gives each leg's status and score; the panel
-refreshes every minute.
+SportyBet's share endpoint gives each leg's status and final score.
 
-**Alerts** sends web push notifications to a phone: when a booked code lands
-or loses (the first lost leg ends it), a tip slip at chosen Lagos times built
+While a leg plays, Codes reads SportyBet's live feed every 10 seconds: each
+leg's minute and score, and the **chance to land**: each open leg's chance from
+SportyBet's own live probability (1 or 0 once the score decides it, so an over
+that has gone over shows as landed at once), multiplied across the code, with
+an arrow for the last move and a line of how it has swung. Legs not yet started
+use the market chance. A leg that has ended or is already beaten is read again
+from the share endpoint straight away.
+
+**Hedge** appears when one leg is left. It prices the selection that wins
+exactly when that leg loses (double chance for home/draw/away, the other side
+of an over/under or both-teams-score line) at SportyBet's current price, and
+shows three choices for the stake and payout entered: keep it (the chance and
+the average result), cover both ways for the same result (stake = payout ÷
+price), or get the stake back if the leg fails. It says what covering gives up
+on average by SportyBet's own chance: the margin, paid a second time. It can
+book the hedge as a code; it never places a bet, and the price moves every few
+seconds.
+
+**Alerts** sends web push notifications to a phone: when a code lands or
+loses (as soon as the score beats a leg, without waiting for the match to end),
+a goal that moves a code's chance by 15 points or more, when one leg is left
+(with its chance, to ride or hedge), a tip slip at chosen Lagos times built
 with the account's last Tonight filters, and an Our picks set on a schedule
 (every 1 to 12 hours between chosen hours). On iPhone, add Vig to the Home
 Screen first. The app also offers a reload, in a toast, when a new version is
@@ -210,7 +229,10 @@ deployed or a new round is published. Setup, once:
    (`https://<your app>/api/push/tick`).
 4. Open Alerts on the phone, turn notifications on, and send a test.
 
-The collector calls the tick every 4 minutes while it runs. Push signing keys
+Every open code on a signed-in account is watched, however it was booked
+(built, cooked, copied, opened or tracked). The collector calls the tick about
+every 20 seconds while a watched leg is in play and every 2 minutes otherwise
+(the tick tells it which). Push signing keys
 are made on first use and kept in the store (or set `VAPID_PUBLIC_KEY` and
 `VAPID_PRIVATE_KEY`). The store holds only push subscriptions, tip times,
 filters and watched codes; no SportyBet details.

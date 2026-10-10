@@ -84,6 +84,11 @@ class Client:
                 return
             page += 1
 
+    def live(self) -> list[dict]:
+        """Matches in play, with score, clock and live odds (1X2 and totals only)."""
+        data = self.get("liveOrPrematchEvents", sportId=SPORT)
+        return [e for t in data or [] for e in t.get("events", [])]
+
     def upcoming(self) -> list[dict]:
         out: list[dict] = []
         page = 1
@@ -232,6 +237,46 @@ def capture_odds(client: Client, data_dir: str, last: dict[str, dict] | None = N
     return len(snaps)
 
 
+LIVE_KEEP = ("1", "X", "2", "O05", "U05", "O15", "U15", "O25", "U25", "O35", "U35", "O45", "U45")
+
+
+def live_row(e: dict, captured_ms: int) -> dict | None:
+    """One in-play observation: score, clock and SportyBet's live price and
+    probability for the main lines. Joined to the result later to test whether
+    live prices are right for each game state."""
+    ft = _score(e.get("setScore"))
+    if ft is None or e.get("matchStatus") in (None, "End", "Ended"):
+        return None
+    clock = str(e.get("playedSeconds") or "")
+    halves = e.get("gameScore") or []
+    ht = _score(halves[0]) if halves else None
+    odds, prob = parse_odds(e), parse_odds(e, "probability")
+    odds = {k: v for k, v in odds.items() if k in LIVE_KEEP}
+    if not odds:
+        return None
+    return {"event_id": e["eventId"], "captured_at": _iso(captured_ms),
+            "league": e["sport"]["category"]["name"], "phase": e.get("matchStatus"),
+            "minute": int(clock.split(":")[0]) if clock.split(":")[0].isdigit() else None,
+            "score": list(ft), "fh": list(ht) if ht else None,
+            "odds": odds, "prob": {k: v for k, v in prob.items() if k in odds}}
+
+
+def live_path(data_dir: str, ms: int) -> str:
+    return os.path.join(data_dir, "live", _iso(ms)[:10] + ".jsonl")
+
+
+def capture_live(client: Client, data_dir: str) -> int:
+    """Append one row per match in play (captured since 10 Oct 2026)."""
+    now = int(time.time() * 1000)
+    rows = [r for r in (live_row(e, now) for e in client.live()) if r]
+    path = live_path(data_dir, now)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as fh:
+        for r in rows:
+            fh.write(json.dumps(r, sort_keys=True, separators=(",", ":")) + "\n")
+    return len(rows)
+
+
 def watch(client: Client, data_dir: str, minutes: float, interval: float = 300, log=print) -> None:
     """Snapshot odds and pull recent results every `interval` seconds."""
     os.makedirs(data_dir, exist_ok=True)
@@ -241,9 +286,13 @@ def watch(client: Client, data_dir: str, minutes: float, interval: float = 300, 
         now = int(time.time() * 1000)
         try:
             n = capture_odds(client, data_dir, last)
+            try:
+                lv = capture_live(client, data_dir)
+            except ApiError:
+                lv = -1
             r = fetch_results(client, os.path.join(data_dir, "results.csv"),
                               now - 2 * 3600 * 1000, now - 60 * 1000, log=lambda *_: None)
-            log(f"{_iso(now)[:19]} odds snapshots {n}, new results {r}")
+            log(f"{_iso(now)[:19]} odds snapshots {n}, live rows {lv}, new results {r}")
         except ApiError as e:
             log(f"{_iso(now)[:19]} error: {e}")
         if time.time() + interval > stop:

@@ -19,15 +19,19 @@ export type Fixture = {
   odds: Record<string, number>;
 };
 
-type Outcome = { desc?: string; odds?: string; isActive?: number };
+type Outcome = { desc?: string; odds?: string; probability?: string; isActive?: number };
 type Market = { id?: string | number; specifier?: string | null; status?: number | string; outcomes?: Outcome[] };
-type ApiEvent = {
+export type ApiEvent = {
   eventId: string;
   estimateStartTime: number | string;
   homeTeamName: string;
   awayTeamName: string;
   sport: { category: { name: string } };
   markets?: Market[];
+  matchStatus?: string; // in play: "H1", "HT", "H2"; then "End"
+  playedSeconds?: string; // match clock, "61:00"
+  setScore?: string;
+  gameScore?: string[]; // [first half, second half]
 };
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
@@ -38,19 +42,25 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   return body.data as T;
 }
 
-/** Map SportyBet markets to vigs keys; a group is kept only if every outcome is active. */
-export function parseOdds(e: ApiEvent): Record<string, number> {
+/** Map SportyBet markets to vigs keys; a group is kept only if every outcome is active.
+ * With field "probability", SportyBet's own probability per outcome instead. Double
+ * chance (DC1X, DC12, DCX2) is only offered on the single-event feed. */
+export function parseOdds(e: Partial<ApiEvent>, field: "odds" | "probability" = "odds", anyStatus = false): Record<string, number> {
   const out: Record<string, number> = {};
   for (const m of e.markets ?? []) {
-    if (String(m.status ?? 0) !== "0") continue;
+    // anyStatus: keep SportyBet's probability even while a market is paused or
+    // one outcome is closed (a 3-0 lead closes the away win), for live chances.
+    if (!anyStatus && String(m.status ?? 0) !== "0") continue;
     const outs = m.outcomes ?? [];
-    if (!outs.length || outs.some((o) => !o.isActive)) continue;
+    if (!outs.length || (!anyStatus && outs.some((o) => !o.isActive))) continue;
     const prices: Record<string, number> = {};
-    for (const o of outs) if (o.desc && o.odds) prices[o.desc] = Number(o.odds);
+    for (const o of outs) if (o.desc && o[field]) prices[o.desc] = Number(o[field]);
     const id = String(m.id);
     const spec = m.specifier ?? "";
     if (id === "1" && prices.Home && prices.Draw && prices.Away) {
       Object.assign(out, { "1": prices.Home, X: prices.Draw, "2": prices.Away });
+    } else if (id === "10" && prices["Home or Draw"] && prices["Home or Away"] && prices["Draw or Away"]) {
+      Object.assign(out, { DC1X: prices["Home or Draw"], DC12: prices["Home or Away"], DCX2: prices["Draw or Away"] });
     } else if (id === "29" && prices.Yes && prices.No) {
       Object.assign(out, { BY: prices.Yes, BN: prices.No });
     } else if ((id === "18" || id === "68") && /^total=\d\.\d$/.test(spec)) {
@@ -59,7 +69,7 @@ export function parseOdds(e: ApiEvent): Record<string, number> {
       const pre = id === "68" ? "FH_" : "";
       const over = prices[`Over ${line}`];
       const under = prices[`Under ${line}`];
-      if (over > 1 && under > 1) {
+      if (field === "probability" ? over > 0 && under > 0 : over > 1 && under > 1) {
         out[`${pre}O${key}`] = over;
         out[`${pre}U${key}`] = under;
       }
@@ -103,9 +113,60 @@ async function fetchUpcoming(): Promise<Fixture[]> {
   return out;
 }
 
+/** A match in play, as the live feed shows it. */
+export type LiveEvent = {
+  eventId: string; phase: string; minute: number | null;
+  score: [number, number] | null; fh: [number, number] | null;
+  odds: Record<string, number>; prob: Record<string, number>;
+};
+
+const pair = (s: unknown): [number, number] | null => {
+  const m = /^(\d+):(\d+)$/.exec(String(s ?? ""));
+  return m ? [Number(m[1]), Number(m[2])] : null;
+};
+
+export function parseLive(e: ApiEvent): LiveEvent {
+  const clock = /^(\d+):/.exec(e.playedSeconds ?? "");
+  return {
+    eventId: e.eventId, phase: e.matchStatus ?? "", minute: clock ? Number(clock[1]) : null,
+    score: pair(e.setScore), fh: pair(e.gameScore?.[0]),
+    odds: parseOdds(e), prob: parseOdds(e, "probability", true),
+  };
+}
+
+let boardCache: { at: number; data: Map<string, LiveEvent> } | null = null;
+
+/** Every match in play (1X2 and totals only). SportyBet reprices about every
+ * 13 seconds, so 8 seconds of caching loses nothing. */
+export async function liveBoard(): Promise<Map<string, LiveEvent>> {
+  if (boardCache && Date.now() - boardCache.at < 8_000) return boardCache.data;
+  const data = await call<{ events?: ApiEvent[] }[]>(`${BASE}/liveOrPrematchEvents?sportId=${SPORT}`);
+  const map = new Map((data ?? []).flatMap((t) => t.events ?? []).map((e) => [e.eventId, parseLive(e)]));
+  boardCache = { at: Date.now(), data: map };
+  return map;
+}
+
+const eventCache = new Map<string, { at: number; data: LiveEvent | null }>();
+
+/** One match with every market (first half, both teams score, double chance).
+ * live: in play (productId 1); otherwise before kickoff (productId 3). */
+export async function eventMarkets(eventId: string, live: boolean): Promise<LiveEvent | null> {
+  const key = `${eventId}|${live}`;
+  const hit = eventCache.get(key);
+  if (hit && Date.now() - hit.at < (live ? 8_000 : 30_000)) return hit.data;
+  const q = new URLSearchParams({ eventId, productId: live ? "1" : "3" });
+  const e = await call<ApiEvent | null>(`${BASE}/event?${q}`).catch(() => null);
+  const data = e?.eventId ? parseLive(e) : null;
+  if (eventCache.size > 300) eventCache.clear();
+  eventCache.set(key, { at: Date.now(), data });
+  return data;
+}
+
 export type Selection = { eventId: string; marketId: string; specifier: string | null; outcomeId: string };
 
 export function selection(market: string, eventId: string): Selection {
+  if (market.startsWith("DC"))
+    return { eventId, marketId: "10", specifier: null, outcomeId: { DC1X: "9", DC12: "10", DCX2: "11" }[market] ?? "" };
   if (market === "1" || market === "X" || market === "2")
     return { eventId, marketId: "1", specifier: null, outcomeId: { "1": "1", X: "2", "2": "3" }[market] };
   if (market === "BY" || market === "BN")
