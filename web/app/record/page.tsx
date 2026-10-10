@@ -312,6 +312,13 @@ function DataSays({ ins }: { ins: Insights }) {
         from several short legs keeps more value than one long shot, which is how Our picks &ldquo;Target odds&rdquo; builds.
         {lowMargin && highMargin ? ` The listed margin is lowest on ${lowMargin.family} (${p1(lowMargin.margin)}) and highest on ${highMargin.family} (${p1(highMargin.margin)}).` : ""}
       </p>
+      {ins.sportybet_prob && (
+        <p className="status">
+          SportyBet&apos;s own published probabilities, captured since 10 October, against Vig&apos;s market chance on{" "}
+          {ins.sportybet_prob.n.toLocaleString()} settled selections: log loss {ins.sportybet_prob.sportybet.toFixed(4)} against{" "}
+          {ins.sportybet_prob.market.toFixed(4)} (lower is better). Vig switches to them only if they stay ahead with enough data.
+        </p>
+      )}
       <h3 className="subhead">Leagues</h3>
       <div className="tablewrap">
         <table>

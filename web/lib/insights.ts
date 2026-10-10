@@ -5,6 +5,7 @@ export type Insights = {
   version: number; generated_at: string; matches_with_odds: number; results: number; results_from: string | null;
   margins: { family: string; margin: number; n: number }[];
   bands: { lo: number; hi: number; n: number; landed: number; market: number; break_even: number; roi: number; se: number }[];
+  sportybet_prob?: { n: number; sportybet: number; market: number } | null;
   leagues: { league: string; n: number; goals: number; home: number; draw: number; away: number; nil_nil: number; btts: number; first_half_share: number }[];
 };
 

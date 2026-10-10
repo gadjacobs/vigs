@@ -35,12 +35,26 @@ def _roi(profits: list[float]) -> tuple[float, float]:
     return sum(profits) / len(profits), se
 
 
+def _ll(p: float, y: int) -> float:
+    p = min(max(p, 1e-6), 1 - 1e-6)
+    return -math.log(p if y else 1 - p)
+
+
+def _compare(rows: list[tuple[float, float, int]]) -> dict | None:
+    """SportyBet's published probability against our market chance (Shin), by log loss."""
+    if not rows:
+        return None
+    return {"n": len(rows), "sportybet": sum(_ll(a, y) for a, _, y in rows) / len(rows),
+            "market": sum(_ll(b, y) for _, b, y in rows) / len(rows)}
+
+
 def export_insights(data_dir: str) -> dict:
     with open(os.path.join(data_dir, "results.csv"), newline="", encoding="utf-8") as fh:
         results = list(csv.DictReader(fh))
     by_id = {r["event_id"]: r for r in results}
     snaps = snapshots(data_dir)
     margins: dict[str, list[float]] = defaultdict(list)
+    sp_ll: list[tuple[float, float, int]] = []   # (SportyBet prob, our market chance, landed)
     bands: dict[int, list[tuple[float, float, int]]] = defaultdict(list)   # (odds, market chance, won)
     matches = 0
     for e, s in snaps.items():
@@ -55,12 +69,15 @@ def export_insights(data_dir: str) -> dict:
             total = sum(1 / odds[k] for k in g)
             margins[family(g[0])].append(total - 1)
             fair = dict(zip(g, devig([odds[k] for k in g], LIVE_DEVIG)))
+            prob = s.get("prob") or {}
             for k in g:
                 y = settle(k, int(r["hg"]), int(r["ag"]), hth, hta)
                 if y is None:
                     continue
                 i = next(i for i, (lo, hi) in enumerate(BANDS) if lo <= odds[k] < hi)
                 bands[i].append((odds[k], fair[k], int(y)))
+                if k in prob:
+                    sp_ll.append((prob[k], fair[k], int(y)))
     band_rows = []
     for i, (lo, hi) in enumerate(BANDS):
         xs = bands.get(i, [])
@@ -92,4 +109,5 @@ def export_insights(data_dir: str) -> dict:
         "margins": sorted(({"family": f, "margin": st.mean(v), "n": len(v)} for f, v in margins.items()),
                           key=lambda x: x["margin"]),
         "bands": band_rows, "leagues": league_rows,
+        "sportybet_prob": _compare(sp_ll),
     }
