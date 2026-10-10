@@ -2,7 +2,7 @@ import webpush from "web-push";
 import { summary, trackWithPrematch, type Tracked } from "./codes";
 import { liveLegs, slipChance, type LiveLeg } from "./live";
 import type { Profile } from "./profile";
-import { addTo, del, getJson, members, removeFrom, setJson, setJsonIfAbsent, storeReady } from "./store";
+import { addTo, claim, del, getJson, members, removeFrom, setJson, setJsonIfAbsent, storeReady } from "./store";
 
 // Push notifications: booked codes that win or lose, and tips at chosen times.
 // The collector (GitHub Actions) calls /api/push/tick every few minutes.
@@ -85,7 +85,13 @@ export async function send(sub: Sub, p: Payload): Promise<boolean> {
   }
 }
 
+// A code whose result has been sent is marked done for a few days, so it is
+// never watched (or announced) again while it is still on the account.
+const DONE_SECONDS = 3 * 86_400;
+const isDone = async (code: string) => (await getJson<number>(`done:${code}`)) !== null;
+
 export async function watchCode(code: string, subIdValue: string, lastKickoff: number) {
+  if (await isDone(code)) return;
   const old = await getJson<Watch>(`watch:${code}`);
   if (old && old.subs.includes(subIdValue) && old.lastKickoff >= lastKickoff) return;
   const w = old ?? { code, subs: [], lastKickoff, created: Date.now() };
@@ -227,11 +233,14 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
     await del(`watch:${code}`);
     await removeFrom("watches", code);
   };
-  const final = async (w: Watch, t: Tracked) => {
+  // The result goes out once: claiming done:{code} fails if it was already sent.
+  const settle = async (w: Watch, p: Payload) => {
     out.settled++;
-    await tell(w, { title: t.state === "won" ? `✓ ${w.code} landed` : `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}` }, "results");
+    if (await claim(`done:${w.code}`, DONE_SECONDS)) await tell(w, p, "results");
     await drop(w.code);
   };
+  const final = (w: Watch, t: Tracked) =>
+    settle(w, { title: t.state === "won" ? `✓ ${w.code} landed` : `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}` });
 
   for (const code of await members("watches")) {
     out.watches++;
@@ -265,9 +274,7 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
       if (beaten && news.chance === 0) {
         const l = open.find((x) => live[legKey(x)]?.chance === 0)!;
         const x = live[legKey(l)];
-        await tell(w, { title: `✗ ${code} lost`, body: `${l.home} v ${l.away}: ${l.label.toLowerCase()} is beaten at ${x.score}${x.minute !== null ? ` (${x.minute}')` : ""}.`, url: "/codes", tag: `code-${code}` }, "results");
-        out.settled++;
-        await drop(code);
+        await settle(w, { title: `✗ ${code} lost`, body: `${l.home} v ${l.away}: ${l.label.toLowerCase()} is beaten at ${x.score}${x.minute !== null ? ` (${x.minute}')` : ""}.`, url: "/codes", tag: `code-${code}` });
         continue;
       }
       if (news.payload) {

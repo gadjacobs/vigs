@@ -224,7 +224,8 @@ ul.codes .button { min-height: 36px; padding: 4px 12px; margin-left: auto; }
 ul.codes li details { width: 100%; }
 ul.codes li summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; cursor: pointer; min-height: 40px; }
 ul.codes li summary strong { font-size: 18px; }
-.state-open { background: var(--paper-sunk); color: var(--ink); border: 1.5px dashed var(--edge); }
+.state-open, .state-upcoming { background: var(--paper-sunk); color: var(--ink); border: 1.5px dashed var(--edge); }
+.state-upcoming { border-style: solid; color: var(--ink-muted); }
 .state-won { background: var(--ink); color: var(--paper); }
 .state-lost { background: var(--house-wash); color: var(--house); }
 ol.legs { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -289,6 +290,7 @@ form.track { margin-top: 12px; align-items: flex-end; }
 .codecard.is-won { border-left-color: var(--fair); }
 .codecard.is-lost { border-left-color: var(--house); }
 .codecard.is-open { border-left-color: var(--signal); }
+.codecard.is-upcoming { border-left-color: var(--rule); }
 .codehead { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .codeid { font-size: 28px; line-height: 30px; letter-spacing: 1px; }
 .codeodds { margin-left: auto; font-size: 14px; color: var(--ink-muted); }

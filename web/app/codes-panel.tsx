@@ -125,7 +125,7 @@ function Spark({ points }: { points: [number, number][] }) {
 }
 
 const ICON: Record<string, string> = { won: "✓", lost: "✗", playing: "…", waiting: "", unknown: "?" };
-const STATE: Record<Tracked["state"], string> = { open: "In play", won: "Landed", lost: "Lost" };
+const STATE: Record<Tracked["state"] | "upcoming", string> = { upcoming: "Upcoming", open: "In play", won: "Landed", lost: "Lost" };
 
 export function CodesPanel({ stake = 1000 }: { stake?: number }) {
   const [codes, setCodes] = useState<Saved[]>([]);
@@ -319,7 +319,9 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
           const prev = hist.length > 1 ? hist.at(-2)![1] : null;
           const delta = chance !== null && prev !== null ? Math.round((chance - prev) * 100) : 0;
           const last = t && t.state === "open" && !lostN && left === 1 ? legs.find((l) => eff(l) === "waiting" || eff(l) === "playing") : undefined;
-          const shownState = t ? (t.state === "open" && lostN ? "lost" : t.state) : null;
+          // "In play" only once a leg has kicked off; before that, "Upcoming".
+          const started = legs.some((l) => l.kickoff <= now || l.status !== "waiting");
+          const shownState = t ? (t.state === "open" && lostN ? "lost" : t.state === "open" && !started ? "upcoming" : t.state) : null;
           const isOpen = open.has(c.code);
           const odds = t ? t.odds : c.odds || null;
           return (
