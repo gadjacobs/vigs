@@ -12,20 +12,22 @@ export type LiveLeg = {
   odds: number | null; // live price of this selection, while it is offered
 };
 
-const GOALS = /^(FH_)?([OU])(\d)(\d)$/;
+const GOALS = /^(FH_|H_|A_)?([OU])(\d)(\d)$/;
 const PAST_HALF = new Set(["HT", "H2", "End", "Ended"]);
 
 /** True or false once the score already decides the selection, else null.
- * A full-time 1X2 or under line is only decided at the end; overs and both
- * teams to score can land early, and unders and BTTS No can be lost early. */
+ * A full-time 1X2, double chance or under line is only decided at the end;
+ * overs (match or team) and both teams to score can land early, and unders
+ * and BTTS No can be lost early. */
 export function decided(market: string, ev: Pick<LiveEvent, "phase" | "score" | "fh">): boolean | null {
   const s = ev.score;
   if (!s) return null;
   const m = GOALS.exec(market);
   if (m) {
-    const half = Boolean(m[1]);
+    const half = m[1] === "FH_";
     const g = half ? (ev.fh ?? s) : s;
-    const goals = g[0] + g[1];
+    // A team line counts only that side's goals.
+    const goals = m[1] === "H_" ? g[0] : m[1] === "A_" ? g[1] : g[0] + g[1];
     const line = Number(m[3]) + Number(m[4]) / 10;
     const final = half && ev.fh !== null && PAST_HALF.has(ev.phase);
     if (goals > line) return m[2] === "O";

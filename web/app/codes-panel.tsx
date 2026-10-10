@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { hideCode, syncCodes } from "./profile-actions";
 import { ShareButton } from "./share-sheet";
-import { trackCodes } from "./push-actions";
+import { alertState, followMatch, setCodeAlertAction, trackCodes } from "./push-actions";
 import { liveCodes } from "./live-actions";
 import { HedgeSheet, type HedgeLeg } from "./hedge-sheet";
 import type { LiveLeg } from "@/lib/live";
@@ -124,6 +124,52 @@ function Spark({ points }: { points: [number, number][] }) {
   );
 }
 
+/** A number that rolls to its new value, and briefly shows which way it moved. */
+function Ticker({ value }: { value: number }) {
+  const [shown, setShown] = useState(value);
+  const [dir, setDir] = useState<"" | "up" | "down">("");
+  const from = useRef(value);
+  useEffect(() => {
+    const start = from.current;
+    if (start === value) return;
+    setDir(value > start ? "up" : "down");
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t0 = performance.now(), dur = still ? 0 : 700;
+    let raf = 0;
+    const step = (t: number) => {
+      const k = dur ? Math.min(1, (t - t0) / dur) : 1;
+      const v = start + (value - start) * (1 - Math.pow(1 - k, 3));
+      setShown(v);
+      if (k < 1) raf = requestAnimationFrame(step);
+      else from.current = value;
+    };
+    raf = requestAnimationFrame(step);
+    const off = setTimeout(() => setDir(""), 1800);
+    return () => { cancelAnimationFrame(raf); clearTimeout(off); from.current = value; };
+  }, [value]);
+  const r = Math.round(shown);
+  const text = value >= 99.5 && value < 100 ? ">99" : value > 0 && value < 0.5 ? "<1" : String(r);
+  return <span className={`ticker ${dir}`}>{text}</span>;
+}
+
+const pctText = (p: number) => (p >= 0.995 && p < 1 ? ">99" : p > 0 && p < 0.005 ? "<1" : String(Math.round(p * 100)));
+
+/** This device's push subscription endpoint, if notifications are on. */
+async function pushEndpoint(): Promise<string | null> {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration("/");
+    return (await reg?.pushManager.getSubscription())?.endpoint ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const BELL = "M6 16V11a6 6 0 1112 0v5l2 2H4zM10 20a2 2 0 004 0";
+const BELL_OFF = "M6 16V11a6 6 0 0110-4.5M18 11v5l2 2H8M10 20a2 2 0 004 0M3 3l18 18";
+const Icon = ({ d }: { d: string }) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+);
+
 const ICON: Record<string, string> = { won: "✓", lost: "✗", playing: "…", waiting: "", unknown: "?" };
 const STATE: Record<Tracked["state"] | "upcoming", string> = { upcoming: "Upcoming", open: "In play", won: "Landed", lost: "Lost" };
 
@@ -141,6 +187,11 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
   const [swing, setSwing] = useState<Swing>({});
   const [hedge, setHedge] = useState<{ code: string; leg: HedgeLeg; odds: number | null } | null>(null);
   const closeHedge = useCallback(() => setHedge(null), []);
+  const [endpoint, setEndpoint] = useState<string | null | undefined>(undefined);
+  const [modes, setModes] = useState<Record<string, "goals" | "off">>({});
+  const [follows, setFollows] = useState<Set<string>>(new Set());
+  const [goalFlash, setGoalFlash] = useState<Set<string>>(new Set());
+  const lastScores = useRef<Record<string, string>>({});
   const statusRef = useRef(status);
   statusRef.current = status;
   const checked = useRef<Record<string, number>>({});
@@ -177,6 +228,17 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
     const res = await liveCodes(legs.map((l) => ({ eventId: l.eventId, market: l.market, kickoff: l.kickoff }))).catch(() => null);
     if (!res) return;
     setLive(res);
+    // A changed score flashes for a few seconds.
+    const fresh: string[] = [];
+    for (const [k, x] of Object.entries(res)) {
+      const id = k.split("|")[0];
+      if (x.score && lastScores.current[id] !== undefined && lastScores.current[id] !== x.score) fresh.push(id);
+      if (x.score) lastScores.current[id] = x.score;
+    }
+    if (fresh.length) {
+      setGoalFlash((g) => new Set([...g, ...fresh]));
+      setTimeout(() => setGoalFlash((g) => new Set([...g].filter((id) => !fresh.includes(id)))), 4000);
+    }
     const sw = readSwing();
     const again: string[] = [];
     for (const t of open) {
@@ -196,6 +258,29 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
   }, []);
 
   const haveStatus = Object.keys(status).length > 0;
+  useEffect(() => {
+    if (!haveStatus) return;
+    (async () => {
+      const ep = await pushEndpoint();
+      setEndpoint(ep);
+      if (!ep) return;
+      const ts = Object.values(statusRef.current).filter((t): t is Tracked => "legs" in t);
+      const st = await alertState(ep, ts.map((t) => t.code), ts.flatMap((t) => t.legs.map((l) => l.eventId))).catch(() => null);
+      if (st) { setModes(st.modes); setFollows(new Set(st.matches)); }
+    })();
+  }, [haveStatus]);
+
+  const chooseMode = (code: string, mode: "goals" | "off" | "default", lastKickoff: number) => {
+    if (!endpoint) return;
+    setModes((m) => { const n = { ...m }; if (mode === "default") delete n[code]; else n[code] = mode; return n; });
+    setCodeAlertAction(endpoint, code, mode, lastKickoff).catch(() => undefined);
+  };
+  const toggleFollow = (l: Tracked["legs"][number]) => {
+    if (!endpoint) return;
+    const on = !follows.has(l.eventId);
+    setFollows((f) => { const n = new Set(f); if (on) n.add(l.eventId); else n.delete(l.eventId); return n; });
+    followMatch(endpoint, { eventId: l.eventId, home: l.home, away: l.away, league: l.league, kickoff: l.kickoff }, on).catch(() => undefined);
+  };
   useEffect(() => {
     setSwing(readSwing());
     if (!haveStatus) return;
@@ -324,35 +409,41 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
           const shownState = t ? (t.state === "open" && lostN ? "lost" : t.state === "open" && !started ? "upcoming" : t.state) : null;
           const isOpen = open.has(c.code);
           const odds = t ? t.odds : c.odds || null;
+          const mode = modes[c.code];
+          const settled = t && t.state !== "open";
           return (
             <li key={c.code} className={`codecard ${shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""}`}
-              onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button")) toggle(c.code); }}>
-              <div className="codehead">
-                <strong className="num codeid">{c.code}</strong>
-                {shownState && <span className={`badge state-${shownState}`}>{STATE[shownState]}</span>}
-                {err && <span className="badge state-lost">Unavailable</span>}
-                <span className="codeodds">
-                  {odds ? <><span className="num">{odds.toFixed(2)}</span> odds</> : <span title="Some legs were never seen before kickoff">odds unknown</span>}
-                  {" · "}{legs.length || c.legs} legs
-                </span>
+              onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button,input,label")) toggle(c.code); }}>
+              <div className="codetop">
+                <div className="codehead">
+                  <strong className="num codeid">{c.code}</strong>
+                  {shownState && <span className={`badge state-${shownState}`}>{STATE[shownState]}</span>}
+                  {err && <span className="badge state-lost">Unavailable</span>}
+                  {mode && <span className="alertmark" title={mode === "goals" ? "Alerts for every goal" : "Alerts off for this code"}><Icon d={mode === "goals" ? BELL : BELL_OFF} /></span>}
+                </div>
+                {chance !== null && !lostN ? (
+                  <div className={`chancebig ${chance >= 0.5 ? "good" : "low"}`} aria-label={`${pctText(chance)}% chance to land`}>
+                    <span className="num"><Ticker value={chance * 100} /><small>%</small></span>
+                    <em>{delta !== 0 ? <b className={delta > 0 ? "up" : "down"}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</b> : null} to land</em>
+                  </div>
+                ) : settled ? (
+                  <div className={`chancebig done-${t!.state}`}><span>{t!.state === "won" ? "✓" : "✗"}</span><em>{t!.state === "won" ? "landed" : "lost"}</em></div>
+                ) : null}
               </div>
+              <p className="codemeta">
+                {odds ? <><strong className="num">{odds.toFixed(2)}</strong> odds</> : <span title="Some legs were never seen before kickoff">odds unknown</span>}
+                {" · "}{legs.length || c.legs} legs<span className="muted"> · booked {lagos(c.at)}</span>
+              </p>
               {legs.length > 0 && (
                 <div className="legbar" role="img" aria-label={`${wonN} won, ${lostN} lost, ${left} to play`}>
-                  {legs.map((l) => <span key={l.eventId} className={`seg seg-${eff(l)}`} />)}
+                  {legs.map((l) => <span key={l.eventId} className={`seg seg-${eff(l)} ${goalFlash.has(l.eventId) ? "flash" : ""}`} />)}
                 </div>
               )}
               <p className="codeline">
                 {t ? <>{wonN} won · {lostN} lost · {left} to play{next ? ` · next kickoff ${lagos(next.kickoff)}` : ""}</>
                   : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : "Checking…"}
-                <span className="muted"> · booked {lagos(c.at)}</span>
               </p>
-              {chance !== null && !lostN && (
-                <div className="chanceline">
-                  <span>Chance to land <strong className="num">{chance >= 0.995 && chance < 1 ? ">99" : chance > 0 && chance < 0.005 ? "<1" : Math.round(chance * 100)}%</strong>
-                    {delta !== 0 && <span className={delta > 0 ? "up" : "down"}> {delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</span>}</span>
-                  <Spark points={hist} />
-                </div>
-              )}
+              {hist.length > 1 && chance !== null && !lostN && <Spark points={hist} />}
               <div className="row codeactions">
                 <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>
                 <CopyButton text={c.code} />
@@ -366,23 +457,51 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
                   </button>
                 )}
               </div>
+              {isOpen && t && !settled && (
+                endpoint ? (
+                  <div className="codealerts" role="radiogroup" aria-label={`Alerts for ${c.code}`}>
+                    <span>Alerts</span>
+                    {([["goals", "Every goal"], ["default", "Key moments"], ["off", "Off"]] as const).map(([v, label]) => (
+                      <button key={v} type="button" role="radio" aria-checked={(mode ?? "default") === v}
+                        onClick={() => chooseMode(c.code, v, t.lastKickoff)}>{label}</button>
+                    ))}
+                  </div>
+                ) : endpoint === null ? (
+                  <p className="hint"><a href="/alerts">Turn on notifications</a> to follow this code or its matches without opening the app.</p>
+                ) : null
+              )}
               {isOpen && legs.length > 0 && (
                 <ol className="legs">
                   {legs.map((l) => {
                     const st = eff(l), x = live[legKey(l)];
+                    const playing = x?.state === "playing" && x.score;
+                    const lc = x?.chance ?? null;
+                    const course = st === "won" ? "won" : st === "lost" ? "lost" : playing && lc !== null ? (lc >= 0.5 ? "on" : "off") : "";
+                    const followed = follows.has(l.eventId);
                     return (
-                    <li key={l.eventId} className={`leg-${st}`}>
+                    <li key={l.eventId} className={`leg-${st} ${course ? `course-${course}` : ""}`}>
                       <span className="legicon" aria-hidden="true">{ICON[st]}</span>
-                      <span>{l.home} v {l.away}
+                      <span className="legmain">{l.home} v {l.away}
                         <small>{l.label} · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"} · {lagos(l.kickoff)}</small>
+                        {lc !== null && (st === "playing" || st === "waiting") && (
+                          <span className="legmeter" aria-hidden="true"><span style={{ width: `${Math.round(lc * 100)}%` }} /></span>
+                        )}
                       </span>
                       <span className="legres">
-                        {l.status === "won" || l.status === "lost" ? `${l.score}${l.market.startsWith("FH_") && l.ht ? ` (HT ${l.ht})` : ""}`
-                          : x?.state === "playing" && x.score ? <>{x.minute !== null ? <small>{x.phase === "HT" ? "HT" : `${x.minute}'`}</small> : null} {x.score}</>
-                          : l.kickoff > now ? lagos(l.kickoff) : "Playing"}
-                        {x && x.chance !== null && (st === "playing" || st === "waiting") && <small className="legchance">{Math.round(x.chance * 100)}%</small>}
+                        {playing && <span className={`livepill ${x!.phase === "HT" ? "ht" : ""}`}>{x!.phase === "HT" ? "HT" : x!.minute !== null ? `${x!.minute}'` : "Live"}</span>}
+                        <b className={`score num ${goalFlash.has(l.eventId) ? "goal" : ""}`}>
+                          {l.status === "won" || l.status === "lost" ? `${l.score}${l.market.startsWith("FH_") && l.ht ? ` (HT ${l.ht})` : ""}`
+                            : playing ? x!.score : l.kickoff > now ? lagos(l.kickoff) : "Playing"}
+                        </b>
+                        {lc !== null && (st === "playing" || st === "waiting") && <small className="legchance">{pctText(lc)}%</small>}
                         <span className="sr-only"> {st}</span>
                       </span>
+                      {endpoint && !settled && (st === "waiting" || st === "playing") && (
+                        <button type="button" className={`followbtn ${followed ? "on" : ""}`} aria-pressed={followed}
+                          aria-label={`${followed ? "Stop following" : "Follow"} ${l.home} v ${l.away}`}
+                          title={followed ? "Following: kick-off, goals, half and full time" : "Follow this match"}
+                          onClick={() => toggleFollow(l)}><Icon d={followed ? BELL : BELL} /></button>
+                      )}
                     </li>
                     );
                   })}

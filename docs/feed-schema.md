@@ -46,8 +46,10 @@ Base: `https://www.sportybet.com/api/ng/factsCenter/`. A browser-like
 - per event: `markets[]` with `id`, `specifier` (e.g. `total=1.5`), `status`, and
   `outcomes[]` with `desc`, `odds` (string), `isActive`
 - market ids: `1` 1X2 · `18` total goals, lines 0.5 to 9.5 · `68` first-half total, 0.5 to 4.5 ·
-  `29` both teams score (`Yes`/`No`) · `19`/`20` home/away team totals · `60` first-half 1X2.
-  45 markets per match in all.
+  `29` both teams score (`Yes`/`No`) · `19`/`20` home/away team totals (outcomes `12` over,
+  `13` under) · `10` double chance (`9` home or draw, `10` home or away, `11` draw or away) ·
+  `60` first-half 1X2. 45 markets per match in all. The collector captures `1,18,68,29,10,19,20`
+  (double chance and team totals from 11 Oct 2026).
 - odds for a match did not change between snapshots taken minutes apart
 
 **Single event**: `event?eventId=...&productId=3` returns no markets once the match is over.

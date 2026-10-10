@@ -3,7 +3,7 @@ import { liveLegs, type LegRef, type LiveLeg } from "@/lib/live";
 import { opposite } from "@/lib/hedge";
 import { book, eventMarkets, selection } from "@/lib/sportybet";
 
-const KEY = /^(1|X|2|BY|BN|(FH_)?[OU]\d\d)$/;
+const KEY = /^(1|X|2|BY|BN|DC1X|DC12|DCX2|(FH_|H_|A_)?[OU]\d\d)$/;
 
 /** Live score, clock and chance for the legs of open codes. The Codes tab calls
  * this every few seconds while something is in play. */

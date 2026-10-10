@@ -25,7 +25,8 @@ def family(m: str) -> str:
         return "1X2"
     if m in ("BY", "BN"):
         return "Both teams score"
-    return ("First half " if m.startswith("FH_") else "") + f"over/under {m[-2]}.{m[-1]}"
+    lead = {"FH": "First half ", "H": "Home team ", "A": "Away team "}.get(m.split("_")[0], "") if "_" in m else ""
+    return lead + f"over/under {m[-2]}.{m[-1]}"
 
 
 def _roi(profits: list[float]) -> tuple[float, float]:

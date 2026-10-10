@@ -1,3 +1,4 @@
+import { MAX_LEGS } from "@/lib/slip";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { SlipBuilder } from "../../slip-builder";
@@ -20,7 +21,7 @@ export default async function EditSlate({ searchParams }: { searchParams: Promis
   const { profile } = await myProfile();
   const view = (profile?.view ?? (await cookies()).get("vig_view")?.value) === "detailed" ? "detailed" : "simple";
   const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
-  const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, mode: "count", count: 30, sort: "likely" };
+  const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, mode: "count", count: MAX_LEGS, sort: "likely" };
   const cands = candidates(model, fixtures, { ...q, now }, blend).candidates;
   const have = new Set(cands.map((p) => p.id));
   const ids = slate ? slate.legs.map((p) => p.id).filter((x) => have.has(x)) : [];

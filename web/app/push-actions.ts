@@ -106,3 +106,35 @@ export async function adoptCode(code: string, style: string) {
   await logOnce(code, slate.legs, `cooked:${style}`, user);
   return true;
 }
+
+/** This device's alert choices for these codes, and which of these matches it follows. */
+export async function alertState(endpoint: string, codes: string[], eventIds: string[]) {
+  const { myCodeAlerts, getFollowed } = await import("@/lib/push");
+  if (!pushReady() || !endpoint) return null;
+  const id = await subId(endpoint);
+  if (!(await loadSub(id))) return null;
+  const all = await myCodeAlerts(id);
+  const modes = Object.fromEntries(codes.filter((c) => all[c]).map((c) => [c, all[c]]));
+  return { modes, matches: await getFollowed(id, eventIds.filter((e) => /^sr:match:\d+$/.test(e)).slice(0, 200)) };
+}
+
+/** Every goal / usual alerts / nothing, for one code on this device. */
+export async function setCodeAlertAction(endpoint: string, code: string, mode: "goals" | "off" | "default", lastKickoff: number) {
+  const { setCodeAlert } = await import("@/lib/push");
+  if (!pushReady() || !/^[A-Z0-9]{4,12}$/.test(code) || !["goals", "off", "default"].includes(mode)) return false;
+  const s = await loadSub(await subId(endpoint));
+  if (!s) return false;
+  await setCodeAlert(code, s.id, mode, Number(lastKickoff) || Date.now());
+  return true;
+}
+
+/** Follow one match on this device: kick-off, goals, half time, full time. */
+export async function followMatch(endpoint: string, f: { eventId: string; home: string; away: string; league: string; kickoff: number }, on: boolean) {
+  const { followFixture } = await import("@/lib/push");
+  if (!pushReady() || !/^sr:match:\d+$/.test(f.eventId)) return false;
+  const s = await loadSub(await subId(endpoint));
+  if (!s) return false;
+  const clip = (x: string) => String(x).slice(0, 40);
+  await followFixture({ eventId: f.eventId, home: clip(f.home), away: clip(f.away), league: clip(f.league), kickoff: Number(f.kickoff) }, s.id, on);
+  return true;
+}

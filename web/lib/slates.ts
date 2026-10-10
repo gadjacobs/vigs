@@ -2,7 +2,7 @@ import { atLeast } from "./flex";
 import { ourPicks } from "./ourpicks";
 import type { Pick } from "./picks";
 import { confidence, slipConfidence, type Confidence } from "./plain";
-import { toTarget } from "./slip";
+import { MAX_LEGS, toTarget } from "./slip";
 
 // Cooked slips: ready-made, named slips for the rounds published right now.
 // Which slips appear, and how many legs each has, depends on what the round
@@ -11,7 +11,7 @@ import { toTarget } from "./slip";
 // keep value, long shots lose it; market and model agreeing is what
 // confidence measures; draws are priced per league and land about 1 in 4.
 
-export type StyleId = "steady" | "double" | "fiver" | "tenner" | "goals" | "tight" | "bold" | "draws";
+export type StyleId = "steady" | "double" | "fiver" | "tenner" | "long" | "goals" | "tight" | "bold" | "draws";
 export type Slate = {
   id: string; style: StyleId; name: string; blurb: string;
   legs: Pick[]; odds: number; chance: number; confidence: Confidence;
@@ -76,6 +76,13 @@ export function cookSlates(cands: Pick[]): Slate[] {
     const legs = byConfidence(short, (pool) => toTarget(pool, target, 0.1, 10));
     out.push(make(style, name, `About ${target} odds from short, likely legs: they keep more value than one long shot.`, legs));
   }
+
+  // Long shot: big total odds built only from likely legs (double chance, team
+  // goals, overs), the likeliest combination that reaches about 20.
+  const likely = cands.filter((p) => p.estimate >= 0.75 && p.odds >= 1.15);
+  const long = byConfidence(likely, (pool) => toTarget(pool, 20, 0.15, MAX_LEGS));
+  if (long.length >= 6)
+    out.push(make("long", "Long shot", "About 20 odds from likely legs only. Each leg pays the bookmaker's cut, so long slips land rarely and cost more on average.", long));
 
   // Goals and tight games: the market and model agreeing on how the match goes.
   const goals = onePerMatch(cands.filter((p) => ["O25", "BY", "FH_O15", "O35"].includes(p.market) && p.estimate >= 0.55), (p) => p.estimate);

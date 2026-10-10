@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { summary, trackWithPrematch, type Tracked } from "./codes";
 import { liveLegs, slipChance, type LiveLeg } from "./live";
+import { eventMarkets, liveBoard } from "./sportybet";
 import type { Profile } from "./profile";
 import { addTo, claim, del, getJson, members, removeFrom, setJson, setJsonIfAbsent, storeReady } from "./store";
 
@@ -106,7 +107,9 @@ const pct = (p: number) => `${p >= 0.995 && p < 1 ? ">99" : Math.round(p * 100)}
 const SWING = 0.15; // a goal that moves a code's chance by 15 points or more is worth a notification
 
 /** What a watched code's live state says to tell its subscribers, if anything. */
-export function liveNews(w: Watch, live: Record<string, LiveLeg>): { payload: Payload | null; chance: number | null; scores: Record<string, string>; last: boolean } {
+export function liveNews(w: Watch, live: Record<string, LiveLeg>): {
+  payload: Payload | null; goal: Payload | null; chance: number | null; scores: Record<string, string>; last: boolean;
+} {
   const legs = w.legs ?? [];
   const settled = w.settled ?? {};
   const scores: Record<string, string> = { ...w.scores };
@@ -123,11 +126,20 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): { payload: Pa
   const chance = slipChance(chances);
   const openLegs = legs.filter((l, i) => chances[i] !== 1);
   const last = openLegs.length === 1 && chances.every((c) => c !== 0) && !(w.told ?? []).includes("last");
+  // Every goal, for anyone following this code goal by goal.
+  const g0 = goals[0];
+  const goal: Payload | null = g0 ? {
+    title: `⚽ ${g0.leg.home} ${g0.x.score!.replace(":", "–")} ${g0.leg.away}${g0.x.minute !== null ? ` (${g0.x.minute}')` : ""}`,
+    body: chance === null ? `${w.code}: ${g0.leg.label.toLowerCase()}.`
+      : chance === 0 ? `${w.code} is beaten: ${g0.leg.label.toLowerCase()} can't land now.`
+      : `${w.code} now ${pct(chance)} to land${w.chance !== undefined ? ` (was ${pct(w.chance)})` : ""}.`,
+    url: "/codes", tag: `code-${w.code}`,
+  } : null;
   if (goals.length && chance !== null && w.chance !== undefined && Math.abs(chance - w.chance) >= SWING) {
     const g = goals[0];
     const [h, a] = g.x.score!.split(":");
     return {
-      chance, scores, last,
+      chance, scores, last, goal,
       payload: {
         title: `${chance > w.chance ? "▲" : "▼"} ${g.leg.home} ${h}–${a} ${g.leg.away}${g.x.minute !== null ? ` (${g.x.minute}')` : ""}`,
         body: chance === 0 ? `${w.code} is beaten: ${g.leg.label.toLowerCase()} can't land now.`
@@ -139,7 +151,7 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): { payload: Pa
   if (last && chance !== null && chance > 0) {
     const l = openLegs[0];
     return {
-      chance, scores, last: true,
+      chance, scores, last: true, goal,
       payload: {
         title: `${w.code}: one leg left`,
         body: `${legs.length - 1} of ${legs.length} landed. Last: ${l.home} v ${l.away}, ${l.label.toLowerCase()}, ${pct(chance)} to land. Open Codes to ride it or hedge.`,
@@ -147,7 +159,84 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): { payload: Pa
       },
     };
   }
-  return { payload: null, chance, scores, last: false };
+  return { payload: null, goal, chance, scores, last: false };
+}
+
+// Per-code choice, per device: "goals" = every goal plus results; "off" = nothing
+// for this code. Without a choice a code gets the device's usual alerts.
+export type CodeAlert = "goals" | "off";
+export const codeAlerts = async (code: string) => (await getJson<Record<string, CodeAlert>>(`codealert:${code}`)) ?? {};
+
+export async function setCodeAlert(code: string, subIdValue: string, mode: CodeAlert | "default", lastKickoff: number) {
+  const all = await codeAlerts(code);
+  if (mode === "default") delete all[subIdValue];
+  else all[subIdValue] = mode;
+  await setJson(`codealert:${code}`, all);
+  // The device's own copy, so the Codes tab reads all its choices at once.
+  const mine = (await getJson<Record<string, CodeAlert>>(`alertmodes:${subIdValue}`)) ?? {};
+  if (mode === "default") delete mine[code];
+  else mine[code] = mode;
+  const keep = Object.entries(mine).slice(-200);
+  await setJson(`alertmodes:${subIdValue}`, Object.fromEntries(keep));
+  if (mode === "goals") await watchCode(code, subIdValue, lastKickoff);
+}
+
+// Followed matches: kick-off, every goal, half time and full time.
+export type FollowedFixture = {
+  eventId: string; home: string; away: string; league: string; kickoff: number;
+  subs: string[]; score?: string; told?: string[];
+};
+
+export async function followFixture(f: Omit<FollowedFixture, "subs">, subIdValue: string, on: boolean) {
+  const key = `fixture:${f.eventId}`;
+  const old = await getJson<FollowedFixture>(key);
+  const subs = new Set(old?.subs ?? []);
+  if (on) subs.add(subIdValue);
+  else subs.delete(subIdValue);
+  if (on) await addTo(`follows:${subIdValue}`, f.eventId);
+  else await removeFrom(`follows:${subIdValue}`, f.eventId);
+  if (!subs.size) {
+    await del(key);
+    await removeFrom("fixtures", f.eventId);
+    return;
+  }
+  await setJson(key, { ...f, ...old, subs: [...subs] });
+  await addTo("fixtures", f.eventId);
+}
+
+/** Which of these matches this subscription follows. */
+export async function getFollowed(subIdValue: string, eventIds: string[]): Promise<string[]> {
+  const mine = new Set(await members(`follows:${subIdValue}`));
+  return eventIds.filter((id) => mine.has(id));
+}
+
+/** This subscription's per-code choices. */
+export const myCodeAlerts = async (subIdValue: string) => (await getJson<Record<string, CodeAlert>>(`alertmodes:${subIdValue}`)) ?? {};
+
+/** What a followed match's latest state says to send, if anything. */
+export function fixtureNews(f: FollowedFixture, ev: { phase: string; minute: number | null; score: [number, number] | null } | null, now: number):
+  { payloads: Payload[]; score?: string; told: string[]; done: boolean } {
+  const told = [...(f.told ?? [])];
+  const out: Payload[] = [];
+  const name = (sc?: string) => sc ? `${f.home} ${sc.replace(":", "–")} ${f.away}` : `${f.home} v ${f.away}`;
+  const base = { url: "/codes", tag: `match-${f.eventId}` };
+  if (!ev) return { payloads: out, score: f.score, told, done: false };
+  const score = ev.score ? `${ev.score[0]}:${ev.score[1]}` : f.score;
+  if (ev.phase === "End" || ev.phase === "Ended") {
+    out.push({ title: `Full time: ${name(score)}`, body: `${f.league}.`, ...base });
+    return { payloads: out, score, told, done: true };
+  }
+  if (!told.includes("ko") && now >= f.kickoff) {
+    told.push("ko");
+    if (!f.score || f.score === "0:0") out.push({ title: `Kick-off: ${f.home} v ${f.away}`, body: `${f.league}. You'll hear about every goal.`, ...base });
+  }
+  if (f.score !== undefined && score && score !== f.score)
+    out.push({ title: `⚽ ${name(score)}${ev.minute !== null ? ` (${ev.minute}')` : ""}`, body: `${f.league}.`, ...base });
+  if (ev.phase === "HT" && !told.includes("ht")) {
+    told.push("ht");
+    out.push({ title: `Half time: ${name(score)}`, body: `${f.league}.`, ...base });
+  }
+  return { payloads: out, score: score ?? f.score ?? "0:0", told, done: false };
 }
 
 /** Codes on the accounts behind these subscriptions that are still to play or in play. */
@@ -223,10 +312,16 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
   for (const { sub, code, last } of await accountCodes([...subs.values()], now).catch(() => []))
     await watchCode(code, sub.id, last).catch(() => undefined);
 
-  const tell = async (w: Watch, p: Payload, kind: "results" | "swings") => {
+  // kind "goals" goes only to devices following the code goal by goal; a
+  // device that turned a code off hears nothing about it.
+  const tell = async (w: Watch, p: Payload, kind: "results" | "swings" | "goals") => {
+    const modes = await codeAlerts(w.code);
     for (const id of w.subs) {
       const s = subs.get(id);
-      if (s && (kind === "results" ? s.results : s.swings !== false) && (await send(s, p))) out.sent++;
+      const mode = modes[id];
+      if (!s || mode === "off") continue;
+      const wants = mode === "goals" ? true : kind === "results" ? s.results : kind === "swings" ? s.swings !== false : false;
+      if (wants && (await send(s, p))) out.sent++;
     }
   };
   const drop = async (code: string) => {
@@ -281,6 +376,7 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
         out.swings++;
         await tell(w, news.payload, "swings");
       }
+      if (news.goal && !/^[▲▼]/.test(news.payload?.title ?? "")) await tell(w, news.goal, "goals");
       await setJson(`watch:${code}`, {
         ...w, scores: news.scores, chance: news.chance ?? w.chance,
         told: news.last ? [...(w.told ?? []), "last"] : w.told,
@@ -289,6 +385,37 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
       out.errors++;
     }
   }
+  // Followed matches.
+  for (const id of await members("fixtures")) {
+    const f = await getJson<FollowedFixture>(`fixture:${id}`);
+    if (!f || now > f.kickoff + 3 * 60 * MIN) {
+      for (const sid of f?.subs ?? []) await removeFrom(`follows:${sid}`, id);
+      await del(`fixture:${id}`);
+      await removeFrom("fixtures", id);
+      continue;
+    }
+    if (f.kickoff > now + MIN) continue;
+    out.next = 20;
+    try {
+      const board = await liveBoard();
+      // Gone from the live list a while after kickoff: read the match itself for the final score.
+      const ev = board.get(id) ?? (now - f.kickoff > 3 * MIN ? await eventMarkets(id, true) : null);
+      const news = fixtureNews(f, ev, now);
+      for (const p of news.payloads)
+        for (const sid of f.subs) {
+          const sub = subs.get(sid);
+          if (sub && (await send(sub, p))) out.sent++;
+        }
+      if (news.done) {
+        for (const sid of f.subs) await removeFrom(`follows:${sid}`, id);
+        await del(`fixture:${id}`);
+        await removeFrom("fixtures", id);
+      } else await setJson(`fixture:${id}`, { ...f, score: news.score, told: news.told });
+    } catch {
+      out.errors++;
+    }
+  }
+
   for (const s of subs.values()) {
     if (!buildOurs || !s.ours || !dueOurs(s, now)) continue;
     out.tips++;

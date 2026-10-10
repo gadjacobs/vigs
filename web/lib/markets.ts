@@ -25,9 +25,17 @@ export const MARKET_LABELS: Record<string, string> = {
   "1": "Home win",
   X: "Draw",
   "2": "Away win",
+  DC1X: "Home or draw",
+  DC12: "Home or away",
+  DCX2: "Draw or away",
+  ...Object.fromEntries(["H", "A"].flatMap((t) => ["05", "15", "25", "35"].flatMap((ln) => ["O", "U"].map((s) =>
+    [`${t}_${s}${ln}`, `${t === "H" ? "Home" : "Away"} team ${s === "O" ? "over" : "under"} ${ln[0]}.${ln[1]}`])))),
 };
 
-const OU = /^(FH_)?([OU])(\d)(\d)$/;
+/** Double chance and the two 1X2 outcomes each one covers. */
+export const DOUBLE_CHANCE: Record<string, [string, string]> = { DC1X: ["1", "X"], DC12: ["1", "2"], DCX2: ["X", "2"] };
+
+const OU = /^(FH_|H_|A_)?([OU])(\d)(\d)$/;
 
 export function marketGroups(markets: Iterable<string>): string[][] {
   const ms = new Set(markets);
@@ -68,6 +76,9 @@ export function fairProbs(odds: Record<string, number>): Record<string, number> 
     const ps = shin(g.map((m) => 1 / odds[m]));
     g.forEach((m, i) => (out[m] = ps[i]));
   }
+  // Double chance overlaps, so its market chance is the sum of the two 1X2 outcomes it covers.
+  for (const [dc, [a, b]] of Object.entries(DOUBLE_CHANCE))
+    if (dc in odds && a in out && b in out) out[dc] = out[a] + out[b];
   return out;
 }
 
@@ -80,11 +91,18 @@ export const MARKET_GROUPS: { title: string; markets: [string, string][] }[] = [
     ["FH_U25", "Under 2.5"], ["FH_U35", "Under 3.5"], ["FH_U45", "Under 4.5"]] },
   { title: "Both teams score", markets: [["BY", "Yes"], ["BN", "No"]] },
   { title: "Result", markets: [["1", "Home"], ["X", "Draw"], ["2", "Away"]] },
+  { title: "Double chance", markets: [["DC1X", "Home or draw"], ["DC12", "Home or away"], ["DCX2", "Draw or away"]] },
+  { title: "Home team goals", markets: [["H_O05", "Over 0.5"], ["H_O15", "Over 1.5"], ["H_O25", "Over 2.5"], ["H_O35", "Over 3.5"],
+    ["H_U05", "Under 0.5"], ["H_U15", "Under 1.5"], ["H_U25", "Under 2.5"], ["H_U35", "Under 3.5"]] },
+  { title: "Away team goals", markets: [["A_O05", "Over 0.5"], ["A_O15", "Over 1.5"], ["A_O25", "Over 2.5"], ["A_O35", "Over 3.5"],
+    ["A_U05", "Under 0.5"], ["A_U15", "Under 1.5"], ["A_U25", "Under 2.5"], ["A_U35", "Under 3.5"]] },
 ];
 
 export const SHORT_LABELS: Record<string, string> = {
   FH_O05: "HT O0.5", FH_O15: "HT O1.5", FH_O25: "HT O2.5", FH_U05: "HT U0.5", FH_U15: "HT U1.5", FH_U25: "HT U2.5",
   FH_O35: "HT O3.5", FH_U35: "HT U3.5", FH_O45: "HT O4.5", FH_U45: "HT U4.5", O05: "O0.5", U05: "U0.5",
   O15: "O1.5", O25: "O2.5", O35: "O3.5", O45: "O4.5", U15: "U1.5", U25: "U2.5", U35: "U3.5", U45: "U4.5",
-  BY: "GG", BN: "NG", "1": "Home", X: "Draw", "2": "Away",
+  BY: "GG", BN: "NG", "1": "Home", X: "Draw", "2": "Away", DC1X: "1X", DC12: "12", DCX2: "X2",
+  ...Object.fromEntries(["H", "A"].flatMap((t) => ["05", "15", "25", "35"].flatMap((ln) => ["O", "U"].map((s) =>
+    [`${t}_${s}${ln}`, `${t === "H" ? "Home" : "Away"} ${s}${ln[0]}.${ln[1]}`])))),
 };

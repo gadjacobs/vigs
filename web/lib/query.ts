@@ -1,3 +1,4 @@
+import { MAX_LEGS } from "./slip";
 import { MARKET_LABELS } from "./markets";
 
 // The page's filters, shared by the server page and the client filter panel.
@@ -42,8 +43,8 @@ export function parseQuery(sp: Params): Query {
     mode: one(sp.mode) === "count" ? "count" : "target",
     target: num(one(sp.target), d.target, 1.1, 10000),
     tol: num(one(sp.tol), d.tol, 0.02, 0.5),
-    maxLegs: Math.round(num(one(sp.legs), d.maxLegs, 0, 30)),
-    count: Math.round(num(one(sp.count), d.count, 1, 30)),
+    maxLegs: Math.round(num(one(sp.legs), d.maxLegs, 0, MAX_LEGS)),
+    count: Math.round(num(one(sp.count), d.count, 1, MAX_LEGS)),
     sort: one(sp.sort) === "edge" ? "edge" : "likely",
     minGrade: one(sp.grade) === "lean" ? "Lean" : "Rough",
     minConf: one(sp.conf) === "high" ? "High" : one(sp.conf) === "medium" ? "Medium" : "Low",

@@ -105,7 +105,7 @@ export function Filters({ initial, saved: savedInitial = null }: { initial: Quer
           <label className="field">Games
             <select value={q.maxLegs} onChange={(e) => set("maxLegs", Number(e.target.value))}>
               <option value={0}>Any number</option>
-              {[2, 3, 4, 5, 6, 8, 10, 15].map((n) => <option key={n} value={n}>Up to {n}</option>)}
+              {[2, 3, 4, 5, 6, 8, 10, 15, 20, 30, 40, 50].map((n) => <option key={n} value={n}>Up to {n}</option>)}
             </select>
           </label>
           {targetOk && (
@@ -116,7 +116,7 @@ export function Filters({ initial, saved: savedInitial = null }: { initial: Quer
         <div className="filter-row">
           <label className="field">Picks
             <select value={q.count} onChange={(e) => set("count", Number(e.target.value))}>
-              {[3, 5, 10, 15, 20, 30].map((c) => <option key={c} value={c}>{c}</option>)}
+              {[3, 5, 10, 15, 20, 30, 40, 50].map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
           <label className="field">Rank by

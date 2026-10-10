@@ -11,6 +11,8 @@ describe("poisson", () => {
     const py: Record<string, number> = {
       "1": 0.464244177983, X: 0.257667214776, BY: 0.518272329007,
       O15: 0.732615110425, FH_O05: 0.727468206964, U25: 0.518429575936,
+      H_O05: 0.776869832048, A_O15: 0.300970724034, H_U25: 0.808846830538,
+      DC1X: 0.72191139276, DC12: 0.74233277722, DCX2: 0.535755814013,
     };
     for (const [k, v] of Object.entries(py)) expect(p[k]).toBeCloseTo(v, 9);
   });
@@ -140,5 +142,28 @@ describe("settle", () => {
       const s = selection(m, "e");
       expect(marketKey(s.marketId, s.specifier, s.outcomeId)).toBe(m);
     }
+  });
+});
+
+describe("double chance and team goals", () => {
+  it("settles and maps them like the Python package", () => {
+    expect([settle("DC1X", 0, 0, null, null), settle("DC12", 1, 1, null, null), settle("DCX2", 0, 2, null, null)]).toEqual([true, false, true]);
+    expect([settle("H_O05", 1, 0, null, null), settle("A_O05", 1, 0, null, null), settle("A_U15", 3, 1, null, null)]).toEqual([true, false, true]);
+    expect([marketKey("10", null, "11"), marketKey("19", "total=0.5", "12"), marketKey("20", "total=1.5", "13")]).toEqual(["DCX2", "H_O05", "A_U15"]);
+    expect(selection("H_O05", "e")).toEqual({ eventId: "e", marketId: "19", specifier: "total=0.5", outcomeId: "12" });
+    expect(selection("A_U15", "e")).toEqual({ eventId: "e", marketId: "20", specifier: "total=1.5", outcomeId: "13" });
+    expect(selection("FH_O05", "e")).toEqual({ eventId: "e", marketId: "68", specifier: "total=0.5", outcomeId: "12" });
+  });
+
+  it("reads team totals and prices double chance from the de-vigged 1X2", () => {
+    const odds = parseOdds({ markets: [
+      { id: "1", status: 0, outcomes: [{ desc: "Home", odds: "2.00", isActive: 1 }, { desc: "Draw", odds: "3.50", isActive: 1 }, { desc: "Away", odds: "4.00", isActive: 1 }] },
+      { id: "19", specifier: "total=0.5", status: 0, outcomes: [{ desc: "Over 0.5", odds: "1.32", isActive: 1 }, { desc: "Under 0.5", odds: "3.54", isActive: 1 }] },
+      { id: "10", status: 0, outcomes: [{ desc: "Home or Draw", odds: "1.30", isActive: 1 }, { desc: "Home or Away", odds: "1.33", isActive: 1 }, { desc: "Draw or Away", odds: "1.90", isActive: 1 }] },
+    ] });
+    expect([odds.H_O05, odds.H_U05, odds.DC1X]).toEqual([1.32, 3.54, 1.3]);
+    const f = fairProbs(odds);
+    expect(f.DC1X).toBeCloseTo(f["1"] + f.X, 12);
+    expect(f.H_O05 + f.H_U05).toBeCloseTo(1, 12);
   });
 });

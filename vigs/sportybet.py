@@ -27,7 +27,7 @@ SPORT = "sr:sport:202120001"          # vFootball
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 # 1 = 1X2, 18 = total goals, 68 = first-half total, 29 = both teams score
-MARKET_IDS = "1,18,68,29"
+MARKET_IDS = "1,18,68,29,10,19,20"  # + double chance, home and away team goals (from 11 Oct 2026)
 PAGE = 100
 RESULT_COLS = ["event_id", "league", "kickoff", "home", "away", "hg", "ag", "ht_hg", "ht_ag"]
 
@@ -150,12 +150,14 @@ def parse_odds(e: dict, field: str = "odds") -> dict[str, float]:
             out.update({"1": prices["Home"], "X": prices["Draw"], "2": prices["Away"]})
         elif mid == "29" and {"Yes", "No"} <= prices.keys():
             out.update({"BY": prices["Yes"], "BN": prices["No"]})
-        elif mid in ("18", "68") and spec.startswith("total="):
+        elif mid == "10" and {"Home or Draw", "Home or Away", "Draw or Away"} <= prices.keys():
+            out.update({"DC1X": prices["Home or Draw"], "DC12": prices["Home or Away"], "DCX2": prices["Draw or Away"]})
+        elif mid in ("18", "68", "19", "20") and spec.startswith("total="):
             line = spec.split("=", 1)[1]
             if len(line) != 3 or line[1] != "." or not line.replace(".", "").isdigit():
                 continue
             key = line.replace(".", "")
-            pre = "FH_" if mid == "68" else ""
+            pre = {"68": "FH_", "19": "H_", "20": "A_"}.get(mid, "")
             over, under = prices.get(f"Over {line}"), prices.get(f"Under {line}")
             if over and under and (field != "odds" or (over > 1.0 and under > 1.0)):
                 out[f"{pre}O{key}"], out[f"{pre}U{key}"] = over, under
@@ -386,10 +388,12 @@ def selection(market: str, event_id: str) -> dict:
     if market in ("BY", "BN"):
         return {"eventId": event_id, "marketId": "29", "specifier": None,
                 "outcomeId": "74" if market == "BY" else "76"}
-    fh = market.startswith("FH_")
-    key = market[3:] if fh else market
+    if market in ("DC1X", "DC12", "DCX2"):
+        return {"eventId": event_id, "marketId": "10", "specifier": None,
+                "outcomeId": {"DC1X": "9", "DC12": "10", "DCX2": "11"}[market]}
+    pre, _, key = market.rpartition("_")
     side, line = key[0], f"{key[1]}.{key[2]}"
-    return {"eventId": event_id, "marketId": "68" if fh else "18",
+    return {"eventId": event_id, "marketId": {"FH": "68", "H": "19", "A": "20"}.get(pre, "18"),
             "specifier": f"total={line}", "outcomeId": "12" if side == "O" else "13"}
 
 

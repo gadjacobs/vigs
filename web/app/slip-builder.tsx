@@ -13,7 +13,7 @@ import type { Pick } from "@/lib/picks";
 import { atLeast } from "@/lib/flex";
 import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
 import type { Query } from "@/lib/query";
-import { slipStats, smartSwitch, toTarget, topN } from "@/lib/slip";
+import { slipStats, smartSwitch, toTarget, topN, MAX_LEGS } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
 
@@ -70,7 +70,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
   const [view, setView] = useState<View>(initialView);
   const { mode, count, target, sort } = q;
   const initial = useMemo(
-    () => initialIds ?? (mode === "target" ? toTarget(cands, target, q.tol, q.maxLegs || 30) : topN(cands, count, sort)).map((p) => p.id),
+    () => initialIds ?? (mode === "target" ? toTarget(cands, target, q.tol, q.maxLegs || MAX_LEGS) : topN(cands, count, sort)).map((p) => p.id),
     [cands, mode, count, target, sort, q.tol, q.maxLegs, initialIds],
   );
   const [watching, setWatching] = useState(false);
@@ -150,7 +150,8 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
         </dl>
         )}
         {stake > 0 && legs.length > 0 && (
-          <p className="returns">₦{stake.toLocaleString("en-NG")} returns <strong className="num">₦{Math.round(stake * s.odds).toLocaleString("en-NG")}</strong> if every leg lands.</p>
+          <p className="returns">₦{stake.toLocaleString("en-NG")} returns <strong className="num">₦{Math.round(stake * s.odds).toLocaleString("en-NG")}</strong> if every leg lands.
+            {" "}On average about <strong className="num">₦{Math.round(stake * s.odds * s.market).toLocaleString("en-NG")}</strong> comes back, by the bookmaker&apos;s own chances; each leg costs its cut.</p>
         )}
         {flex && legs.length > 1 && <FlexTable legs={legs} />}
         {legs.length > 1 && s.model < LOW_CHANCE && (

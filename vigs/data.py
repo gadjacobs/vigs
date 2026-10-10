@@ -11,13 +11,16 @@ from typing import Iterable, Mapping
 
 from .odds import devig
 
-# Market keys: 1 X 2, BY/BN (both teams score yes/no), and over/under lines
-# such as O15, U25, FH_O05 (first half). Column name = "odds_" + key.lower(),
-# except odds_btts_y / odds_btts_n.
+# Market keys: 1 X 2, BY/BN (both teams score yes/no), double chance DC1X,
+# DC12, DCX2, and over/under lines such as O15, U25, FH_O05 (first half),
+# H_O05 / A_O15 (home / away team's own goals). Column name = "odds_" +
+# key.lower(), except odds_btts_y / odds_btts_n.
 _SPECIAL = {"odds_1": "1", "odds_x": "X", "odds_2": "2",
-            "odds_btts_y": "BY", "odds_btts_n": "BN"}
-_OU = re.compile(r"^(FH_)?([OU])(\d)(\d)$")
-_OU_COL = re.compile(r"^odds_(fh_)?([ou])(\d)(\d)$")
+            "odds_btts_y": "BY", "odds_btts_n": "BN",
+            "odds_dc1x": "DC1X", "odds_dc12": "DC12", "odds_dcx2": "DCX2"}
+_OU = re.compile(r"^(FH_|H_|A_)?([OU])(\d)(\d)$")
+_OU_COL = re.compile(r"^odds_(fh_|h_|a_)?([ou])(\d)(\d)$")
+DOUBLE_CHANCE = {"DC1X": ("1", "X"), "DC12": ("1", "2"), "DCX2": ("X", "2")}
 
 
 def market_from_column(col: str) -> str | None:
@@ -26,7 +29,7 @@ def market_from_column(col: str) -> str | None:
     m = _OU_COL.match(col)
     if not m:
         return None
-    return f"{'FH_' if m.group(1) else ''}{m.group(2).upper()}{m.group(3)}{m.group(4)}"
+    return f"{(m.group(1) or '').upper()}{m.group(2).upper()}{m.group(3)}{m.group(4)}"
 
 
 def column_for(market: str) -> str:
@@ -38,7 +41,8 @@ def column_for(market: str) -> str:
 
 def market_label(market: str) -> str:
     names = {"1": "Home win", "X": "Draw", "2": "Away win",
-                    "BY": "Both teams score", "BN": "Not both teams score"}
+             "BY": "Both teams score", "BN": "Not both teams score",
+             "DC1X": "Home or draw", "DC12": "Home or away", "DCX2": "Draw or away"}
     if market in names:
         return names[market]
     m = _OU.match(market)
@@ -46,7 +50,8 @@ def market_label(market: str) -> str:
         return market
     side = "over" if m.group(2) == "O" else "under"
     text = f"{side} {m.group(3)}.{m.group(4)}"
-    return ("First half " + text) if m.group(1) else text.capitalize()
+    lead = {"FH_": "First half ", "H_": "Home team ", "A_": "Away team "}.get(m.group(1) or "")
+    return (lead + text) if lead else text.capitalize()
 
 
 def market_groups(markets: Iterable[str]) -> list[tuple[str, ...]]:
@@ -80,14 +85,20 @@ def settle(market: str, hg: int, ag: int,
         return hg > 0 and ag > 0
     if market == "BN":
         return hg == 0 or ag == 0
+    if market in DOUBLE_CHANCE:
+        return any(settle(x, hg, ag) for x in DOUBLE_CHANCE[market])
     m = _OU.match(market)
     if not m:
         raise ValueError(f"unknown market {market!r}")
     line = int(m.group(3)) + int(m.group(4)) / 10
-    if m.group(1):
+    if m.group(1) == "FH_":
         if ht_hg is None or ht_ag is None:
             return None
         goals = ht_hg + ht_ag
+    elif m.group(1) == "H_":
+        goals = hg
+    elif m.group(1) == "A_":
+        goals = ag
     else:
         goals = hg + ag
     return goals > line if m.group(2) == "O" else goals < line
@@ -98,6 +109,11 @@ def fair_probs(odds: Mapping[str, float], method: str = "proportional") -> dict[
     out: dict[str, float] = {}
     for group in market_groups(odds):
         out.update(zip(group, devig([odds[m] for m in group], method)))
+    # Double chance overlaps, so it can't be de-vigged on its own: its market
+    # chance is the sum of the two de-vigged 1X2 outcomes it covers.
+    for dc, pair in DOUBLE_CHANCE.items():
+        if dc in odds and all(x in out for x in pair):
+            out[dc] = out[pair[0]] + out[pair[1]]
     return out
 
 

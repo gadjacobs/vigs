@@ -590,3 +590,55 @@ main.welcome { max-width: none; padding: 0 0 64px; }
   .w-card { transform: none; }
   .w-final h2 { font-size: 40px; line-height: 42px; }
 }
+
+/* Code card: chance on the ticket, ticker, live colours, alerts */
+.codetop { display: flex; align-items: flex-start; gap: 12px; }
+.codetop .codehead { flex: 1; min-width: 0; }
+.codemeta { margin: 6px 0 0; font-size: 14px; color: var(--ink-muted); }
+.codemeta strong { font-size: 18px; color: var(--ink); }
+.chancebig { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; min-width: 72px; }
+.chancebig > span { font-family: var(--font-num); font-weight: 800; font-size: 40px; line-height: 40px; }
+.chancebig > span small { font-size: 20px; margin-left: 1px; }
+.chancebig em { font-style: normal; font-size: 12px; line-height: 16px; color: var(--ink-muted); margin-top: 2px; white-space: nowrap; }
+.chancebig.good > span { color: var(--fair); }
+.chancebig.low > span { color: var(--ink); }
+.chancebig.done-won > span { color: var(--fair); }
+.chancebig.done-lost > span { color: var(--house); }
+.chancebig b.up { color: var(--fair); }
+.chancebig b.down { color: var(--house); }
+.ticker { display: inline-block; transition: color 600ms ease-out; }
+.ticker.up { color: var(--fair); }
+.ticker.down { color: var(--house); }
+.spark { display: block; width: 100%; max-width: none; height: 28px; margin: 0 0 10px; }
+.alertmark { display: inline-flex; color: var(--ink-muted); }
+.legbar .seg.flash { animation: segflash 1.2s ease-out 3; }
+@keyframes segflash { 50% { background: var(--signal); border-color: var(--signal); } }
+
+ol.legs li { grid-template-columns: 20px minmax(0, 1fr) auto auto; }
+.legmain { min-width: 0; }
+.legmeter { display: block; height: 4px; border-radius: 2px; background: var(--paper-sunk); margin-top: 6px; max-width: 160px; overflow: hidden; }
+.legmeter > span { display: block; height: 100%; background: var(--edge); border-radius: 2px; transition: width 700ms ease-out; }
+.course-on .legmeter > span { background: var(--fair); }
+.course-off .legmeter > span { background: var(--house); }
+.legres { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.legres .score { font-size: 18px; line-height: 22px; border-radius: 4px; padding: 0 4px; transition: background 300ms; }
+.course-on .score, .leg-won .score { color: var(--fair); }
+.course-off .score, .leg-lost .score { color: var(--house); }
+.score.goal { animation: goalflash 1s ease-out 4; }
+@keyframes goalflash { 0%, 100% { background: transparent; } 40% { background: var(--signal); color: var(--on-signal); } }
+.livepill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; line-height: 16px; font-weight: 700; color: var(--house); }
+.livepill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--house); animation: livepulse 1.4s ease-in-out infinite; }
+.livepill.ht { color: var(--ink-muted); }
+.livepill.ht::before { background: var(--edge); animation: none; }
+@keyframes livepulse { 50% { opacity: 0.25; } }
+.legres .legchance { font-weight: 700; color: var(--ink-muted); font-size: 12px; }
+.followbtn { min-height: 36px; min-width: 36px; padding: 0; justify-content: center; border-radius: 50%; border-color: var(--rule); color: var(--ink-muted); background: transparent; }
+.followbtn.on { background: var(--signal); border-color: var(--signal); color: var(--on-signal); }
+.codealerts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 14px; }
+.codealerts > span { font-weight: 700; margin-right: 4px; }
+.codealerts button { min-height: 34px; padding: 4px 12px; border-radius: 999px; font-size: 13px; }
+.codealerts button[aria-checked="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+@media (prefers-reduced-motion: reduce) {
+  .score.goal, .legbar .seg.flash, .livepill::before { animation: none; }
+  .legmeter > span, .ticker { transition: none; }
+}

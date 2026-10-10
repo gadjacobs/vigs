@@ -6,11 +6,14 @@ export function settle(market: string, hg: number, ag: number, htHg: number | nu
   if (market === "2") return hg < ag;
   if (market === "BY") return hg > 0 && ag > 0;
   if (market === "BN") return hg === 0 || ag === 0;
-  const m = /^(FH_)?([OU])(\d)(\d)$/.exec(market);
+  if (market === "DC1X") return hg >= ag;
+  if (market === "DC12") return hg !== ag;
+  if (market === "DCX2") return hg <= ag;
+  const m = /^(FH_|H_|A_)?([OU])(\d)(\d)$/.exec(market);
   if (!m) throw new Error(`unknown market ${market}`);
   const line = Number(m[3]) + Number(m[4]) / 10;
-  let goals = hg + ag;
-  if (m[1]) {
+  let goals = m[1] === "H_" ? hg : m[1] === "A_" ? ag : hg + ag;
+  if (m[1] === "FH_") {
     if (htHg === null || htAg === null) return null;
     goals = htHg + htAg;
   }
@@ -27,8 +30,10 @@ export function score(s: unknown): [number, number] | null {
 export function marketKey(marketId: string, specifier: string | null | undefined, outcomeId: string): string | null {
   if (marketId === "1") return ({ "1": "1", "2": "X", "3": "2" } as Record<string, string>)[outcomeId] ?? null;
   if (marketId === "29") return outcomeId === "74" ? "BY" : outcomeId === "76" ? "BN" : null;
+  if (marketId === "10") return ({ "9": "DC1X", "10": "DC12", "11": "DCX2" } as Record<string, string>)[outcomeId] ?? null;
   const t = /^total=(\d)\.(\d)$/.exec(specifier ?? "");
-  if ((marketId === "18" || marketId === "68") && t && (outcomeId === "12" || outcomeId === "13"))
-    return `${marketId === "68" ? "FH_" : ""}${outcomeId === "12" ? "O" : "U"}${t[1]}${t[2]}`;
+  const pre: Record<string, string> = { "18": "", "68": "FH_", "19": "H_", "20": "A_" };
+  if (marketId in pre && t && (outcomeId === "12" || outcomeId === "13"))
+    return `${pre[marketId]}${outcomeId === "12" ? "O" : "U"}${t[1]}${t[2]}`;
   return null;
 }

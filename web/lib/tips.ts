@@ -7,7 +7,7 @@ import { candidates } from "./picks";
 import { chance, oneIn, slipConfidence } from "./plain";
 import type { Payload } from "./push";
 import { parseQuery, queryString } from "./query";
-import { slipStats, toTarget, topN } from "./slip";
+import { slipStats, toTarget, topN, MAX_LEGS } from "./slip";
 import { upcoming } from "./sportybet";
 
 const lagos = (ms: number) =>
@@ -19,7 +19,7 @@ export async function buildTip(qs: string, now: number): Promise<Payload> {
   const url = `/?${queryString(q)}`;
   const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
   const r = candidates(model, fixtures, { ...q, now }, blend);
-  const legs = q.mode === "target" ? toTarget(r.candidates, q.target, q.tol, q.maxLegs || 30) : topN(r.candidates, q.count, q.sort);
+  const legs = q.mode === "target" ? toTarget(r.candidates, q.target, q.tol, q.maxLegs || MAX_LEGS) : topN(r.candidates, q.count, q.sort);
   const markets = q.markets.map((m) => SHORT_LABELS[m] ?? m).join(", ");
   if (!legs.length)
     return { title: "Vig: nothing to book", url, tag: "tip",

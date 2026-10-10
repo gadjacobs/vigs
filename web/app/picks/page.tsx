@@ -1,3 +1,4 @@
+import { MAX_LEGS } from "@/lib/slip";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { lagos } from "../pick-row";
@@ -17,7 +18,7 @@ import { SlateCard } from "./slate-card";
 
 export const dynamic = "force-dynamic";
 
-const MAX_ON_SLIP = 30;
+const MAX_ON_SLIP = MAX_LEGS;
 type SP = { set?: string; bar?: string; odds?: string; n?: string };
 
 const ABOUT: Record<SetId, string> = {

@@ -5,11 +5,11 @@
 /** The selection that wins exactly when `market` loses. 1X2 legs are covered
  * by double chance, which SportyBet offers as one selection. */
 export function opposite(market: string): string | null {
-  const dc: Record<string, string> = { "1": "DCX2", X: "DC12", "2": "DC1X" };
+  const dc: Record<string, string> = { "1": "DCX2", X: "DC12", "2": "DC1X", DCX2: "1", DC12: "X", DC1X: "2" };
   if (dc[market]) return dc[market];
   if (market === "BY") return "BN";
   if (market === "BN") return "BY";
-  const m = /^(FH_)?([OU])(\d\d)$/.exec(market);
+  const m = /^(FH_|H_|A_)?([OU])(\d\d)$/.exec(market);
   return m ? `${m[1] ?? ""}${m[2] === "O" ? "U" : "O"}${m[3]}` : null;
 }
 

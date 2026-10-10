@@ -39,7 +39,19 @@ export async function loadModel(): Promise<ModelFile> {
   return model;
 }
 
+// The same league parameters and teams always give the same probabilities, and
+// a page asks for every market of every match, so each grid is worked out once.
+const memo = new WeakMap<LeagueParams, Map<string, Record<string, number> | null>>();
+
 function predict(p: LeagueParams, home: string, away: string): Record<string, number> | null {
+  let m = memo.get(p);
+  if (!m) memo.set(p, (m = new Map()));
+  const key = `${home}|${away}`;
+  if (!m.has(key)) m.set(key, compute(p, home, away));
+  return m.get(key)!;
+}
+
+function compute(p: LeagueParams, home: string, away: string): Record<string, number> | null {
   if (!(home in p.attack) || !(away in p.attack)) return null;
   const lh = p.home * p.attack[home] * p.defence[away];
   const la = p.attack[away] * p.defence[home];
@@ -87,6 +99,8 @@ export function history(
 ): { rate: number | null; n: number } {
   const h = model.history[league]?.[home]?.home;
   const a = model.history[league]?.[away]?.away;
+  // A model file made before a market was added has no counts for it.
+  if ((h && !(market in h)) || (a && !(market in a))) return { rate: null, n: 0 };
   const n = (h?.n ?? 0) + (a?.n ?? 0);
   const hits = (h?.[market] ?? 0) + (a?.[market] ?? 0);
   return { rate: n ? hits / n : null, n };

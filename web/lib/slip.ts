@@ -5,6 +5,9 @@ import type { Pick } from "./picks";
 
 export type SortKey = "likely" | "edge";
 
+/** SportyBet takes up to 50 selections on one slip. */
+export const MAX_LEGS = 50;
+
 /** Combined odds, Vig estimate, market chance and edge of a slip. */
 export function slipStats(picks: Pick[]) {
   const odds = picks.reduce((a, p) => a * p.odds, 1);
@@ -33,7 +36,7 @@ export function topN(cands: Pick[], n: number, sort: SortKey): Pick[] {
  * that is also the best expected return. Exact multiple-choice knapsack over
  * log-odds, at most one leg per match and at most `maxLegs` legs.
  */
-export function toTarget(cands: Pick[], target: number, tolerance = 0.1, maxLegs = 30): Pick[] {
+export function toTarget(cands: Pick[], target: number, tolerance = 0.1, maxLegs = MAX_LEGS): Pick[] {
   const R = 0.005; // log-odds resolution
   const lo = Math.max(1, Math.ceil(Math.log(target * (1 - tolerance)) / R));
   const hi = Math.floor(Math.log(target * (1 + tolerance)) / R);

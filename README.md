@@ -112,11 +112,22 @@ view stays on the card. "Full numbers" shows the original layout.
 ## Our picks
 
 **Cooked slips** come first: each time a round is published, Vig cooks named
-slips from it (Steady, Double up, Fiver, Tenner, Goal rush, Tight games, Bold,
-Draw trio/four), books each one and shows the code, ready to open in SportyBet
+slips from it (Steady, Double up, Fiver, Tenner, Long shot, Goal rush, Tight
+games, Bold, Draw trio/four), books each one and shows the code, ready to open in SportyBet
 or tweak in the editor. A slip is only cooked when enough legs clear its
 confidence bar, so the mix changes with the round. Every cooked code is logged
-once (account "vig") and scored on Record by style.
+once (account "vig") and scored on Record by style. Long shot is the likeliest
+combination of legs at 75% or better that reaches about 20 odds (up to 50
+legs); every leg pays the bookmaker's cut, so it lands rarely.
+
+**Markets** cover 1X2, double chance (home or draw, home or away, draw or
+away), total goals and first-half lines, both teams to score, and each team's
+own goals (home or away team over/under 0.5 to 3.5). On SportyBet's own
+probabilities double chance pays back about ₦96.4 per ₦100 and team goals
+about ₦96 at the 0.5 and 1.5 lines, against ₦96.9 on 1X2: they land often but
+are not cheaper. Double chance's market chance is the sum of the two de-vigged
+1X2 outcomes it covers. Slips take up to 50 legs, as SportyBet does, and the
+slip shows what comes back on average by the bookmaker's own chances.
 
 Below them, four sets to build your own, each from what the data has shown, ready to book or edit
 (graded Avoid excluded):
@@ -196,7 +207,9 @@ SportyBet's own live probability (1 or 0 once the score decides it, so an over
 that has gone over shows as landed at once), multiplied across the code, with
 an arrow for the last move and a line of how it has swung. Legs not yet started
 use the market chance. A leg that has ended or is already beaten is read again
-from the share endpoint straight away.
+from the share endpoint straight away. The chance to land sits large on the
+ticket and rolls to each new value; live minutes pulse, scores are blue while a
+leg is on course and red while it is off, and a goal flashes the score.
 
 **Hedge** appears when one leg is left. It prices the selection that wins
 exactly when that leg loses (double chance for home/draw/away, the other side
@@ -213,7 +226,11 @@ loses (as soon as the score beats a leg, without waiting for the match to end),
 a goal that moves a code's chance by 15 points or more, when one leg is left
 (with its chance, to ride or hedge), a tip slip at chosen Lagos times built
 with the account's last Tonight filters, and an Our picks set on a schedule
-(every 1 to 12 hours between chosen hours). On iPhone, add Vig to the Home
+(every 1 to 12 hours between chosen hours). Each open code can be set to
+**Every goal** (every goal in any of its legs, plus the result), **Key
+moments** (the device's usual alerts) or **Off**, and the bell on any leg
+follows that match on its own: kick-off, every goal, half time and full time.
+On iPhone, add Vig to the Home
 Screen first. The app also offers a reload, in a toast, when a new version is
 deployed or a new round is published. Setup, once:
 

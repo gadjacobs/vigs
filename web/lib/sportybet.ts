@@ -63,10 +63,10 @@ export function parseOdds(e: Partial<ApiEvent>, field: "odds" | "probability" = 
       Object.assign(out, { DC1X: prices["Home or Draw"], DC12: prices["Home or Away"], DCX2: prices["Draw or Away"] });
     } else if (id === "29" && prices.Yes && prices.No) {
       Object.assign(out, { BY: prices.Yes, BN: prices.No });
-    } else if ((id === "18" || id === "68") && /^total=\d\.\d$/.test(spec)) {
+    } else if ((id === "18" || id === "68" || id === "19" || id === "20") && /^total=\d\.\d$/.test(spec)) {
       const line = spec.slice(6);
       const key = line.replace(".", "");
-      const pre = id === "68" ? "FH_" : "";
+      const pre = ({ "68": "FH_", "19": "H_", "20": "A_" } as Record<string, string>)[id] ?? "";
       const over = prices[`Over ${line}`];
       const under = prices[`Under ${line}`];
       if (field === "probability" ? over > 0 && under > 0 : over > 1 && under > 1) {
@@ -92,7 +92,7 @@ async function fetchUpcoming(): Promise<Fixture[]> {
   const out: Fixture[] = [];
   for (let page = 1; page < 10; page++) {
     const q = new URLSearchParams({
-      sportId: SPORT, marketId: "1,18,68,29", pageSize: "100", pageNum: String(page), option: "1",
+      sportId: SPORT, marketId: "1,18,68,29,10,19,20", pageSize: "100", pageNum: String(page), option: "1",
     });
     const data = await call<{ totalNum?: number; tournaments?: { events: ApiEvent[] }[] }>(
       `${BASE}/pcUpcomingEvents?${q}`,
@@ -171,11 +171,12 @@ export function selection(market: string, eventId: string): Selection {
     return { eventId, marketId: "1", specifier: null, outcomeId: { "1": "1", X: "2", "2": "3" }[market] };
   if (market === "BY" || market === "BN")
     return { eventId, marketId: "29", specifier: null, outcomeId: market === "BY" ? "74" : "76" };
-  const fh = market.startsWith("FH_");
-  const key = fh ? market.slice(3) : market;
+  const cut = market.lastIndexOf("_");
+  const pre = cut < 0 ? "" : market.slice(0, cut);
+  const key = market.slice(cut + 1);
   return {
     eventId,
-    marketId: fh ? "68" : "18",
+    marketId: ({ FH: "68", H: "19", A: "20" } as Record<string, string>)[pre] ?? "18",
     specifier: `total=${key[1]}.${key[2]}`,
     outcomeId: key[0] === "O" ? "12" : "13",
   };

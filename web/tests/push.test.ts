@@ -119,3 +119,22 @@ describe("live notifications", () => {
     expect(liveNews({ ...w, settled: { "a|O15": true }, told: ["last"] }, { "b|1": lv("0:0", 0.7) }).payload).toBeNull();
   });
 });
+
+import { fixtureNews, type FollowedFixture } from "../lib/push";
+
+describe("followed matches", () => {
+  const f: FollowedFixture = { eventId: "e", home: "ARS", away: "EVE", league: "England", kickoff: 1000, subs: ["s"] };
+  const ev = (phase: string, score: [number, number], minute: number | null = 30) => ({ phase, minute, score });
+
+  it("announces kick-off once, then every goal, half time and full time", () => {
+    const k = fixtureNews(f, ev("H1", [0, 0], 1), 2000);
+    expect(k.payloads.map((p) => p.title)).toEqual(["Kick-off: ARS v EVE"]);
+    const g = fixtureNews({ ...f, score: k.score, told: k.told }, ev("H1", [1, 0], 31), 3000);
+    expect(g.payloads.map((p) => p.title)).toEqual(["⚽ ARS 1–0 EVE (31')"]);
+    const h = fixtureNews({ ...f, score: "1:0", told: g.told }, ev("HT", [1, 0], 45), 4000);
+    expect(h.payloads.map((p) => p.title)).toEqual(["Half time: ARS 1–0 EVE"]);
+    expect(fixtureNews({ ...f, score: "1:0", told: h.told }, ev("HT", [1, 0], 45), 5000).payloads).toEqual([]);
+    const ft = fixtureNews({ ...f, score: "1:0", told: h.told }, ev("End", [2, 1], 90), 6000);
+    expect([ft.done, ft.payloads[0].title]).toEqual([true, "Full time: ARS 2–1 EVE"]);
+  });
+});

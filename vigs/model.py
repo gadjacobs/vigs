@@ -13,6 +13,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 LINES = ("05", "15", "25", "35", "45")
+TEAM_LINES = ("05", "15", "25", "35")  # home / away team goals
 
 
 @dataclass
@@ -96,6 +97,14 @@ def probs(lh: float, la: float, fh_share: float) -> dict[str, float]:
                     out["BY" if i and j else "BN"] += w
                 for ln in LINES:
                     out[f"{pre}{'O' if i + j > int(ln) / 10 else 'U'}{ln}"] += w
+        if not pre:
+            # Each side's own goals: home and away team over/under.
+            for side, pm in (("H_", ph), ("A_", pa)):
+                for ln in TEAM_LINES:
+                    over = sum(x for k, x in enumerate(pm) if k > int(ln) / 10)
+                    out[f"{side}O{ln}"] += over
+                    out[f"{side}U{ln}"] += sum(pm) - over
+    out["DC1X"], out["DC12"], out["DCX2"] = out["1"] + out["X"], out["1"] + out["2"], out["X"] + out["2"]
     return dict(out)
 
 
@@ -131,8 +140,9 @@ def predict_interval(main: dict[str, LeagueModel], boots: list[dict[str, LeagueM
     return p[market], lo, hi
 
 
-HISTORY_MARKETS = ("1", "X", "2", "BY", "BN") + tuple(
-    f"{pre}{side}{ln}" for pre in ("", "FH_") for side in "OU" for ln in LINES)
+HISTORY_MARKETS = ("1", "X", "2", "BY", "BN", "DC1X", "DC12", "DCX2") + tuple(
+    f"{pre}{side}{ln}" for pre in ("", "FH_") for side in "OU" for ln in LINES) + tuple(
+    f"{pre}{side}{ln}" for pre in ("H_", "A_") for side in "OU" for ln in TEAM_LINES)
 
 
 def export(rows: list[dict], reps: int = 20, seed: int = 0) -> dict:
