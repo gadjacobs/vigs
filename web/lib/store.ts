@@ -75,6 +75,8 @@ export async function getJson<T>(key: string): Promise<T | null> {
 }
 export const setJson = (key: string, v: unknown) => cmd("SET", P + key, JSON.stringify(v));
 export const setJsonIfAbsent = (key: string, v: unknown) => cmd("SET", P + key, JSON.stringify(v), "NX");
+/** A short-lived claim: true if this caller got it. */
+export const claim = async (key: string, seconds: number) => (await cmd<string | null>("SET", P + key, "1", "NX", "EX", seconds)) === "OK";
 export const del = (key: string) => cmd("DEL", P + key);
 export const push = (list: string, v: unknown) => cmd<number>("RPUSH", P + list, JSON.stringify(v));
 export async function range<T>(list: string, start: number, stop: number): Promise<T[]> {

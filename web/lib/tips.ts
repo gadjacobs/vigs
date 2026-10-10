@@ -36,6 +36,14 @@ export async function buildTip(qs: string, now: number): Promise<Payload> {
 
 /** An Our picks notification for the chosen set, priced live. */
 export async function buildOurs(setId: string, now: number): Promise<Payload> {
+  if (setId === "cooked") {
+    const { currentSlates } = await import("./kitchen");
+    const c = await currentSlates(now);
+    if (!c.slates.length) return { title: "Vig: cooked slips", body: "Nothing published right now is good enough to cook a slip.", url: "/picks", tag: "ours" };
+    const first = Math.min(...c.slates.map((s) => s.first));
+    const list = c.slates.slice(0, 4).map((s) => `${s.name} ${s.odds.toFixed(2)} (${chance(s.chance)})`).join(", ");
+    return { title: `Vig: ${c.slates.length} slips cooked`, body: `${list}. From ${lagos(first)}. Codes ready; tap to open.`, url: "/picks", tag: "ours" };
+  }
   const set = (SETS.find((x) => x.id === setId) ?? SETS[0]);
   const url = `/picks?set=${set.id}`;
   const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);

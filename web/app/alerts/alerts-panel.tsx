@@ -5,7 +5,7 @@ import { SETS } from "@/lib/ourpicks";
 import type { OursPrefs } from "@/lib/push";
 
 const EVERY = [[0, "Off"], [1, "Every hour"], [2, "Every 2 hours"], [3, "Every 3 hours"], [6, "Every 6 hours"], [12, "Twice a day"]] as const;
-const OURS_DEFAULT: OursPrefs = { set: "safe", every: 0, from: "09:00", to: "23:00" };
+const OURS_DEFAULT: OursPrefs = { set: "cooked", every: 0, from: "09:00", to: "23:00" };
 
 const PRESETS = ["09:00", "13:00", "18:00", "20:00", "22:00"];
 
@@ -134,6 +134,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
               <label className="field">Set
                 <select value={ours.set} disabled={pending}
                   onChange={(e) => { const o = { ...ours, set: e.target.value }; setOurs(o); if (sub) save(sub, results, tips, "Set saved.", o); }}>
+                  <option value="cooked">Cooked slips (codes ready)</option>
                   {SETS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
                 </select>
               </label>

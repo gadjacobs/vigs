@@ -46,6 +46,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   from SportyBet; it never places bets. Record maths stays in `vigs/record.py`. Booking codes are created with the `OperId: 2` header.
 - Accounts (`web/lib/auth.ts`, `profile.ts`): `ACCOUNTS` or `APP_PASSWORD`; a profile
   per account in the store syncs codes, filters, view and theme. Never store SportyBet details.
+- Cooked slips (`web/lib/slates.ts`, `kitchen.ts`): cooked and booked once per published
+  round (by the tick or the first viewer), stored as `slates`; each code logged once as
+  user "vig". Never show share-endpoint odds after kickoff (they are in-play prices).
+- Google sign-in (`/api/auth/google`): `GOOGLE_ACCOUNTS` allowlist maps emails to accounts.
 - Our picks (`web/lib/ourpicks.ts`, `/picks`): sets safe/odds/bold/draws; `vigs ourpicks`
   logs the safe set hourly. Booked codes go to the store's `codelog` with the server's
   clock and are copied into the ledger by `vigs ledger import-codes`; legs that had

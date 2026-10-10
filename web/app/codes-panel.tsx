@@ -6,11 +6,11 @@ import { CopyButton } from "./copy-button";
 import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
 import type { SavedCode as Saved } from "@/lib/profile";
+import { shareUrl } from "@/lib/share";
 
 export type { Saved };
 export const CODES_KEY = "vig_codes";
 const SHOW = 24 * 3600 * 1000; // list a code until a day after its last kickoff
-export const shareUrl = (code: string) => `https://www.sportybet.com/ng/?shareCode=${code}`;
 
 function readAll(): Saved[] {
   try {
@@ -43,6 +43,8 @@ export function CodesPanel() {
   const [status, setStatus] = useState<Record<string, Tracked | { code: string; error: string }>>({});
   const [entry, setEntry] = useState("");
   const [pending, start] = useTransition();
+  const [filter, setFilter] = useState<"all" | Tracked["state"]>("all");
+  const [open, setOpen] = useState<Set<string>>(new Set());
 
   const refresh = useCallback((list: Saved[]) => {
     if (!list.length) return;
@@ -82,13 +84,22 @@ export function CodesPanel() {
     start(async () => {
       const [r] = await trackCodes([code]);
       setStatus((s) => ({ ...s, [code]: r }));
-      if ("legs" in r) rememberCode({ code, at: Date.now(), legs: r.legs.length, odds: r.odds, last: r.lastKickoff });
+      if ("legs" in r) rememberCode({ code, at: Date.now(), legs: r.legs.length, odds: r.odds ?? 0, last: r.lastKickoff });
       setEntry("");
     });
   };
 
   const tracked = codes.map((c) => ({ c, t: status[c.code] && "legs" in status[c.code] ? (status[c.code] as Tracked) : null }));
   const count = (st: Tracked["state"]) => tracked.filter((x) => x.t?.state === st).length;
+  const shown = tracked.filter((x) => filter === "all" || x.t?.state === filter);
+  const toggle = (code: string) => setOpen((o) => {
+    const n = new Set(o);
+    if (n.has(code)) n.delete(code);
+    else n.add(code);
+    return n;
+  });
+  const FILTERS: [typeof filter, string][] = [["all", `All ${codes.length}`], ["open", `In play ${count("open")}`],
+    ["won", `Landed ${count("won")}`], ["lost", `Lost ${count("lost")}`]];
 
   return (
     <section id="codes" className="codes-block" aria-labelledby="codes-title">
@@ -101,28 +112,35 @@ export function CodesPanel() {
       </form>
 
       {codes.length > 0 && (
-        <p className="codesum" id="codes-title">
-          <span><strong className="num">{count("open")}</strong> in play</span>
-          <span><strong className="num">{count("won")}</strong> landed</span>
-          <span><strong className="num">{count("lost")}</strong> lost</span>
-          <span className="muted">Updates every minute{pending ? "…" : ""}</span>
-        </p>
+        <div className="codefilters" role="radiogroup" aria-label="Show codes" id="codes-title">
+          {FILTERS.map(([v, label]) => (
+            <button key={v} type="button" role="radio" aria-checked={filter === v} onClick={() => setFilter(v)}>{label}</button>
+          ))}
+          <span className="muted">{pending ? "Updating…" : "Updates every minute"}</span>
+        </div>
       )}
       {codes.length === 0 && <p className="note">No codes yet. Book a slip on Tonight or Our picks, or track any code above.</p>}
 
+      {codes.length > 0 && !shown.length && <p className="note">No codes here.</p>}
       <ul className="codecards">
-        {tracked.map(({ c, t }) => {
+        {shown.map(({ c, t }) => {
           const err = status[c.code] && "error" in status[c.code];
           const legs = t?.legs ?? [];
           const next = legs.filter((l) => l.status === "waiting").sort((a, b) => a.kickoff - b.kickoff)[0];
           const left = legs.filter((l) => l.status === "waiting" || l.status === "playing").length;
+          const isOpen = open.has(c.code);
+          const odds = t ? t.odds : c.odds || null;
           return (
-            <li key={c.code} className={`codecard ${t ? `is-${t.state}` : ""}`}>
+            <li key={c.code} className={`codecard ${t ? `is-${t.state}` : ""} ${isOpen ? "open" : ""}`}
+              onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button")) toggle(c.code); }}>
               <div className="codehead">
                 <strong className="num codeid">{c.code}</strong>
                 {t && <span className={`badge state-${t.state}`}>{STATE[t.state]}</span>}
                 {err && <span className="badge state-lost">Unavailable</span>}
-                <span className="codeodds"><span className="num">{(t?.odds ?? c.odds).toFixed(2)}</span> odds · {legs.length || c.legs} legs</span>
+                <span className="codeodds">
+                  {odds ? <><span className="num">{odds.toFixed(2)}</span> odds</> : <span title="Some legs were never seen before kickoff">odds unknown</span>}
+                  {" · "}{legs.length || c.legs} legs
+                </span>
               </div>
               {legs.length > 0 && (
                 <div className="legbar" role="img" aria-label={`${t!.won} won, ${t!.lost} lost, ${left} to play`}>
@@ -137,24 +155,28 @@ export function CodesPanel() {
               <div className="row codeactions">
                 <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>
                 <CopyButton text={c.code} />
+                {legs.length > 0 && (
+                  <button type="button" className="legstoggle" aria-expanded={isOpen} onClick={() => toggle(c.code)}>
+                    {isOpen ? "Hide legs ▴" : "Show legs ▾"}
+                  </button>
+                )}
               </div>
-              {legs.length > 0 && (
-                <details className="legsbox">
-                  <summary>Legs</summary>
-                  <ol className="legs">
-                    {legs.map((l) => (
-                      <li key={l.eventId} className={`leg-${l.status}`}>
-                        <span className="legicon" aria-hidden="true">{ICON[l.status]}</span>
-                        <span>{l.home} v {l.away}<small>{l.label} at {l.odds.toFixed(2)}</small></span>
-                        <span className="legres">
-                          {l.status === "waiting" ? lagos(l.kickoff) : l.status === "playing" ? "Playing" :
-                            `${l.score}${l.market.startsWith("FH_") && l.ht ? ` (HT ${l.ht})` : ""}`}
-                          <span className="sr-only"> {l.status}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                </details>
+              {isOpen && legs.length > 0 && (
+                <ol className="legs">
+                  {legs.map((l) => (
+                    <li key={l.eventId} className={`leg-${l.status}`}>
+                      <span className="legicon" aria-hidden="true">{ICON[l.status]}</span>
+                      <span>{l.home} v {l.away}
+                        <small>{l.label} · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"} · {lagos(l.kickoff)}</small>
+                      </span>
+                      <span className="legres">
+                        {l.status === "waiting" ? lagos(l.kickoff) : l.status === "playing" ? "Playing" :
+                          `${l.score}${l.market.startsWith("FH_") && l.ht ? ` (HT ${l.ht})` : ""}`}
+                        <span className="sr-only"> {l.status}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
               )}
             </li>
           );

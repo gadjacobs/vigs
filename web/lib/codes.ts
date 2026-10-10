@@ -1,20 +1,26 @@
 import { MARKET_LABELS } from "./markets";
 import { decodeShare } from "./sportybet";
 import { marketKey, score, settle } from "./settle";
+import { getJson, setJson, storeReady } from "./store";
 
 export type LegStatus = "waiting" | "playing" | "won" | "lost" | "unknown";
 export type Leg = {
   eventId: string; league: string; home: string; away: string; kickoff: number;
-  market: string; label: string; odds: number; status: LegStatus; score: string | null; ht: string | null;
+  market: string; label: string; status: LegStatus; score: string | null; ht: string | null;
+  // Prematch price. SportyBet's share endpoint gives the prematch price only
+  // until kickoff; afterwards it returns a different, in-play price, so that one
+  // is never shown. null when Vig never saw the leg before kickoff.
+  odds: number | null;
+  shareOdds: number; // what the share endpoint returned this time
 };
 export type CodeState = "open" | "won" | "lost";
 export type Tracked = {
-  code: string; legs: Leg[]; state: CodeState; won: number; lost: number; odds: number;
+  code: string; legs: Leg[]; state: CodeState; won: number; lost: number; odds: number | null;
   lastKickoff: number; deadline: number; unavailable: number;
 };
 
 /** Where a booked code stands, from one read of SportyBet's share endpoint. */
-export async function trackCode(code: string, now = Date.now()): Promise<Tracked> {
+export async function trackCode(code: string, now = Date.now(), prematch: Record<string, number> = {}): Promise<Tracked> {
   const d = await decodeShare(code);
   const legs: Leg[] = (d.outcomes ?? []).map((e) => {
     const m = e.markets?.[0];
@@ -31,7 +37,8 @@ export async function trackCode(code: string, now = Date.now()): Promise<Tracked
     }
     return {
       eventId: e.eventId, league: e.sport?.category?.name ?? "", home: e.homeTeamName, away: e.awayTeamName,
-      kickoff, market, label: MARKET_LABELS[market] ?? m?.desc ?? "Selection", odds: Number(o?.odds ?? 1),
+      kickoff, market, label: MARKET_LABELS[market] ?? m?.desc ?? "Selection",
+      odds: prematch[e.eventId] ?? (kickoff > now && o?.odds ? Number(o.odds) : null), shareOdds: Number(o?.odds ?? 0),
       status, score: ft ? ft.join(":") : null, ht: ht ? ht.join(":") : null,
     };
   });
@@ -40,7 +47,7 @@ export async function trackCode(code: string, now = Date.now()): Promise<Tracked
   return {
     code, legs, won, lost,
     state: lost ? "lost" : legs.length && won === legs.length ? "won" : "open",
-    odds: legs.reduce((a, l) => a * l.odds, 1),
+    odds: legs.length && legs.every((l) => l.odds) ? legs.reduce((a, l) => a * (l.odds as number), 1) : null,
     lastKickoff: Math.max(0, ...legs.map((l) => l.kickoff)),
     deadline: Number(d.deadline ?? 0),
     unavailable: (d.unavailableOutcomes ?? []).length,
@@ -49,7 +56,7 @@ export async function trackCode(code: string, now = Date.now()): Promise<Tracked
 
 /** One line for a notification or a status chip. */
 export function summary(t: Tracked): string {
-  if (t.state === "won") return `Booking ${t.code} landed: all ${t.legs.length} legs won at ${t.odds.toFixed(2)}.`;
+  if (t.state === "won") return `Booking ${t.code} landed: all ${t.legs.length} legs won${t.odds ? ` at ${t.odds.toFixed(2)}` : ""}.`;
   if (t.state === "lost") {
     const miss = t.legs.find((l) => l.status === "lost")!;
     return `Booking ${t.code} lost: ${miss.home} v ${miss.away}, ${miss.label.toLowerCase()}, ended ${miss.score}` +
@@ -57,4 +64,26 @@ export function summary(t: Tracked): string {
       `${t.won + t.lost < t.legs.length ? " so far" : ""}.`;
   }
   return `Booking ${t.code}: ${t.won} of ${t.legs.length} legs won, ${t.legs.length - t.won} to go.`;
+}
+
+// Prematch prices kept in the store: written when Vig books a code, and filled
+// in whenever a code is tracked before its legs kick off.
+
+export async function trackWithPrematch(code: string, now = Date.now()): Promise<Tracked> {
+  const key = `codeodds:${code}`;
+  const pre = (storeReady() ? await getJson<Record<string, number>>(key).catch(() => null) : null) ?? {};
+  const t = await trackCode(code, now, pre);
+  const fresh = t.legs.filter((l) => !(l.eventId in pre) && l.kickoff > now && l.shareOdds > 1);
+  if (fresh.length && storeReady()) {
+    for (const l of fresh) pre[l.eventId] = l.shareOdds;
+    await setJson(key, pre).catch(() => undefined);
+  }
+  return t;
+}
+
+export async function rememberPrematch(code: string, odds: Record<string, number>) {
+  if (!storeReady()) return;
+  const key = `codeodds:${code}`;
+  const pre = (await getJson<Record<string, number>>(key).catch(() => null)) ?? {};
+  await setJson(key, { ...odds, ...pre });
 }

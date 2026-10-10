@@ -342,3 +342,31 @@ form.track { margin: 0; }
 .longshot { color: var(--house); }
 .barpick { flex-wrap: wrap; }
 .barpick a.button { white-space: nowrap; }
+.codefilters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 16px 0 12px; }
+.codefilters button { min-height: 36px; padding: 4px 12px; border-radius: 999px; font-size: 14px; }
+.codefilters button[aria-checked="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.codefilters .muted { font-size: 13px; margin-left: 4px; }
+.codecard { cursor: pointer; }
+.legstoggle { margin-left: auto; }
+.codecard ol.legs small strong { color: var(--ink); }
+
+/* Cooked slips */
+.slates { list-style: none; padding: 0; margin: 0 0 32px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.slate { background: var(--paper); border: 1px solid var(--rule); border-top: 5px solid var(--edge); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.slate.conf-edge-high { border-top-color: var(--ink); }
+.slate.conf-edge-medium { border-top-color: var(--signal); }
+.slate.conf-edge-low { border-top-color: var(--house); }
+.slatehead { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.slatehead h3 { margin: 0; font-family: var(--font-num); font-weight: 800; font-size: 26px; line-height: 28px; }
+.slatewin { margin-left: auto; font-size: 13px; }
+.slatestats { margin: 0; font-size: 15px; }
+.slatestats .num { font-size: 20px; }
+.slatelegs { list-style: none; padding: 0; margin: 4px 0; font-size: 14px; }
+.slatelegs li { display: grid; grid-template-columns: 44px 1fr auto 36px; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--rule); }
+.slatelegs small { display: block; color: var(--ink-muted); font-size: 12px; line-height: 16px; }
+.slatelegs .muted { text-align: right; font-size: 13px; }
+.slateactions { margin-top: 6px; }
+.slatecode { font-size: 22px; letter-spacing: 1px; margin-right: auto; }
+.slateactions .button, .slateactions button { min-height: 40px; padding: 6px 12px; font-size: 14px; }
+.buildown { font-family: var(--font-num); font-weight: 800; font-size: 28px; margin: 8px 0 12px; }
+.orline { margin: 12px 0; text-align: center; } main > .login + .login { margin-top: 0; }

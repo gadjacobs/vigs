@@ -10,6 +10,7 @@ export type Profile = {
   query?: string;
   view?: "simple" | "detailed";
   theme?: "system" | "light" | "dark";
+  who?: { email: string; name: string; picture: string; via: "google" };
   updated: number;
 };
 

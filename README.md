@@ -111,7 +111,14 @@ view stays on the card. "Full numbers" shows the original layout.
 
 ## Our picks
 
-Four ready-made sets, each from what the data has shown, ready to book or edit
+**Cooked slips** come first: each time a round is published, Vig cooks named
+slips from it (Steady, Double up, Fiver, Tenner, Goal rush, Tight games, Bold,
+Draw trio/four), books each one and shows the code, ready to open in SportyBet
+or tweak in the editor. A slip is only cooked when enough legs clear its
+confidence bar, so the mix changes with the round. Every cooked code is logged
+once (account "vig") and scored on Record by style.
+
+Below them, four sets to build your own, each from what the data has shown, ready to book or edit
 (graded Avoid excluded):
 
 - **Safe ~90%**: per published match, the best-paying selection with an
@@ -141,6 +148,14 @@ leg by leg.
 
 ## Accounts
 
+**Google sign-in** (recommended): create an OAuth client (Google Cloud Console →
+APIs & Services → Credentials → OAuth client ID → Web application) with the
+redirect URI `https://<your app>/api/auth/google/callback`, then set in Vercel
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SECRET` (a long random
+string) and `GOOGLE_ACCOUNTS="you@gmail.com=me,friend@gmail.com=ada"`. Only
+listed addresses get in, each as the named account (map yours to `me` to keep
+what that account already has). Password sign-in keeps working alongside.
+
 Signing in picks the account. `ACCOUNTS="name:password,name2:password2"` in
 Vercel lists them (passwords must differ: the form asks only for the
 password); without it, `APP_PASSWORD` is one account called "me". With the
@@ -150,7 +165,12 @@ each device already had. Push tips follow the account's latest filters.
 
 ## Your codes and notifications
 
-**Codes** lists the account's booked codes for a day after their last kickoff, and any code typed into "Track a code". One read of
+**Codes** lists the account's booked codes for a day after their last kickoff
+(filter by in play, landed or lost; tap a card for its legs), with each leg's
+prematch price. SportyBet's share endpoint returns the prematch price only
+until kickoff and a different in-play price afterwards, so Vig keeps the
+prematch prices from booking time or from before kickoff, and shows none
+rather than a wrong one, and any code typed into "Track a code". One read of
 SportyBet's share endpoint gives each leg's status and score; the panel
 refreshes every minute.
 

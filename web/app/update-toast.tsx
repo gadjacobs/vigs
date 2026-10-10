@@ -17,6 +17,12 @@ export function UpdateToast({ build }: { build: string }) {
   const [kind, setKind] = useState<"build" | "round" | null>(null);
   const dismissed = useRef<string>("");
 
+  // Keep the service worker current, so notification changes reach installed apps.
+  useEffect(() => {
+    navigator.serviceWorker?.register("/sw.js", { scope: "/", updateViaCache: "none" })
+      .then((r) => r.update()).catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     round.current = null;
     let stop = false;

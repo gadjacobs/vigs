@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import { summary, trackCode } from "./codes";
+import { summary, trackWithPrematch } from "./codes";
 import { addTo, del, getJson, members, removeFrom, setJson, setJsonIfAbsent, storeReady } from "./store";
 
 // Push notifications: booked codes that win or lose, and tips at chosen times.
@@ -143,7 +143,7 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
       continue;
     }
     try {
-      const t = await trackCode(code, now);
+      const t = await trackWithPrematch(code, now);
       if (t.state === "open") continue;
       out.settled++;
       for (const id of w.subs) {

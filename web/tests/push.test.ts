@@ -68,3 +68,19 @@ describe("our picks schedule", () => {
     expect(dueOurs({ ours: { ...ours, from: "22:00", to: "02:00" }, lastOurs: 0 }, at(1))).toBe(true); // overnight
   });
 });
+
+import { googleAccountFor, googleSession, verifyGoogle } from "../lib/auth";
+
+describe("google sign-in", () => {
+  const env = { AUTH_SECRET: "s", GOOGLE_ACCOUNTS: "You@Gmail.com=me, friend@x.com" };
+  it("maps listed emails to accounts and signs sessions", async () => {
+    expect(googleAccountFor("you@gmail.com", env)).toBe("me");
+    expect(googleAccountFor("friend@x.com", env)).toBe("friend_x_com");
+    expect(googleAccountFor("other@x.com", env)).toBeNull();
+    expect(googleAccountFor("other@x.com", { ...env, GOOGLE_ALLOW_ANY: "1" })).toBe("other_x_com");
+    const c = await googleSession("me", env);
+    expect(await verifyGoogle(c, env)).toBe("me");
+    expect(await verifyGoogle(c, { ...env, AUTH_SECRET: "t" })).toBeNull();
+    expect(await verifyGoogle(c, { AUTH_SECRET: "s", GOOGLE_ACCOUNTS: "friend@x.com" })).toBeNull(); // removed from the list
+  });
+});

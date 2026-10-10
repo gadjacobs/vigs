@@ -66,38 +66,50 @@ def export_record(ledger: Ledger, recent: int = 150) -> dict:
                     "market": m / n, "hit_rate": h / n}
                    for k, (n, e, m, h) in sorted(bins.items())]
 
-    # Codes booked in the app: each code as one accumulator, and its scored legs as singles.
+    # Codes booked in the app ("vig" = cooked slips): each code as one
+    # accumulator, and its scored legs as singles.
     settled_codes = ledger.user_code_settlements()
-    codes, legs = [], []
+    codes = []
     for key, c in ledger.user_codes().items():
         scored = [leg for leg in c["legs"] if leg.get("scored")]
         st = settled_codes.get(key)
         won_by = {o["event_id"]: o["won"] for o in (st or {}).get("legs", [])}
-        odds = 1.0
-        est = mkt = 1.0
+        odds = est = mkt = 1.0
         for leg in scored:
             odds *= leg.get("odds") or 1.0
             est *= leg.get("estimate") or 0.0
             mkt *= leg.get("market_prob") or 0.0
-            if st:
-                legs.append((leg, won_by.get(leg["event_id"])))
-        codes.append({"code": c["code"], "user": c.get("user"), "origin": c.get("origin"),
+        codes.append({"code": c["code"], "user": c.get("user"), "origin": c.get("origin") or "",
                       "booked_at": c["booked_at"], "legs": len(c["legs"]), "scored": len(scored),
                       "odds": odds, "estimate": est, "market_prob": mkt,
-                      "won": None if not st else st["won"]})
-    done_codes = [c for c in codes if c["won"] is not None and c["scored"]]
-    code_profits = [c["odds"] - 1 if c["won"] else -1.0 for c in done_codes]
-    leg_rows = [(l, w) for l, w in legs if w is not None]
-    mycodes = {
-        "codes": len(codes), "settled": len(done_codes), "landed": sum(bool(c["won"]) for c in done_codes),
-        "expected_vig": sum(c["estimate"] for c in done_codes),
-        "expected_market": sum(c["market_prob"] for c in done_codes),
-        "roi": sum(code_profits) / len(code_profits) if code_profits else 0.0,
-        "legs": {"settled": len(leg_rows), "hits": sum(bool(w) for _, w in leg_rows),
-                 "expected_vig": sum(l.get("estimate") or 0 for l, _ in leg_rows),
-                 "expected_market": sum(l.get("market_prob") or 0 for l, _ in leg_rows)},
-        "recent": sorted(codes, key=lambda c: -c["booked_at"])[:30],
-    }
+                      "won": None if not st else st["won"],
+                      "_legs": [(leg, won_by.get(leg["event_id"])) for leg in scored] if st else []})
+
+    def code_group(cs: list[dict]) -> dict:
+        done = [c for c in cs if c["won"] is not None and c["scored"]]
+        profits = [c["odds"] - 1 if c["won"] else -1.0 for c in done]
+        legs = [(l, w) for c in done for l, w in c["_legs"] if w is not None]
+        return {
+            "codes": len(cs), "settled": len(done), "landed": sum(bool(c["won"]) for c in done),
+            "expected_vig": sum(c["estimate"] for c in done), "expected_market": sum(c["market_prob"] for c in done),
+            "roi": sum(profits) / len(profits) if profits else 0.0,
+            "legs": {"settled": len(legs), "hits": sum(bool(w) for _, w in legs),
+                     "expected_vig": sum(l.get("estimate") or 0 for l, _ in legs),
+                     "expected_market": sum(l.get("market_prob") or 0 for l, _ in legs)},
+            "recent": [{k: v for k, v in c.items() if k != "_legs"}
+                       for c in sorted(cs, key=lambda c: -c["booked_at"])[:30]],
+        }
+
+    people = [c for c in codes if c["user"] != "vig"]
+    by_user: dict[str, list] = defaultdict(list)
+    for c in people:
+        by_user[c["user"] or "me"].append(c)
+    cooked = [c for c in codes if c["user"] == "vig"]
+    by_style: dict[str, list] = defaultdict(list)
+    for c in cooked:
+        by_style[c["origin"].removeprefix("slate:")].append(c)
+    mycodes = dict(code_group(people), by_user={u: code_group(cs) for u, cs in by_user.items()})
+    slates = dict(code_group(cooked), by_style={k: code_group(cs) for k, cs in by_style.items()})
 
     latest = sorted(rows, key=lambda r: r[0].get("kickoff") or "", reverse=True)[:recent]
     return {
@@ -107,6 +119,7 @@ def export_record(ledger: Ledger, recent: int = 150) -> dict:
         "grades": {g: _group(rs) for g, rs in by_grade.items()},
         "confidence": {c: _group(rs) for c, rs in by_conf.items()},
         "mycodes": mycodes,
+        "slates": slates,
         "ourpicks": _group([(p, s) for p, s in rows if str(p.get("sheet_id", "")).startswith("ourpicks-")]),
         "markets": [dict(market=m, grade=g, **_group(rs)) for (m, g), rs in sorted(by_market.items())],
         "curve": curve,

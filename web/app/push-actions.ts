@@ -1,6 +1,6 @@
 "use server";
 import { cookies } from "next/headers";
-import { trackCode, type Tracked } from "@/lib/codes";
+import { trackWithPrematch, type Tracked } from "@/lib/codes";
 import { dropSub, loadSub, pushReady, saveSub, send, subId, watchCode, type OursPrefs } from "@/lib/push";
 import { SETS } from "@/lib/ourpicks";
 import { myProfile } from "@/lib/profile";
@@ -20,7 +20,7 @@ export async function subscribePush(raw: Raw, prefs: PushPrefs) {
   const query = profile?.query ?? decodeURIComponent((await cookies()).get("vig_q")?.value ?? "");
   const tips = [...new Set(prefs.tips.filter((t) => TIME.test(t)))].sort().slice(0, 8);
   const o = prefs.ours;
-  const ours = o && SETS.some((x) => x.id === o.set) && TIME.test(o.from) && TIME.test(o.to)
+  const ours = o && (o.set === "cooked" || SETS.some((x) => x.id === o.set)) && TIME.test(o.from) && TIME.test(o.to)
     ? { set: o.set, every: Math.min(24, Math.max(0, Math.round(Number(o.every) || 0))), from: o.from, to: o.to } : undefined;
   await saveSub({ endpoint: raw.endpoint, keys: raw.keys, results: Boolean(prefs.results), tips, query, user: user ?? undefined, ours });
   return { ok: true as const };
@@ -41,7 +41,7 @@ export async function testPush(endpoint: string, kind: "plain" | "tip" | "ours")
   const s = await loadSub(await subId(endpoint));
   if (!s) return false;
   const { profile } = await myProfile();
-  if (kind === "ours") return send(s, await buildOurs(s.ours?.set ?? "safe", Date.now()));
+  if (kind === "ours") return send(s, await buildOurs(s.ours?.set ?? "cooked", Date.now()));
   return send(s, kind === "tip"
     ? await buildTip(profile?.query ?? s.query, Date.now())
     : { title: "Vig notifications are on", body: "You will hear here when a watched code settles, and at your tip times.", url: "/alerts" });
@@ -60,7 +60,7 @@ export async function watchBooking(code: string, endpoint: string, lastKickoff: 
 export async function trackCodes(codes: string[]): Promise<(Tracked | { code: string; error: string })[]> {
   return Promise.all(codes.slice(0, 10).map(async (code) => {
     try {
-      return await trackCode(code);
+      return await trackWithPrematch(code);
     } catch (e) {
       return { code, error: (e as Error).message };
     }

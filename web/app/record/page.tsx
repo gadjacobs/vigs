@@ -1,7 +1,8 @@
 import { loadBlend, type BlendFile } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadInsights, type Insights } from "@/lib/insights";
-import { loadRecord, type Group, type RecordFile } from "@/lib/record";
+import { myProfile } from "@/lib/profile";
+import { loadRecord, type CodeGroup, type Group, type RecordFile } from "@/lib/record";
 import { ProfitChart } from "./profit-chart";
 
 export const dynamic = "force-dynamic";
@@ -78,7 +79,8 @@ function Accuracy({ blend }: { blend: BlendFile | null }) {
   );
 }
 
-function Body({ rec }: { rec: RecordFile }) {
+function Body({ rec, user }: { rec: RecordFile; user: string | null }) {
+  const mine = (user && rec.mycodes?.by_user?.[user]) || (rec.mycodes?.by_user ? null : rec.mycodes) || null;
   const series = ["Lean", "Rough"]
     .filter((g) => rec.curve[g]?.length)
     .map((g) => ({ key: g, points: rec.curve[g].map(([t, v]) => [Date.parse(t), v * 1000] as [number, number]) }));
@@ -86,25 +88,35 @@ function Body({ rec }: { rec: RecordFile }) {
     <>
       <div className="tiles">{GRADES.map((g) => <Tile key={g} grade={g} s={rec.grades[g]} />)}</div>
 
-      {rec.mycodes && rec.mycodes.codes > 0 && (
+      {mine && mine.codes > 0 && (
         <section className="block" aria-labelledby="mine">
           <h2 id="mine">Your codes</h2>
-          <div className="tiles">
-            <div className="tile">
-              <h2>As booked</h2>
-              <p className="big">{rec.mycodes.landed} of {rec.mycodes.settled}</p>
-              <p>codes landed. Vig expected {rec.mycodes.expected_vig.toFixed(1)}, the market {rec.mycodes.expected_market.toFixed(1)}.</p>
-              {rec.mycodes.settled > 0 && (
-                <p className={rec.mycodes.roi < 0 ? "loss" : ""}>Return at a flat stake per code {signedPct(rec.mycodes.roi)}{rec.mycodes.settled < 30 ? " (too few to judge)" : ""}.</p>
-              )}
+          <CodeTiles g={mine} />
+          <p className="status">Every code {user ? `${user} booked` : "booked"} in Vig, copied to the ledger with the time it was booked. Legs that had already kicked off when booked are not scored. {mine.codes - mine.settled} code(s) still open.</p>
+        </section>
+      )}
+
+      {rec.slates && rec.slates.codes > 0 && (
+        <section className="block" aria-labelledby="cooked">
+          <h2 id="cooked">Cooked slips</h2>
+          <CodeTiles g={rec.slates} />
+          {rec.slates.by_style && (
+            <div className="tablewrap">
+              <table>
+                <thead><tr><th>Style</th><th className="n">Settled</th><th className="n">Landed</th><th className="n">Vig expected</th><th className="n">Market expected</th><th className="n">Return per code</th></tr></thead>
+                <tbody>
+                  {Object.entries(rec.slates.by_style).sort((x, y) => y[1].settled - x[1].settled).map(([k, g]) => (
+                    <tr key={k}>
+                      <td>{k}</td><td className="n">{g.settled}</td><td className="n">{g.landed}</td>
+                      <td className="n">{g.expected_vig.toFixed(1)}</td><td className="n">{g.expected_market.toFixed(1)}</td>
+                      <td className={`n ${g.roi < 0 ? "loss" : ""}`}>{g.settled ? `${signedPct(g.roi)}${g.settled < 30 ? " (too few)" : ""}` : "None"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="tile">
-              <h2>Leg by leg</h2>
-              <p className="big">{rec.mycodes.legs.settled ? `${(100 * rec.mycodes.legs.hits / rec.mycodes.legs.settled).toFixed(1)}%` : "None yet"}</p>
-              <p>{rec.mycodes.legs.hits} of {rec.mycodes.legs.settled} legs landed. Vig expected {rec.mycodes.legs.expected_vig.toFixed(1)}, the market {rec.mycodes.legs.expected_market.toFixed(1)}.</p>
-            </div>
-          </div>
-          <p className="status">Every code booked in Vig, copied to the ledger with the time it was booked. Legs that had already kicked off when booked are not scored. {rec.mycodes.codes - rec.mycodes.settled} code(s) still open.</p>
+          )}
+          <p className="status">Every slip Vig cooked and booked, logged once per code before kickoff and scored like your own.</p>
         </section>
       )}
 
@@ -242,6 +254,24 @@ function Body({ rec }: { rec: RecordFile }) {
   );
 }
 
+function CodeTiles({ g }: { g: CodeGroup }) {
+  return (
+    <div className="tiles">
+      <div className="tile">
+        <h2>As booked</h2>
+        <p className="big">{g.landed} of {g.settled}</p>
+        <p>codes landed. Vig expected {g.expected_vig.toFixed(1)}, the market {g.expected_market.toFixed(1)}.</p>
+        {g.settled > 0 && <p className={g.roi < 0 ? "loss" : ""}>Return at a flat stake per code {signedPct(g.roi)}{g.settled < 30 ? " (too few to judge)" : ""}.</p>}
+      </div>
+      <div className="tile">
+        <h2>Leg by leg</h2>
+        <p className="big">{g.legs.settled ? `${(100 * g.legs.hits / g.legs.settled).toFixed(1)}%` : "None yet"}</p>
+        <p>{g.legs.hits} of {g.legs.settled} legs landed. Vig expected {g.legs.expected_vig.toFixed(1)}, the market {g.legs.expected_market.toFixed(1)}.</p>
+      </div>
+    </div>
+  );
+}
+
 function DataSays({ ins }: { ins: Insights }) {
   const p1 = (x: number) => `${(x * 100).toFixed(1)}%`;
   const band = (lo: number, hi: number) => (hi >= 1000 ? `${lo}+` : `${lo}–${hi}`);
@@ -306,6 +336,7 @@ export default async function RecordPage() {
   }
   const blend = await loadBlend();
   const ins = await loadInsights();
+  const { user } = await myProfile();
   return (
     <main>
       <h1>Record</h1>
@@ -313,7 +344,7 @@ export default async function RecordPage() {
         Every pick the collector logs before kickoff, settled automatically. Shadow mode: no money is staked.
         This page is how we find out whether the picks are any good.
       </p>
-      {rec && <Body rec={rec} />}
+      {rec && <Body rec={rec} user={user} />}
       <Accuracy blend={blend} />
       {ins && <DataSays ins={ins} />}
       {!rec && (

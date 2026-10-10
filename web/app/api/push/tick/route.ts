@@ -1,4 +1,5 @@
 import { pushReady, tick } from "@/lib/push";
+import { currentSlates } from "@/lib/kitchen";
 import { buildOurs, buildTip } from "@/lib/tips";
 
 export const dynamic = "force-dynamic";
@@ -10,5 +11,7 @@ export async function POST(request: Request) {
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
     return Response.json({ error: "unauthorised" }, { status: 401 });
   if (!pushReady()) return Response.json({ error: "push not configured" }, { status: 503 });
-  return Response.json(await tick(buildTip, Date.now(), buildOurs));
+  // Cook (and book) the slips as soon as a round is published, so codes are ready.
+  const cooked = await currentSlates().then((c) => c.slates.length).catch(() => -1);
+  return Response.json({ ...(await tick(buildTip, Date.now(), buildOurs)), cooked });
 }

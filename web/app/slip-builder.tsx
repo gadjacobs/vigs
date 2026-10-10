@@ -1,7 +1,8 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { bookSlip, type BookResult } from "./actions";
-import { rememberCode, shareUrl } from "./codes-panel";
+import { rememberCode } from "./codes-panel";
+import { shareUrl } from "@/lib/share";
 import { saveView } from "./profile-actions";
 import { watchBooking } from "./push-actions";
 import { CopyButton } from "./copy-button";

@@ -4,6 +4,12 @@ export type Group = {
   picks: number; settled: number; open: number; hits: number;
   expected_vig: number; expected_market: number; roi: number; roi_low: number; roi_high: number;
 };
+export type CodeGroup = {
+  codes: number; settled: number; landed: number; expected_vig: number; expected_market: number; roi: number;
+  legs: { settled: number; hits: number; expected_vig: number; expected_market: number };
+  recent: { code: string; user?: string; origin?: string; booked_at: number; legs: number; scored: number;
+    odds: number; estimate: number; market_prob: number; won: boolean | null }[];
+};
 export type RecordFile = {
   version: number;
   generated_at: string;
@@ -11,12 +17,8 @@ export type RecordFile = {
   grades: Record<string, Group>;
   confidence?: Record<string, Group>;
   ourpicks?: Group;
-  mycodes?: {
-    codes: number; settled: number; landed: number; expected_vig: number; expected_market: number; roi: number;
-    legs: { settled: number; hits: number; expected_vig: number; expected_market: number };
-    recent: { code: string; user?: string; origin?: string; booked_at: number; legs: number; scored: number;
-      odds: number; estimate: number; market_prob: number; won: boolean | null }[];
-  };
+  mycodes?: CodeGroup & { by_user?: Record<string, CodeGroup> };
+  slates?: CodeGroup & { by_style?: Record<string, CodeGroup> };
   markets: (Group & { market: string; grade: string })[];
   curve: Record<string, [string, number][]>;
   calibration: { bin: string; n: number; estimate: number; market: number; hit_rate: number }[];

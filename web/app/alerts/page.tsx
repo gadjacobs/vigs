@@ -54,7 +54,7 @@ export default async function Alerts() {
       <section className="panel account" aria-labelledby="acct">
         <h2 id="acct">Account</h2>
         <p className="status">
-          Signed in as <strong>{user}</strong>.{" "}
+          Signed in as <strong>{user}</strong>{profile?.who ? ` with Google (${profile.who.email})` : ""}.{" "}
           {storeSource() ? "Booked codes, filters, view and theme sync across every device signed in to this account."
             : "Syncing across devices needs the store (see the setup check)."}
         </p>

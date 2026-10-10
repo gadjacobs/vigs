@@ -12,6 +12,8 @@ import { chance, oneIn } from "@/lib/plain";
 import { myProfile } from "@/lib/profile";
 import { DEFAULT_QUERY, type Query } from "@/lib/query";
 import { upcoming, type Fixture } from "@/lib/sportybet";
+import { currentSlates, type Cooked } from "@/lib/kitchen";
+import { SlateCard } from "./slate-card";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,12 @@ function Chips<T extends string | number>({ name, value, options, label, href }:
 
 export default async function OurPicks({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
+  let cooked: Cooked | null = null;
+  try {
+    cooked = await currentSlates();
+  } catch {
+    cooked = null;
+  }
   const set: SetId = SETS.find((x) => x.id === sp.set)?.id ?? "safe";
   const bar = OUR_BARS.find((b) => String(Math.round(b * 100)) === sp.bar) ?? OUR_DEFAULT;
   const target = TARGETS.find((t) => String(t) === sp.odds) ?? 10;
@@ -70,6 +78,20 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   return (
     <main>
       <h1>Our picks</h1>
+      <p className="lede">Slips cooked for the rounds published now, named by style and already booked. Open one in SportyBet, or edit it first.</p>
+      {cooked && cooked.slates.length > 0 ? (
+        <>
+          <p className="status">
+            {cooked.slates.length} slips cooked at {lagos(cooked.cooked_at)} Lagos. Which slips appear depends on what this round offers:
+            each needs enough legs at its confidence level. They are recooked when a new round is published.
+          </p>
+          <ul className="slates">{cooked.slates.map((s) => <SlateCard key={s.id} s={s} />)}</ul>
+        </>
+      ) : (
+        <p className="note">Nothing published right now is good enough to cook a slip. Check back when the next round is published.</p>
+      )}
+
+      <h2 className="buildown">Build your own</h2>
       <nav className="settabs" aria-label="Pick sets">
         {SETS.map((x) => (
           <Link key={x.id} href={`/picks?set=${x.id}`} aria-current={x.id === set ? "page" : undefined}>{x.label}</Link>
