@@ -44,13 +44,15 @@ publish() {
   . tools/publish.sh
 }
 
+echo "push tick: url $([ -n "${PUSH_TICK_URL:-}" ] && echo set || echo MISSING), secret $([ -n "${PUSH_TICK_SECRET:-}" ] && echo set || echo MISSING)"
 # Push notifications: every 4 minutes ask the web app to settle watched codes
 # and send due tips. Needs PUSH_TICK_URL and PUSH_TICK_SECRET; skipped otherwise.
 if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
   (
     while true; do
-      curl -sS -m 60 -X POST -H "Authorization: Bearer $PUSH_TICK_SECRET" "$PUSH_TICK_URL" > /dev/null \
-        || echo "push tick failed"
+      code=$(curl -sS -m 60 -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $PUSH_TICK_SECRET" "$PUSH_TICK_URL") \
+        || code=000
+      [ "$code" = 200 ] || echo "push tick: HTTP $code"
       sleep 240
     done
   ) &

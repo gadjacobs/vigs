@@ -188,3 +188,6 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
 
 /** When the collector last called the tick, for the Alerts setup check. */
 export const lastTick = async () => (storeReady() ? await getJson<number>("lastTick") : null);
+
+/** When a tick last arrived with the wrong secret. */
+export const lastRefusedTick = async () => (storeReady() ? await getJson<number>("tickRefused") : null);

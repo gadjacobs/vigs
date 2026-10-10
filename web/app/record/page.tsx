@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { loadBlend, type BlendFile } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadInsights, type Insights } from "@/lib/insights";
@@ -79,15 +80,19 @@ function Accuracy({ blend }: { blend: BlendFile | null }) {
   );
 }
 
-function Body({ rec, user }: { rec: RecordFile; user: string | null }) {
+function Body({ rec, user, tab, n }: { rec: RecordFile; user: string | null; tab: Tab; n: number }) {
   const mine = (user && rec.mycodes?.by_user?.[user]) || (rec.mycodes?.by_user ? null : rec.mycodes) || null;
   const series = ["Lean", "Rough"]
     .filter((g) => rec.curve[g]?.length)
     .map((g) => ({ key: g, points: rec.curve[g].map(([t, v]) => [Date.parse(t), v * 1000] as [number, number]) }));
   return (
     <>
+{tab === "summary" && (<>
       <div className="tiles">{GRADES.map((g) => <Tile key={g} grade={g} s={rec.grades[g]} />)}</div>
 
+</>)}
+
+{tab === "yours" && (<>
       {mine && mine.codes > 0 && (
         <section className="block" aria-labelledby="mine">
           <h2 id="mine">Your codes</h2>
@@ -120,6 +125,9 @@ function Body({ rec, user }: { rec: RecordFile; user: string | null }) {
         </section>
       )}
 
+{!(mine && mine.codes) && !(rec.slates && rec.slates.codes) && <p className="note">No booked codes in the record yet. Codes you book or open in Vig appear here once settled.</p>}
+</>)}
+{tab === "summary" && (<>
       {rec.ourpicks && rec.ourpicks.picks > 0 && (
         <section className="block" aria-labelledby="ours">
           <h2 id="ours">Our picks</h2>
@@ -146,7 +154,9 @@ function Body({ rec, user }: { rec: RecordFile; user: string | null }) {
         <ProfitChart series={series} />
       </section>
 
-      <section className="block" aria-labelledby="markets">
+      </>)}
+{tab === "markets" && (<>
+<section className="block" aria-labelledby="markets">
         <h2 id="markets">By market</h2>
         <div className="tablewrap">
           <table>
@@ -218,38 +228,36 @@ function Body({ rec, user }: { rec: RecordFile; user: string | null }) {
         </div>
       </section>
 
-      <section className="block" aria-labelledby="recent">
-        <h2 id="recent">Recent picks</h2>
-        <div className="tablewrap">
-          <table>
-            <thead><tr><th>Kickoff (Lagos)</th><th>Match</th><th>Market</th><th className="n">Odds</th>
-              <th className="n">Vig estimate</th><th>Grade</th><th>Result</th></tr></thead>
-            <tbody>
-              {rec.recent.map((r) => {
-                const [league, , , home, away] = r.fixture.split("|");
-                return (
-                  <tr key={r.fixture + r.market + (r.generated_at ?? "")}>
-                    <td>{r.kickoff ? lagos(r.kickoff) : "-"}</td>
-                    <td>{home} v {away} <span className="muted">{league}</span></td>
-                    <td>{MARKET_LABELS[r.market] ?? r.market}</td>
-                    <td className="n num">{r.odds.toFixed(2)}</td>
-                    <td className="n">{pct(r.estimate)}</td>
-                    <td><span className={`badge grade-${r.grade.toLowerCase()}`}>{r.grade}</span></td>
-                    <td className={r.won === false ? "loss" : r.won ? "won" : "muted"}>
-                      {r.won === null ? "To play" : `${r.won ? "Landed" : "Missed"} ${r.score ?? ""}`}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+</>)}
+      {tab === "picks" && (
+        <section className="block" aria-labelledby="recent">
+          <h2 id="recent">Recent picks</h2>
+          <p className="status">The latest {Math.min(n, rec.recent.length)} of {rec.recent.length} picks the collector logged, newest first.</p>
+          <ol className="recentlist">
+            {rec.recent.slice(0, n).map((r) => {
+              const [league, , , home, away] = r.fixture.split("|");
+              return (
+                <li key={r.fixture + r.market + (r.generated_at ?? "")} className={r.won === false ? "is-lost" : r.won ? "is-won" : ""}>
+                  <span className="num rtime">{r.kickoff ? lagos(r.kickoff) : "-"}</span>
+                  <span className="rmatch">{home} v {away}<small>{MARKET_LABELS[r.market] ?? r.market} · {league}</small></span>
+                  <span className="rnums"><span className="num">{r.odds.toFixed(2)}</span><small>{pct(r.estimate)} · {r.grade}</small></span>
+                  <span className={`rres ${r.won === false ? "loss" : r.won ? "won" : "muted"}`}>
+                    {r.won === null ? "To play" : r.won ? "✓" : "✗"}<small>{r.score ?? ""}</small>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+          {n < rec.recent.length && <Link className="button" href={`/record?tab=picks&n=${n + 30}`}>Show 30 more</Link>}
+        </section>
+      )}
 
+{tab === "summary" && (
       <p className="status">
         Ledger: {rec.chain.records.toLocaleString()} records, hash chain intact (head {rec.chain.head.slice(0, 12)}).
         Updated {lagos(rec.generated_at)} Lagos. Picks are logged before kickoff and never edited.
       </p>
+)}
     </>
   );
 }
@@ -327,7 +335,13 @@ function DataSays({ ins }: { ins: Insights }) {
   );
 }
 
-export default async function RecordPage() {
+type Tab = "summary" | "yours" | "markets" | "picks" | "data";
+const TABS: [Tab, string][] = [["summary", "Summary"], ["yours", "Your codes"], ["markets", "Markets"], ["picks", "Picks"], ["data", "Data"]];
+
+export default async function RecordPage({ searchParams }: { searchParams: Promise<{ tab?: string; n?: string }> }) {
+  const sp = await searchParams;
+  const tab: Tab = TABS.find(([t]) => t === sp.tab)?.[0] ?? "summary";
+  const n = Math.min(500, Math.max(30, Number(sp.n) || 30));
   let rec: RecordFile | null = null;
   try {
     rec = await loadRecord();
@@ -344,9 +358,14 @@ export default async function RecordPage() {
         Every pick the collector logs before kickoff, settled automatically. Shadow mode: no money is staked.
         This page is how we find out whether the picks are any good.
       </p>
-      {rec && <Body rec={rec} user={user} />}
-      <Accuracy blend={blend} />
-      {ins && <DataSays ins={ins} />}
+      <nav className="settabs recordtabs" aria-label="Record sections">
+        {TABS.map(([t, label]) => (
+          <Link key={t} href={`/record?tab=${t}`} aria-current={t === tab ? "page" : undefined}>{label}</Link>
+        ))}
+      </nav>
+      {rec && <Body rec={rec} user={user} tab={tab} n={n} />}
+      {tab === "markets" && <Accuracy blend={blend} />}
+      {tab === "data" && (ins ? <DataSays ins={ins} /> : <p className="note">The data summary is published hourly by the collector; it appears after its next run.</p>)}
       {!rec && (
         <p className="note warn" role="alert">
           The scorecard is not published yet. The collector writes it every hour; try again shortly.

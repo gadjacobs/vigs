@@ -47,6 +47,7 @@ jobs:
       - name: Collect
         env:
           # Optional: push notifications (see README "Notifications").
-          PUSH_TICK_URL: ${{ vars.PUSH_TICK_URL }}
-          PUSH_TICK_SECRET: ${{ secrets.PUSH_TICK_SECRET }}
+          # Either may be saved as a variable or a secret.
+          PUSH_TICK_URL: ${{ vars.PUSH_TICK_URL || secrets.PUSH_TICK_URL }}
+          PUSH_TICK_SECRET: ${{ secrets.PUSH_TICK_SECRET || vars.PUSH_TICK_SECRET }}
         run: code/tools/collect.sh store "${{ inputs.chunks || '6' }}"

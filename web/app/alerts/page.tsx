@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { AlertsPanel } from "./alerts-panel";
 import { SHORT_LABELS } from "@/lib/markets";
-import { lastTick, pushReady, vapidPublicKey } from "@/lib/push";
+import { lastRefusedTick, lastTick, pushReady, vapidPublicKey } from "@/lib/push";
 import { storeSource } from "@/lib/store";
 import { myProfile } from "@/lib/profile";
 import { parseQuery } from "@/lib/query";
@@ -9,7 +9,7 @@ import { logout } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-function SetupCheck({ tick }: { tick: number | null }) {
+function SetupCheck({ tick, refused }: { tick: number | null; refused: number | null }) {
   const store = storeSource();
   const related = Object.keys(process.env).filter((k) => /KV|REDIS|UPSTASH/.test(k)).sort();
   const secret = Boolean(process.env.PUSH_TICK_SECRET);
@@ -25,7 +25,9 @@ function SetupCheck({ tick }: { tick: number | null }) {
           : related.length ? `not usable. The server sees ${related.join(", ")} but needs a REST URL and token pair, e.g. KV_REST_API_URL and KV_REST_API_TOKEN.`
           : "not found. Connect Upstash for Redis to this Vercel project for Production, then redeploy.")}
         {row(secret, "Tick secret", secret ? "set (PUSH_TICK_SECRET)." : "missing. Add PUSH_TICK_SECRET in Vercel, then redeploy.")}
-        {row(ago !== null && ago <= 15, "Collector tick", ago === null ? "not seen yet. Set PUSH_TICK_URL (variable) and PUSH_TICK_SECRET (secret) in GitHub Actions; the next collector run picks them up."
+        {row(ago !== null && ago <= 15, "Collector tick", refused && (!tick || refused > tick)
+          ? `a call arrived ${Math.round((Date.now() - refused) / 60000)} min ago with the wrong secret: PUSH_TICK_SECRET in GitHub must match Vercel's exactly.`
+          : ago === null ? "not seen yet. In GitHub → Settings → Secrets and variables → Actions, add PUSH_TICK_URL and PUSH_TICK_SECRET (either tab works); the next collector run picks them up and its log says whether each is set."
           : `last seen ${ago} min ago${ago > 15 ? "; the collector may be between runs" : ""}.`)}
       </ul>
       <p className="status">Environment variables only reach new deployments: after changing them in Vercel, redeploy.</p>
@@ -43,7 +45,7 @@ export default async function Alerts() {
     <main>
       <h1>Alerts</h1>
       <p className="lede">Notifications on this device: when a booked code lands or loses, and a tip slip at times you choose.</p>
-      <SetupCheck tick={await lastTick().catch(() => null)} />
+      <SetupCheck tick={await lastTick().catch(() => null)} refused={await lastRefusedTick().catch(() => null)} />
       {!pushReady() ? (
         <p className="note warn" role="alert">
           Notifications need the store. The setup check above shows what the server can see.

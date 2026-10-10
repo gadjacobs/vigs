@@ -26,6 +26,21 @@ function writeAll(list: Saved[]) {
   } catch { /* private mode */ }
 }
 
+const FINAL_KEY = "vig_code_final";
+function readFinal(): Record<string, Tracked> {
+  try {
+    return JSON.parse(localStorage.getItem(FINAL_KEY) ?? "{}") as Record<string, Tracked>;
+  } catch {
+    return {};
+  }
+}
+function saveFinal(ts: Tracked[]) {
+  if (!ts.length) return;
+  const all = { ...readFinal(), ...Object.fromEntries(ts.map((t) => [t.code, t])) };
+  const keep = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].lastKickoff - a[1].lastKickoff).slice(0, 80));
+  try { localStorage.setItem(FINAL_KEY, JSON.stringify(keep)); } catch { /* full or private */ }
+}
+
 export const readCodes = (): Saved[] => readAll().filter((c) => c.last + SHOW > Date.now());
 
 /** Remember a code on this device and in the account, and tell the panel. */
@@ -46,11 +61,19 @@ export function CodesPanel() {
   const [filter, setFilter] = useState<"all" | Tracked["state"]>("all");
   const [open, setOpen] = useState<Set<string>>(new Set());
 
+  // Settled codes never change, so they are kept on the device and not checked
+  // again; the rest are checked in batches of 8, newest first.
   const refresh = useCallback((list: Saved[]) => {
-    if (!list.length) return;
+    const done = readFinal();
+    if (Object.keys(done).length) setStatus((s) => ({ ...done, ...s }));
+    const todo = list.map((c) => c.code).filter((c) => !done[c]);
+    if (!todo.length) return;
     start(async () => {
-      const res = await trackCodes(list.map((c) => c.code));
-      setStatus((s) => ({ ...s, ...Object.fromEntries(res.map((r) => [r.code, r])) }));
+      for (let i = 0; i < todo.length; i += 8) {
+        const res = await trackCodes(todo.slice(i, i + 8)).catch(() => []);
+        setStatus((s) => ({ ...s, ...Object.fromEntries(res.map((r) => [r.code, r])) }));
+        saveFinal(res.flatMap((r) => ("legs" in r && r.state !== "open" ? [r] : [])));
+      }
     });
   }, []);
 

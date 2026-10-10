@@ -58,7 +58,7 @@ export async function watchBooking(code: string, endpoint: string, lastKickoff: 
 
 /** Live status of recent codes (one SportyBet read each). */
 export async function trackCodes(codes: string[]): Promise<(Tracked | { code: string; error: string })[]> {
-  return Promise.all(codes.slice(0, 10).map(async (code) => {
+  return Promise.all(codes.slice(0, 12).map(async (code) => {
     try {
       return await trackWithPrematch(code);
     } catch (e) {
