@@ -3,10 +3,25 @@
 # `data` branch, committing after every chunk so a killed job loses at most one.
 # Usage: tools/collect.sh DATA_DIR [CHUNKS] [MINUTES_PER_CHUNK]
 set -u
+# Run from a copy, so pulling new code mid-run never rewrites the script bash
+# is reading. The code itself is updated before every hourly publish.
+if [ -z "${VIG_RUNNING_COPY:-}" ]; then
+  VIG_REPO=$(cd "$(dirname "$0")/.." && pwd)
+  export VIG_REPO VIG_RUNNING_COPY=1
+  copy=$(mktemp)
+  cp "$0" "$copy"
+  exec bash "$copy" "$@"
+fi
 DATA=$(cd "$1" && pwd)
 CHUNKS=${2:-6}
 MINUTES=${3:-55}
-cd "$(dirname "$0")/.."
+cd "$VIG_REPO"
+
+update_code() {
+  # Fast-forward to the latest code on this branch; publish steps live in
+  # tools/publish.sh, re-read each time, so new steps start within the hour.
+  git pull -q --ff-only 2>/dev/null || echo "code update skipped"
+}
 
 save() {
   (
@@ -24,25 +39,9 @@ if [ ! -f "$DATA/results.csv" ]; then
   save
 fi
 publish() {
-  # Model for the web app, then log the coming hour's picks (shadow mode) and
-  # settle earlier ones, so every list the method produces is scored.
-  # Results first, so restarts or outages never leave gaps (the archive goes back a year).
-  python -m vigs fetch results --data "$DATA" --days 0.25 > /dev/null || true
-  python -m vigs export-model --data "$DATA" --out "$DATA/model.json" || true
-  python -m vigs export-blend --data "$DATA" --out "$DATA/blend.json" || true
-  for m in FH_O05 BY O15; do
-    python -m vigs likely --market "$m" --hours 1 --count 20 --data "$DATA" \
-      --ledger "$DATA/ledger.jsonl" --no-refresh > /dev/null || true
-  done
-  python -m vigs ourpicks --hours 1 --data "$DATA" --ledger "$DATA/ledger.jsonl" > /dev/null || true
-  if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
-    # Codes booked in the app, so the Record page can score them.
-    python -m vigs ledger import-codes --ledger "$DATA/ledger.jsonl" \
-      --url "${PUSH_TICK_URL%/api/push/tick}/api/codes/log" || true
-  fi
-  python -m vigs ledger settle --ledger "$DATA/ledger.jsonl" --results "$DATA/results.csv" || true
-  python -m vigs export-insights --data "$DATA" --out "$DATA/insights.json" || true
-  python -m vigs export-record --ledger "$DATA/ledger.jsonl" --out "$DATA/record.json" || true
+  update_code
+  # shellcheck source=tools/publish.sh
+  . tools/publish.sh
 }
 
 # Push notifications: every 4 minutes ask the web app to settle watched codes

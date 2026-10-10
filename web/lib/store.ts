@@ -40,24 +40,49 @@ export const storeSource = () => FOUND?.from ?? null;
 type Tcp = ReturnType<typeof createClient>;
 let tcp: Promise<Tcp> | null = null;
 
-/** One connection per server instance, reopened if it drops. */
+/** One connection per server instance, reopened if it drops. A serverless
+ * instance can be frozen between requests, leaving a socket that looks open but
+ * never answers, so every command has a deadline and a miss drops the socket. */
 function tcpClient(): Promise<Tcp> {
   if (!tcp) {
-    const c = createClient({ url: FOUND!.url, socket: { connectTimeout: 5000, reconnectStrategy: false } });
+    const c = createClient({
+      url: FOUND!.url, disableOfflineQueue: true,
+      socket: { connectTimeout: 3000, keepAlive: 5000, reconnectStrategy: false },
+    });
     c.on("error", () => { tcp = null; });
+    c.on("end", () => { tcp = null; });
     tcp = c.connect().then(() => c).catch((e) => { tcp = null; throw e; });
   }
   return tcp;
 }
 
+const DEADLINE = 2500;
+
+function within<T>(p: Promise<T>, ms: number, onMiss: () => void): Promise<T> {
+  let t: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    p.finally(() => clearTimeout(t)),
+    new Promise<T>((_, reject) => { t = setTimeout(() => { onMiss(); reject(new Error("Storage timed out")); }, ms); }),
+  ]);
+}
+
 async function cmd<T>(...args: (string | number)[]): Promise<T> {
   if (FOUND?.tcp) {
-    const c = await tcpClient();
-    return (await c.sendCommand(args.map(String))) as T;
+    const run = async () => (await (await tcpClient()).sendCommand(args.map(String))) as T;
+    const drop = () => {
+      const old = tcp;
+      tcp = null;
+      old?.then((c) => c.disconnect()).catch(() => undefined);
+    };
+    try {
+      return await within(run(), DEADLINE, drop);
+    } catch {
+      return await within(run(), DEADLINE, drop); // once more on a fresh connection
+    }
   }
   if (!URL_ || !TOKEN) throw new Error("Storage is not set up");
   const res = await fetch(URL_, {
-    method: "POST",
+    method: "POST", signal: AbortSignal.timeout(DEADLINE * 2),
     headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify(args.map(String)),
     cache: "no-store",

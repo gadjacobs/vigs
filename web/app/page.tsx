@@ -77,7 +77,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
           model fitted on {model.fitted_on.toLocaleString()} results.
           {blended.length
             ? ` Blend of market price and model in use for ${blended.join(", ")}.`
-            : ` Estimates are weighted 70/30 toward the market price, which has beaten the results model so far${blend ? `; the blend switches on once proven (${blend.matches.toLocaleString()} of ${blend.min_matches.toLocaleString()} settled matches)` : ""}.`}
+            : ` Estimates are weighted 85/15 toward the market price, which has beaten the results model so far${blend ? `; the blend switches on once proven (${blend.matches.toLocaleString()} of ${blend.min_matches.toLocaleString()} settled matches)` : ""}.`}
         </p>
       )}
       </div>

@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { CopyButton } from "../copy-button";
 import { lagos, pct } from "../pick-row";
+import { SlateActions } from "./slate-actions";
 import { MARKET_LABELS } from "@/lib/markets";
 import { chance, oneIn } from "@/lib/plain";
-import { shareUrl } from "@/lib/share";
 import type { Slate } from "@/lib/slates";
 
 export function SlateCard({ s }: { s: Slate }) {
@@ -41,11 +40,7 @@ export function SlateCard({ s }: { s: Slate }) {
       )}
       <div className="row slateactions">
         {s.code ? (
-          <>
-            <strong className="num slatecode">{s.code}</strong>
-            <a className="button primary" href={shareUrl(s.code)}>Open in SportyBet</a>
-            <CopyButton text={s.code} />
-          </>
+          <SlateActions code={s.code} legs={s.legs.length} odds={s.odds} last={s.last} style={s.style} />
         ) : null}
         <Link className="button" href={`/picks/edit?slate=${encodeURIComponent(s.id)}`}>{s.code ? "Edit" : "Edit and book"}</Link>
       </div>

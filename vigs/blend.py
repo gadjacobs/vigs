@@ -5,7 +5,7 @@ Trained on settled matches with a pre-kickoff odds snapshot. The model input is
 point-in-time: for matches on day D it comes from a model fitted on results
 before D. A blend switches on for a market only when there is enough data and
 it beats the results model on the most recent 30% of matches, which it did not
-train on. Until then the app and `likely` use `guarded`: a constant 70/30 weighting
+train on. Until then the app and `likely` use `guarded`: a constant 85/15 weighting
 toward the market price, with a range that spans both views.
 """
 from __future__ import annotations
@@ -29,11 +29,12 @@ PRIOR = (0.0, 1.0, 0.0)     # shrink toward "trust the market"
 RIDGE = 2.0                 # prior strength, in pseudo-observations
 REPS = 20
 EPS = 1e-6
-# Until a blend is proven: 0.7 * logit(market) + 0.3 * logit(model). On the first
-# 269 settled matches with odds (4,914 selections) the market price beat the
-# results model on log loss in all 10 markets checked; this weighting cut most of
-# the gap (pooled 0.4968 vs market 0.4960, model 0.5038).
-GUARD = (0.0, 0.7, 0.3)
+# Until a blend is proven: 0.85 * logit(market) + 0.15 * logit(model). The market
+# price beat the results model on log loss in every market checked; where the two
+# disagree by 8+ points, results follow the market. On 1,032 settled matches with
+# odds (23,870 selections), weights of 0.8-0.9 on the market beat 0.7 in both
+# halves of the data (first half 0.4946-0.4950 vs 0.4954; second 0.4948 vs 0.4949).
+GUARD = (0.0, 0.85, 0.15)
 
 
 def logit(p: float) -> float:

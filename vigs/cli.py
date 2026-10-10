@@ -461,7 +461,7 @@ def cmd_likely(a) -> None:
                 "estimate": g.estimate, "ci_low": lo, "ci_high": hi, "edge": g.edge,
                 "grade": g.grade, "grade_reasons": [vars(t) for t in g.tests],
                 "slice_key": (f"blend:v1|{a.market}" if src == "blend"
-                              else f"guarded:70-30:{a.days:g}d|{a.market}"),
+                              else f"guarded:85-15:{a.days:g}d|{a.market}"),
                 "stats_version": STATS_VERSION, "source": src,
                 "sheet_id": f"likely-{sb._iso(now)}", "stake": 0, "shadow": True,
                 "event_id": s["event_id"]}, m)

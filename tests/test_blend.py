@@ -52,7 +52,7 @@ class Switch(unittest.TestCase):
     def test_guarded_leans_on_the_market_and_spans_both_views(self):
         p, lo, hi, src = bl.guarded(0.60, 0.72, 0.70, 0.74)
         self.assertEqual(src, "guarded")
-        self.assertAlmostEqual(p, bl.apply([0, .7, .3], 0.60, 0.72))
+        self.assertAlmostEqual(p, bl.apply([0, .85, .15], 0.60, 0.72))
         self.assertTrue(0.60 < p < 0.66)               # much nearer the market
         self.assertEqual((lo, hi), (0.60, 0.74))
         # Market below break-even keeps the range below it too, so no Lean.

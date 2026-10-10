@@ -370,3 +370,10 @@ form.track { margin: 0; }
 .slateactions .button, .slateactions button { min-height: 40px; padding: 6px 12px; font-size: 14px; }
 .buildown { font-family: var(--font-num); font-weight: 800; font-size: 28px; margin: 8px 0 12px; }
 .orline { margin: 12px 0; text-align: center; } main > .login + .login { margin-top: 0; }
+.oops { padding-top: 48px; } .oops .row { margin-top: 8px; }
+
+/* Feel like an app: no grey tap flash, no double-tap zoom delay on controls */
+html { -webkit-tap-highlight-color: transparent; }
+button, .button, a, .chip, summary { touch-action: manipulation; }
+.mainnav, .segmented, .settabs { user-select: none; -webkit-user-select: none; }
+@media (display-mode: standalone) { body { overscroll-behavior-y: contain; } }

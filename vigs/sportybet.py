@@ -124,9 +124,11 @@ def parse_result(e: dict) -> dict | None:
             "ht_hg": ht[0] if ht else "", "ht_ag": ht[1] if ht else ""}
 
 
-def parse_odds(e: dict) -> dict[str, float]:
+def parse_odds(e: dict, field: str = "odds") -> dict[str, float]:
     """Map SportyBet markets to vigs market keys. A group is kept only when every
-    outcome in it is active, since de-vigging needs the whole group."""
+    outcome in it is active, since de-vigging needs the whole group. With
+    field="probability", returns SportyBet's own probability per outcome
+    instead (published with the odds; each group sums to 1)."""
     out: dict[str, float] = {}
     for m in e.get("markets") or []:
         if str(m.get("status", 0)) != "0":
@@ -135,7 +137,7 @@ def parse_odds(e: dict) -> dict[str, float]:
         if not outs or any(not o.get("isActive") for o in outs):
             continue
         try:
-            prices = {o["desc"]: float(o["odds"]) for o in outs}
+            prices = {o["desc"]: float(o[field]) for o in outs}
         except (KeyError, TypeError, ValueError):
             continue
         mid, spec = str(m.get("id")), m.get("specifier") or ""
@@ -150,7 +152,7 @@ def parse_odds(e: dict) -> dict[str, float]:
             key = line.replace(".", "")
             pre = "FH_" if mid == "68" else ""
             over, under = prices.get(f"Over {line}"), prices.get(f"Under {line}")
-            if over and under and over > 1.0 and under > 1.0:
+            if over and under and (field != "odds" or (over > 1.0 and under > 1.0)):
                 out[f"{pre}O{key}"], out[f"{pre}U{key}"] = over, under
     return out
 
@@ -162,7 +164,9 @@ def snapshot(e: dict, captured_ms: int) -> dict | None:
     return {"event_id": e["eventId"], "captured_at": _iso(captured_ms),
             "kickoff": _iso(int(e["estimateStartTime"])),
             "league": e["sport"]["category"]["name"], "home": e["homeTeamName"],
-            "away": e["awayTeamName"], "odds": odds}
+            "away": e["awayTeamName"], "odds": odds,
+            # SportyBet's own probabilities, captured from 10 Oct 2026 for evaluation.
+            "prob": parse_odds(e, "probability")}
 
 
 # ---------------------------------------------------------------- storage --

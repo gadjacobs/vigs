@@ -66,3 +66,19 @@ export async function trackCodes(codes: string[]): Promise<(Tracked | { code: st
     }
   }));
 }
+
+/** A cooked slip the user opened or copied: log it once as theirs, so Codes and Record show it. */
+export async function adoptCode(code: string, style: string) {
+  if (!/^[A-Z0-9]{4,12}$/.test(code)) return false;
+  const { user } = await myProfile();
+  if (!user) return false;
+  const { currentSlates } = await import("@/lib/kitchen");
+  const { logBooking } = await import("@/lib/codelog");
+  const { addTo, storeReady } = await import("@/lib/store");
+  if (!storeReady()) return false;
+  const slate = (await currentSlates().catch(() => null))?.slates.find((s) => s.code === code);
+  if (!slate) return false;
+  if (Number(await addTo(`adopted:${user}`, code)) !== 1) return true;   // already logged
+  await logBooking(code, slate.legs, `cooked:${style}`, user);
+  return true;
+}

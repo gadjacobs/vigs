@@ -101,7 +101,7 @@ describe("guarded estimate", () => {
   it("matches vigs.blend.guarded", () => {
     // python: vigs.blend.guarded(0.60, 0.72, 0.70, 0.74)
     const g = guardedEstimate(0.6, { p: 0.72, lo: 0.7, hi: 0.74 });
-    expect(g.p).toBeCloseTo(0.6381085392, 9);
+    expect(g.p).toBeCloseTo(0.6192378588, 9);
     expect(g.lo).toBe(0.6);
     expect(g.hi).toBe(0.74);
     expect(gradeOf(1 / 1.6, g.lo, g.hi).grade).not.toBe("Lean");

@@ -1,8 +1,22 @@
 // Vig service worker: shows push notifications and opens the app when one is tapped.
 // v2: monochrome status-bar badge (Android draws the badge as a white silhouette,
 // so a full-colour icon there shows as a blank square or the browser's logo).
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+const OFFLINE = "/offline.html";
+const CACHE = "vig-v3";
+
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.add(OFFLINE)).then(() => self.skipWaiting()));
+});
+
+// Pages come from the network; with no connection, show Vig's own offline
+// screen instead of the browser's.
+self.addEventListener("fetch", (event) => {
+  if (event.request.mode !== "navigate") return;
+  event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE)));
+});
+self.addEventListener("activate", (e) => e.waitUntil(
+  caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()),
+));
 
 self.addEventListener("push", (event) => {
   let p = { title: "Vig", body: "", url: "/" };

@@ -9,5 +9,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // The service worker, manifest and icons load without cookies; the tick checks its own secret.
-  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|icon-|badge-|apple-touch-icon|api/push/tick|api/codes/log|api/auth/google).*)"],
+  matcher: ["/((?!login|_next/static|_next/image|favicon.ico|sw.js|offline.html|manifest.webmanifest|icon-|badge-|apple-touch-icon|api/push/tick|api/codes/log|api/auth/google).*)"],
 };
