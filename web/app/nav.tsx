@@ -23,7 +23,7 @@ function Pending() {
 
 export function Nav() {
   const path = usePathname();
-  if (path === "/login") return null;
+  if (path === "/login" || path === "/welcome") return null;
   return (
     <nav aria-label="Main" className="mainnav">
       {LINKS.map((l) => (

@@ -27,6 +27,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
       <LoginPanel google={googleEnabled()} passwords={accounts().length > 0} />
       <p className="login-small">
         Personal tool for adults. Vig never places bets and never asks for your SportyBet details. Chances are estimates, not promises.
+        {" "}<a href="/welcome">What is Vig?</a>
       </p>
     </main>
   );
