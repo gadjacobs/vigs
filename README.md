@@ -112,13 +112,22 @@ view stays on the card. "Full numbers" shows the original layout.
 ## Our picks
 
 **Cooked slips** come first: each time a round is published, Vig cooks named
-slips from it (Steady, Double up, Fiver, Tenner, Long shot, Goal rush, Tight
-games, Bold, Draw trio/four), books each one and shows the code, ready to open in SportyBet
+slips from it (Steady, Double up, Fiver, Tenner, Long shot, Hundred,
+Thousand, Goal rush, Tight games, Bold, Draw trio/four), books each one and shows the code, ready to open in SportyBet
 or tweak in the editor. A slip is only cooked when enough legs clear its
 confidence bar, so the mix changes with the round. Every cooked code is logged
-once (account "vig") and scored on Record by style. Long shot is the likeliest
-combination of legs at 75% or better that reaches about 20 odds (up to 50
-legs); every leg pays the bookmaker's cut, so it lands rarely.
+once (account "vig") and scored on Record by style. Long shot, Hundred and
+Thousand are the likeliest slips near 20, 100 and 1,000 odds (up to 50 legs);
+every leg pays the bookmaker's cut, so they land rarely.
+
+Slips are built from the **best bet per match**, ranked by the bookmaker's
+de-vigged chance rather than Vig's estimate: where the two disagree, results
+have followed the market, and the model leans the same way across many matches
+(under 3.5 about 1.4 points above the market, home wins 2 below), which made
+every slip lean on under 3.5. No market may fill more than 40% of a slip, so a
+match whose top market is already used offers its next one. Our picks opens on
+the cooked slips; **Build your own** is its own tab, starting with Best per
+match (5 to 50 legs).
 
 **Markets** cover 1X2, double chance (home or draw, home or away, draw or
 away), total goals and first-half lines, both teams to score, and each team's

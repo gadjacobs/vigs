@@ -37,7 +37,7 @@ export function parseQuery(sp: Params): Query {
   const markets = many(sp.market).filter((m) => m in MARKET_LABELS);
   return {
     markets: markets.length ? markets : d.markets,
-    hours: num(one(sp.hours), d.hours, 0.5, 4),
+    hours: num(one(sp.hours), d.hours, 0.5, 24),
     minOdds: num(one(sp.min), d.minOdds, 1.01, 100),
     maxOdds: num(one(sp.max), d.maxOdds, 1.01, 1000),
     mode: one(sp.mode) === "count" ? "count" : "target",

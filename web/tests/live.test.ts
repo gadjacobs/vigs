@@ -27,6 +27,7 @@ describe("live legs", () => {
     expect(legChance("U25", ev("H2", [1, 0], [1, 0], { U25: 0.62 }))).toBe(0.62);
     expect(legChance("O05", ev("H1", [1, 0], [1, 0], { O05: 0.5 }))).toBe(1);
     expect(slipChance([1, 0.5, 0.8])).toBeCloseTo(0.4, 12);
+    expect(legChance("DC1X", ev("H2", [1, 3], [0, 1], { "1": 0.01, X: 0.04, "2": 0.95 }))).toBeCloseTo(0.05, 12);
     expect(slipChance([1, null])).toBeNull();
   });
 

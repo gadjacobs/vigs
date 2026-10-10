@@ -1,4 +1,4 @@
-import { fairProbs } from "./markets";
+import { DOUBLE_CHANCE, fairProbs } from "./markets";
 import { eventMarkets, liveBoard, upcoming, type LiveEvent } from "./sportybet";
 
 // Live state of booked legs: score, clock and the chance each leg (and the
@@ -44,7 +44,11 @@ const fmt = (s: [number, number] | null) => (s ? `${s[0]}:${s[1]}` : null);
 export function legChance(market: string, ev: LiveEvent): number | null {
   const d = decided(market, ev);
   if (d !== null) return d ? 1 : 0;
-  return ev.prob[market] ?? null;
+  if (market in ev.prob) return ev.prob[market];
+  // SportyBet closes double chance when the result looks settled; its 1X2
+  // probabilities are still published, and double chance is two of them.
+  const pair = DOUBLE_CHANCE[market];
+  return pair && pair[0] in ev.prob && pair[1] in ev.prob ? ev.prob[pair[0]] + ev.prob[pair[1]] : null;
 }
 
 /** Product of leg chances; null when any open leg has no chance yet. */

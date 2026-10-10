@@ -2,6 +2,7 @@
 const BASE = "https://www.sportybet.com/api/ng/factsCenter";
 const ORDERS = "https://www.sportybet.com/api/ng/orders";
 const SPORT = "sr:sport:202120001"; // vFootball
+export const VFOOTBALL = SPORT;
 const HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -201,7 +202,7 @@ export async function book(selections: Selection[]): Promise<{ code: string; ver
 export type ShareEvent = {
   eventId: string; estimateStartTime: number | string; homeTeamName: string; awayTeamName: string;
   matchStatus?: string; setScore?: string; gameScore?: string[]; regularTimeScore?: string[];
-  sport?: { category?: { name?: string } };
+  sport?: { id?: string; category?: { name?: string } };
   markets?: { id: string | number; specifier?: string | null; desc?: string;
     outcomes?: { id: string | number; odds?: string; desc?: string; isWinning?: number }[] }[];
 };

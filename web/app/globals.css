@@ -642,3 +642,40 @@ ol.legs li { grid-template-columns: 20px minmax(0, 1fr) auto auto; }
   .score.goal, .legbar .seg.flash, .livepill::before { animation: none; }
   .legmeter > span, .ticker { transition: none; }
 }
+
+/* Our picks: page tabs and collapsible slip legs */
+.pagetabs { display: grid; grid-template-columns: 1fr 1fr; margin: 8px 0 16px; border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 5; background: var(--ground); }
+.pagetabs a { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; text-decoration: none; font-weight: 700;
+  color: var(--ink-muted); border-bottom: 3px solid transparent; }
+.pagetabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--signal); }
+.pagetabs .count { font-size: 12px; background: var(--paper-sunk); border-radius: 999px; padding: 1px 8px; }
+.slatelegsbox > summary { cursor: pointer; font-size: 14px; font-weight: 700; min-height: 36px; display: flex; align-items: center; color: var(--ink-muted); list-style: none; }
+.slatelegsbox > summary::-webkit-details-marker { display: none; }
+.slatelegsbox > summary::after { content: "▾"; margin-left: 6px; }
+.slatelegsbox[open] > summary::after { content: "▴"; }
+
+/* Code card, tidier: one action row, a bell menu, a full-width legs row */
+.codecard.is-foreign { border-left-color: var(--rule); }
+.codeline b { font-weight: 700; }
+.codeactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 0; }
+.codeactions > .button.primary { flex: 1 1 160px; justify-content: center; }
+.codeactions .button, .codeactions button, .alertmenu > summary { min-height: 40px; padding: 6px 12px; font-size: 14px; }
+.alertmenu { position: relative; margin-left: auto; }
+.alertmenu > summary { list-style: none; display: inline-flex; align-items: center; justify-content: center; min-width: 40px;
+  border: 1px solid var(--edge); border-radius: 3px; cursor: pointer; color: var(--ink); background: var(--paper); }
+.alertmenu > summary::-webkit-details-marker { display: none; }
+.alertmenu > summary.on { background: var(--signal); border-color: var(--signal); color: var(--on-signal); }
+.alertmenu > summary.off { color: var(--ink-muted); }
+.alertpop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(280px, 80vw); background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow-slip); padding: 6px; display: grid; gap: 2px; }
+.alertpop button { display: grid; justify-items: start; gap: 2px; text-align: left; border: 0; border-radius: 6px; background: transparent;
+  min-height: 48px; padding: 8px 10px; width: 100%; }
+.alertpop button small { font-weight: 400; font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+.alertpop button[aria-checked="true"] { background: var(--paper-sunk); }
+.alertpop button[aria-checked="true"] strong::before { content: "✓ "; color: var(--fair); }
+.legsrow { width: 100%; justify-content: center; margin-top: 10px; border: 0; border-top: 1px solid var(--rule); border-radius: 0;
+  background: transparent; color: var(--ink-muted); font-size: 14px; min-height: 40px; }
+.followbtn { min-height: 32px; min-width: 32px; width: 32px; height: 32px; border: 0; }
+.followbtn svg { width: 16px; height: 16px; }
+.followbtn:not(.on) { color: var(--edge); }
+.chancebig > span small:first-child:not(:last-child) { font-size: 18px; margin-right: 1px; }

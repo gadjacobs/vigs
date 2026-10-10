@@ -36,14 +36,15 @@ export function topN(cands: Pick[], n: number, sort: SortKey): Pick[] {
  * that is also the best expected return. Exact multiple-choice knapsack over
  * log-odds, at most one leg per match and at most `maxLegs` legs.
  */
-export function toTarget(cands: Pick[], target: number, tolerance = 0.1, maxLegs = MAX_LEGS): Pick[] {
+export function toTarget(cands: Pick[], target: number, tolerance = 0.1, maxLegs = MAX_LEGS,
+  chanceOf: (p: Pick) => number = (p) => p.estimate): Pick[] {
   const R = 0.005; // log-odds resolution
   const lo = Math.max(1, Math.ceil(Math.log(target * (1 - tolerance)) / R));
   const hi = Math.floor(Math.log(target * (1 + tolerance)) / R);
   if (hi < lo) return [];
   const groups = new Map<string, Pick[]>();
   for (const p of cands) {
-    if (p.odds <= 1 || p.estimate <= 0) continue;
+    if (p.odds <= 1 || chanceOf(p) <= 0) continue;
     (groups.get(p.eventId) ?? groups.set(p.eventId, []).get(p.eventId)!).push(p);
   }
   const gs = [...groups.values()];
@@ -59,7 +60,7 @@ export function toTarget(cands: Pick[], target: number, tolerance = 0.1, maxLegs
     const ch = new Int32Array(hi + 1).fill(-1);
     g.forEach((p, i) => {
       const w = Math.max(1, Math.round(Math.log(p.odds) / R));
-      const v = Math.log(p.estimate);
+      const v = Math.log(chanceOf(p));
       for (let x = hi; x >= w; x--) {
         if (best[x - w] === NEG || legs[x - w] >= maxLegs) continue;
         const cand = best[x - w] + v;

@@ -1,5 +1,4 @@
 import { atLeast } from "./flex";
-import { ourPicks } from "./ourpicks";
 import type { Pick } from "./picks";
 import { confidence, slipConfidence, type Confidence } from "./plain";
 import { MAX_LEGS, toTarget } from "./slip";
@@ -11,7 +10,7 @@ import { MAX_LEGS, toTarget } from "./slip";
 // keep value, long shots lose it; market and model agreeing is what
 // confidence measures; draws are priced per league and land about 1 in 4.
 
-export type StyleId = "steady" | "double" | "fiver" | "tenner" | "long" | "goals" | "tight" | "bold" | "draws";
+export type StyleId = "steady" | "double" | "fiver" | "tenner" | "long" | "hundred" | "thousand" | "goals" | "tight" | "bold" | "draws";
 export type Slate = {
   id: string; style: StyleId; name: string; blurb: string;
   legs: Pick[]; odds: number; chance: number; confidence: Confidence;
@@ -56,14 +55,58 @@ function byConfidence(pool: Pick[], build: (legs: Pick[]) => Pick[]): Pick[] {
 
 const word = ["", "", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
 
+// Legs are ranked by the bookmaker's de-vigged chance, not Vig's estimate: where
+// the two disagree, results have followed the market, and the model leans the
+// same way across many matches (under 3.5 about 1.4 points above the market,
+// home wins 2 below), which made every slip lean on the same market.
+const market = (p: Pick) => p.marketChance;
+
+/**
+ * The best bet per match for a slip of about `k` legs: each match's likeliest
+ * selection, except that no market may fill more than 40% of the slip, so a
+ * match whose top market is already used offers its next one (double chance,
+ * a team's goals, a first-half line ...).
+ */
+export function bestPerMatch(pool: Pick[], k: number): Pick[] {
+  const cap = Math.max(1, Math.ceil(k * 0.4));
+  const by = new Map<string, Pick[]>();
+  for (const p of pool) (by.get(p.eventId) ?? by.set(p.eventId, []).get(p.eventId)!).push(p);
+  const matches = [...by.values()].map((ps) => ps.sort((a, b) => market(b) - market(a)))
+    .sort((a, b) => market(b[0]) - market(a[0]));
+  const used: Record<string, number> = {};
+  const out: Pick[] = [];
+  for (const ps of matches) {
+    const p = ps.find((x) => (used[x.market] ?? 0) < cap);
+    if (!p) continue;
+    used[p.market] = (used[p.market] ?? 0) + 1;
+    out.push(p);
+  }
+  return out;
+}
+
+/** About how many legs from this pool reach `target` total odds. */
+function legsFor(pool: Pick[], target: number): number {
+  const logs = pool.map((p) => Math.log(p.odds)).sort((a, b) => a - b);
+  const mid = logs[Math.floor(logs.length / 2)] ?? 0.3;
+  return Math.max(2, Math.ceil(Math.log(target) / Math.max(mid, 0.05)));
+}
+
+/** The likeliest slip near `target` odds from varied best-per-match legs in an odds band. */
+function targetSlip(cands: Pick[], target: number, lo: number, hi: number, tol = 0.1): Pick[] {
+  // A single leg can't make a slip, so no leg may reach the target on its own.
+  const top = Math.min(hi, target * (1 - tol) - 0.01);
+  const band = cands.filter((p) => p.odds >= lo && p.odds <= top);
+  return byConfidence(band, (pool) => toTarget(bestPerMatch(pool, legsFor(pool, target)), target, tol, MAX_LEGS, market));
+}
+
 export function cookSlates(cands: Pick[]): Slate[] {
   const out: (Slate | null)[] = [];
 
   // Steady: ~90% legs, as many as keep the whole slip at 60% or better.
-  const safe = ourPicks(cands, 0.88).filter(atLeastConf("Medium")).sort((a, b) => b.estimate - a.estimate);
+  const safe = bestPerMatch(cands.filter((p) => market(p) >= 0.85 && p.odds >= 1.05).filter(atLeastConf("Medium")), 8);
   const steady: Pick[] = [];
   for (const p of safe) {
-    if (steady.reduce((a, x) => a * x.estimate, 1) * p.estimate < 0.6 || steady.length >= 8) break;
+    if (steady.reduce((a, x) => a * market(x), 1) * market(p) < 0.6 || steady.length >= 8) break;
     steady.push(p);
   }
   if (steady.length >= 3)
@@ -71,33 +114,31 @@ export function cookSlates(cands: Pick[]): Slate[] {
       "Likely legs only, kept short so the whole slip lands more often than not.", steady));
 
   // Total-odds slips from short legs (1.25 to 2.2).
-  const short = cands.filter((p) => p.odds >= 1.25 && p.odds <= 2.2);
-  for (const [style, target, name] of [["double", 2, "Double up"], ["fiver", 5, "Fiver"], ["tenner", 10, "Tenner"]] as const) {
-    const legs = byConfidence(short, (pool) => toTarget(pool, target, 0.1, 10));
-    out.push(make(style, name, `About ${target} odds from short, likely legs: they keep more value than one long shot.`, legs));
+  for (const [style, target, name] of [["double", 2, "Double up"], ["fiver", 5, "Fiver"], ["tenner", 10, "Tenner"]] as const)
+    out.push(make(style, name, `About ${target} odds from short, likely legs: they keep more value than one long shot.`,
+      targetSlip(cands, target, 1.25, 2.2)));
+
+  // Long odds from many likely legs, up to SportyBet's 50.
+  for (const [style, target, name, lo] of [["long", 20, "Long shot", 1.15], ["hundred", 100, "Hundred", 1.2], ["thousand", 1000, "Thousand", 1.2]] as const) {
+    const legs = targetSlip(cands, target, lo, 2.5, 0.15);
+    if (legs.length >= 4)
+      out.push(make(style, name, `About ${target.toLocaleString("en-NG")} odds from the likeliest leg per match. Every leg pays the bookmaker's cut, so slips this long land rarely.`, legs));
   }
 
-  // Long shot: big total odds built only from likely legs (double chance, team
-  // goals, overs), the likeliest combination that reaches about 20.
-  const likely = cands.filter((p) => p.estimate >= 0.75 && p.odds >= 1.15);
-  const long = byConfidence(likely, (pool) => toTarget(pool, 20, 0.15, MAX_LEGS));
-  if (long.length >= 6)
-    out.push(make("long", "Long shot", "About 20 odds from likely legs only. Each leg pays the bookmaker's cut, so long slips land rarely and cost more on average.", long));
-
   // Goals and tight games: the market and model agreeing on how the match goes.
-  const goals = onePerMatch(cands.filter((p) => ["O25", "BY", "FH_O15", "O35"].includes(p.market) && p.estimate >= 0.55), (p) => p.estimate);
-  out.push(make("goals", "Goal rush", "Matches the market and model both expect to be open: overs and both teams to score.",
-    byConfidence(goals, (pool) => pool.slice(0, 4))));
-  const tight = onePerMatch(cands.filter((p) => ["U25", "BN", "FH_U15", "U15"].includes(p.market) && p.estimate >= 0.55), (p) => p.estimate);
-  out.push(make("tight", "Tight games", "Matches both expect to stay low: unders and not both teams to score.",
-    byConfidence(tight, (pool) => pool.slice(0, 4))));
+  const goals = onePerMatch(cands.filter((p) => ["O25", "BY", "FH_O15", "O35", "H_O15", "A_O15"].includes(p.market) && market(p) >= 0.55), market);
+  out.push(make("goals", "Goal rush", "Matches the bookmaker expects to be open: overs, both teams to score, a side scoring twice.",
+    byConfidence(goals, (pool) => bestPerMatch(pool, 4).slice(0, 4))));
+  const tight = onePerMatch(cands.filter((p) => ["U25", "BN", "FH_U15", "U15", "H_U15", "A_U15"].includes(p.market) && market(p) >= 0.55), market);
+  out.push(make("tight", "Tight games", "Matches the bookmaker expects to stay low: unders, not both teams to score, a side kept quiet.",
+    byConfidence(tight, (pool) => bestPerMatch(pool, 4).slice(0, 4))));
 
   // Bold: bigger prices only where market and model agree closely.
-  const bold = onePerMatch(cands.filter((p) => p.odds >= 1.8 && p.estimate >= 0.35 && conf(p) === "High"), (p) => p.estimate);
+  const bold = bestPerMatch(cands.filter((p) => p.odds >= 1.8 && market(p) >= 0.35 && conf(p) === "High"), 3);
   if (bold.length >= 3) out.push(make("bold", `Bold ${word[3]}`, "Odds of 1.8 or more where the bookmaker and the model agree closely.", bold.slice(0, 3)));
 
   // Draws, with Flex chances.
-  const draws = cands.filter((p) => p.market === "X" && p.estimate >= 0.27).sort((a, b) => b.estimate - a.estimate);
+  const draws = cands.filter((p) => p.market === "X" && market(p) >= 0.27).sort((a, b) => market(b) - market(a));
   if (draws.length >= 3) {
     const n = Math.min(draws.length, 4);
     out.push(make("draws", `Draw ${["", "", "pair", "trio", "four"][n]}`,

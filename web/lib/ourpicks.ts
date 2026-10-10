@@ -1,5 +1,6 @@
 import type { Pick } from "./picks";
 import { confidence } from "./plain";
+import { bestPerMatch } from "./slates";
 import { toTarget } from "./slip";
 
 // Our picks: ready-made sets, each from what the data has shown so far.
@@ -12,8 +13,11 @@ import { toTarget } from "./slip";
 // - bold: legs at 1.8 or more where the market and model agree (High confidence).
 // - draws: the likeliest draws (evenly matched games, more often in Spain and
 //   Italy), with the chance that at least k of n land for SportyBet's Flex.
-export type SetId = "safe" | "odds" | "bold" | "draws";
+// - best: the best bet per match, ranked by the bookmaker's de-vigged chance
+//   at odds of 1.2 or more, with no market filling more than 40% of the slip.
+export type SetId = "best" | "safe" | "odds" | "bold" | "draws";
 export const SETS: { id: SetId; label: string }[] = [
+  { id: "best", label: "Best per match" },
   { id: "safe", label: "Safe ~90%" },
   { id: "odds", label: "Target odds" },
   { id: "bold", label: "Bold" },
@@ -23,6 +27,7 @@ export const OUR_BARS = [0.85, 0.88, 0.9, 0.93] as const;
 export const OUR_DEFAULT = 0.88;
 export const TARGETS = [2, 5, 10, 20] as const;
 export const COUNTS = [2, 3, 4, 5, 6] as const;
+export const BEST_COUNTS = [5, 10, 20, 30, 50] as const;
 
 export function ourPicks(cands: Pick[], bar = OUR_DEFAULT): Pick[] {
   const best = new Map<string, Pick>();
@@ -56,6 +61,10 @@ export function buildSet(id: SetId, cands: Pick[], o: { bar: number; target: num
       cands.filter((p) => p.odds >= 1.8 && p.estimate >= 0.35 && confidence(p.lo, p.hi) === "High"),
       (p) => p.estimate,
     );
+    return { pool, slip: pool.slice(0, o.n), flex: false };
+  }
+  if (id === "best") {
+    const pool = bestPerMatch(cands.filter((p) => p.odds >= 1.2), o.n);
     return { pool, slip: pool.slice(0, o.n), flex: false };
   }
   if (id === "draws") {

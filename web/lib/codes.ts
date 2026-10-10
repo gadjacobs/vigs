@@ -1,5 +1,5 @@
 import { MARKET_LABELS } from "./markets";
-import { decodeShare } from "./sportybet";
+import { decodeShare, VFOOTBALL } from "./sportybet";
 import { marketKey, score, settle } from "./settle";
 import { getJson, setJson, storeReady } from "./store";
 
@@ -17,11 +17,13 @@ export type CodeState = "open" | "won" | "lost";
 export type Tracked = {
   code: string; legs: Leg[]; state: CodeState; won: number; lost: number; odds: number | null;
   lastKickoff: number; deadline: number; unavailable: number;
+  foreign: boolean; // has legs outside vFootball, which Vig doesn't follow
 };
 
 /** Where a booked code stands, from one read of SportyBet's share endpoint. */
 export async function trackCode(code: string, now = Date.now(), prematch: Record<string, number> = {}): Promise<Tracked> {
   const d = await decodeShare(code);
+  const foreign = (d.outcomes ?? []).some((e) => e.sport?.id !== undefined && e.sport.id !== VFOOTBALL);
   const legs: Leg[] = (d.outcomes ?? []).map((e) => {
     const m = e.markets?.[0];
     const o = m?.outcomes?.[0];
@@ -51,6 +53,7 @@ export async function trackCode(code: string, now = Date.now(), prematch: Record
     lastKickoff: Math.max(0, ...legs.map((l) => l.kickoff)),
     deadline: Number(d.deadline ?? 0),
     unavailable: (d.unavailableOutcomes ?? []).length,
+    foreign,
   };
 }
 

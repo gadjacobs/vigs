@@ -18,6 +18,8 @@ export function SlateCard({ s }: { s: Slate }) {
         <strong>{chance(s.chance)}</strong> chance all land <span className="muted">({oneIn(s.chance)})</span>
       </p>
       <p className="why">{s.blurb}</p>
+      <details className="slatelegsbox" open={s.legs.length <= 4}>
+      <summary>{s.legs.length} legs</summary>
       <ol className="slatelegs">
         {s.legs.map((p) => (
           <li key={p.id}>
@@ -28,6 +30,7 @@ export function SlateCard({ s }: { s: Slate }) {
           </li>
         ))}
       </ol>
+      </details>
       {s.flex && (
         <table className="flextable">
           <caption>With Flex on in SportyBet, the slip pays a reduced amount when legs miss.</caption>

@@ -113,6 +113,27 @@ function codeChance(t: Tracked, live: Record<string, LiveLeg>): number | null {
   return p;
 }
 
+/** The chance from the legs that are priced, and how many aren't yet (rounds SportyBet hasn't published). */
+function chanceParts(t: Tracked, live: Record<string, LiveLeg>): { p: number; missing: number; settling: number } {
+  let p = 1, missing = 0, settling = 0;
+  for (const l of t.legs) {
+    const st = effective(l, live);
+    if (st === "won") continue;
+    if (st === "lost") return { p: 0, missing: 0, settling: 0 };
+    const x = live[legKey(l)];
+    if (x?.state === "ended") settling++;
+    else if (x?.chance === undefined || x.chance === null) missing++;
+    else p *= x.chance;
+  }
+  return { p, missing: missing + settling, settling };
+}
+
+const ALERT_MODES = [
+  ["goals", "Every goal", "Each goal in any leg, then the result"],
+  ["default", "Key moments", "The result, big swings and one leg left"],
+  ["off", "Off", "Nothing for this code"],
+] as const;
+
 function Spark({ points }: { points: [number, number][] }) {
   if (points.length < 2) return null;
   const t0 = points[0][0], t1 = points.at(-1)![0] || t0 + 1;
@@ -208,7 +229,7 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
       for (let i = 0; i < todo.length; i += 8) {
         const res = await trackCodes(todo.slice(i, i + 8)).catch(() => []);
         setStatus((s) => ({ ...s, ...Object.fromEntries(res.map((r) => [r.code, r])) }));
-        saveFinal(res.flatMap((r) => ("legs" in r && r.state !== "open" ? [r] : [])));
+        saveFinal(res.flatMap((r) => ("legs" in r && (r.state !== "open" || r.foreign) ? [r] : [])));
       }
     });
   }, []);
@@ -219,7 +240,7 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
   const pollLive = useCallback(async (force = false) => {
     if (document.visibilityState !== "visible") return;
     const now = Date.now();
-    const open = Object.values(statusRef.current).filter((t): t is Tracked => "legs" in t && t.state === "open");
+    const open = Object.values(statusRef.current).filter((t): t is Tracked => "legs" in t && t.state === "open" && !t.foreign);
     const legs = open.flatMap((t) => t.legs.filter((l) => l.status === "waiting" || l.status === "playing"));
     if (!legs.length) return;
     const playing = legs.some((l) => l.kickoff <= now);
@@ -331,7 +352,7 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
   });
   // Open: still in play, or not checked yet. History: settled, or no longer
   // available from SportyBet a day after the last kickoff.
-  const isHistory = (x: (typeof tracked)[number]) => (x.t ? x.t.state !== "open" : x.err && x.c.last + DAY < now);
+  const isHistory = (x: (typeof tracked)[number]) => (x.t ? x.t.state !== "open" || x.t.foreign : x.err && x.c.last + DAY < now);
   const openList = tracked.filter((x) => !isHistory(x));
   const history = tracked.filter(isHistory);
   const shownHistory = history.filter((x) => filter === "all" || x.t?.state === filter);
@@ -399,7 +420,8 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
           const next = legs.filter((l) => eff(l) === "waiting").sort((a, b) => a.kickoff - b.kickoff)[0];
           const left = legs.filter((l) => eff(l) === "waiting" || eff(l) === "playing").length;
           const wonN = legs.filter((l) => eff(l) === "won").length, lostN = legs.filter((l) => eff(l) === "lost").length;
-          const chance = t && t.state === "open" ? codeChance(t, live) : null;
+          const parts = t && t.state === "open" && !t.foreign ? chanceParts(t, live) : null;
+          const chance = parts && !parts.missing ? codeChance(t!, live) : null;
           const hist = swing[c.code] ?? [];
           const prev = hist.length > 1 ? hist.at(-2)![1] : null;
           const delta = chance !== null && prev !== null ? Math.round((chance - prev) * 100) : 0;
@@ -411,64 +433,79 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
           const odds = t ? t.odds : c.odds || null;
           const mode = modes[c.code];
           const settled = t && t.state !== "open";
+          const foreign = Boolean(t?.foreign);
           return (
-            <li key={c.code} className={`codecard ${shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""}`}
-              onClick={(e) => { if (!(e.target as HTMLElement).closest("a,button,input,label")) toggle(c.code); }}>
+            <li key={c.code} className={`codecard ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""}`}>
               <div className="codetop">
                 <div className="codehead">
                   <strong className="num codeid">{c.code}</strong>
-                  {shownState && <span className={`badge state-${shownState}`}>{STATE[shownState]}</span>}
+                  {foreign ? <span className="badge state-upcoming">Not vFootball</span>
+                    : shownState && <span className={`badge state-${shownState}`}>{STATE[shownState]}</span>}
                   {err && <span className="badge state-lost">Unavailable</span>}
-                  {mode && <span className="alertmark" title={mode === "goals" ? "Alerts for every goal" : "Alerts off for this code"}><Icon d={mode === "goals" ? BELL : BELL_OFF} /></span>}
                 </div>
-                {chance !== null && !lostN ? (
+                {foreign ? null : chance !== null && !lostN ? (
                   <div className={`chancebig ${chance >= 0.5 ? "good" : "low"}`} aria-label={`${pctText(chance)}% chance to land`}>
                     <span className="num"><Ticker value={chance * 100} /><small>%</small></span>
                     <em>{delta !== 0 ? <b className={delta > 0 ? "up" : "down"}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</b> : null} to land</em>
+                  </div>
+                ) : parts && parts.missing && !lostN ? (
+                  <div className="chancebig low" aria-label={`at most ${pctText(parts.p)}% chance to land`}>
+                    <span className="num"><small>≤</small>{pctText(parts.p)}<small>%</small></span>
+                    <em>{parts.missing - parts.settling ? `${parts.missing - parts.settling} not priced yet` : `${parts.settling} settling`}</em>
                   </div>
                 ) : settled ? (
                   <div className={`chancebig done-${t!.state}`}><span>{t!.state === "won" ? "✓" : "✗"}</span><em>{t!.state === "won" ? "landed" : "lost"}</em></div>
                 ) : null}
               </div>
               <p className="codemeta">
-                {odds ? <><strong className="num">{odds.toFixed(2)}</strong> odds</> : <span title="Some legs were never seen before kickoff">odds unknown</span>}
-                {" · "}{legs.length || c.legs} legs<span className="muted"> · booked {lagos(c.at)}</span>
+                {odds ? <><strong className="num">{odds.toFixed(2)}</strong> odds · </> : null}
+                {legs.length || c.legs} legs · booked {lagos(c.at)}
               </p>
+              {foreign ? (
+                <p className="codeline">Vig follows vFootball only, so this code&apos;s results aren&apos;t tracked here. Check it in SportyBet.</p>
+              ) : (<>
               {legs.length > 0 && (
                 <div className="legbar" role="img" aria-label={`${wonN} won, ${lostN} lost, ${left} to play`}>
                   {legs.map((l) => <span key={l.eventId} className={`seg seg-${eff(l)} ${goalFlash.has(l.eventId) ? "flash" : ""}`} />)}
                 </div>
               )}
               <p className="codeline">
-                {t ? <>{wonN} won · {lostN} lost · {left} to play{next ? ` · next kickoff ${lagos(next.kickoff)}` : ""}</>
+                {t ? <><b>{wonN}</b> won · <b>{lostN}</b> lost · <b>{left}</b> to play{next ? <span className="muted"> · next {lagos(next.kickoff)}</span> : null}</>
                   : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : "Checking…"}
               </p>
               {hist.length > 1 && chance !== null && !lostN && <Spark points={hist} />}
-              <div className="row codeactions">
+              </>)}
+              <div className="codeactions">
                 <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>
                 <CopyButton text={c.code} />
-                {(t || !err) && <ShareButton code={c.code} />}
-                {last && <button type="button" onClick={() => setHedge({ code: c.code, odds: t!.odds,
+                {(t || !err) && !foreign && <ShareButton code={c.code} />}
+                {last && !foreign && <button type="button" onClick={() => setHedge({ code: c.code, odds: t!.odds,
                   leg: { eventId: last.eventId, market: last.market, kickoff: last.kickoff, home: last.home, away: last.away, label: last.label } })}>Hedge</button>}
-                {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
-                {legs.length > 0 && (
-                  <button type="button" className="legstoggle" aria-expanded={isOpen} onClick={() => toggle(c.code)}>
-                    {isOpen ? "Hide legs ▴" : "Show legs ▾"}
-                  </button>
+                {t && !settled && !foreign && endpoint && (
+                  <details className="alertmenu">
+                    <summary aria-label={`Alerts for ${c.code}: ${ALERT_MODES.find(([v]) => v === (mode ?? "default"))![1]}`}
+                      className={mode === "goals" ? "on" : mode === "off" ? "off" : ""}>
+                      <Icon d={mode === "off" ? BELL_OFF : BELL} />
+                    </summary>
+                    <div className="alertpop" role="radiogroup" aria-label={`Alerts for ${c.code}`}>
+                      {ALERT_MODES.map(([v, label, hint]) => (
+                        <button key={v} type="button" role="radio" aria-checked={(mode ?? "default") === v}
+                          onClick={(e) => { chooseMode(c.code, v, t.lastKickoff); (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; }}>
+                          <strong>{label}</strong><small>{hint}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </details>
                 )}
+                {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
               </div>
-              {isOpen && t && !settled && (
-                endpoint ? (
-                  <div className="codealerts" role="radiogroup" aria-label={`Alerts for ${c.code}`}>
-                    <span>Alerts</span>
-                    {([["goals", "Every goal"], ["default", "Key moments"], ["off", "Off"]] as const).map(([v, label]) => (
-                      <button key={v} type="button" role="radio" aria-checked={(mode ?? "default") === v}
-                        onClick={() => chooseMode(c.code, v, t.lastKickoff)}>{label}</button>
-                    ))}
-                  </div>
-                ) : endpoint === null ? (
-                  <p className="hint"><a href="/alerts">Turn on notifications</a> to follow this code or its matches without opening the app.</p>
-                ) : null
+              {t && !settled && !foreign && endpoint === null && isOpen && (
+                <p className="hint"><a href="/alerts">Turn on notifications</a> to follow this code or its matches without opening the app.</p>
+              )}
+              {legs.length > 0 && !foreign && (
+                <button type="button" className="legsrow" aria-expanded={isOpen} onClick={() => toggle(c.code)}>
+                  {isOpen ? "Hide legs ▴" : `Show ${legs.length} legs ▾`}
+                </button>
               )}
               {isOpen && legs.length > 0 && (
                 <ol className="legs">

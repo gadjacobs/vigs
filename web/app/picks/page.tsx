@@ -7,7 +7,7 @@ import { SlipBuilder } from "../slip-builder";
 import { loadBlend } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
-import { buildSet, COUNTS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, type SetId } from "@/lib/ourpicks";
+import { BEST_COUNTS, buildSet, COUNTS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, type SetId } from "@/lib/ourpicks";
 import { candidates } from "@/lib/picks";
 import { chance, oneIn } from "@/lib/plain";
 import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
@@ -19,9 +19,10 @@ import { SlateCard } from "./slate-card";
 export const dynamic = "force-dynamic";
 
 const MAX_ON_SLIP = MAX_LEGS;
-type SP = { set?: string; bar?: string; odds?: string; n?: string };
+type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string };
 
 const ABOUT: Record<SetId, string> = {
+  best: "One leg per match: its likeliest selection at odds of 1.2 or more, by the bookmaker's own chance, with no market filling more than 40% of the slip, so you get a spread of markets.",
   safe: "For every published match, the best-paying selection with a chance at or above the bar.",
   odds: "The likeliest slip near your total odds, built from legs priced 1.25 to 2.2 that the market and model broadly agree on. In the settled data, prices under 2 lost 1-2% of stakes on average while prices over 5 lost 24-48%, so several short legs keep more value than one long shot.",
   bold: "Bigger odds with High confidence: legs at 1.8 or more where the bookmaker's price and the model agree closely, likeliest first.",
@@ -48,12 +49,15 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   } catch {
     cooked = null;
   }
-  const set: SetId = SETS.find((x) => x.id === sp.set)?.id ?? "safe";
+  const set: SetId = SETS.find((x) => x.id === sp.set)?.id ?? "best";
+  const tab = sp.tab === "build" || (sp.set && sp.tab !== "cooked") ? "build" : "cooked";
   const bar = OUR_BARS.find((b) => String(Math.round(b * 100)) === sp.bar) ?? OUR_DEFAULT;
   const target = TARGETS.find((t) => String(t) === sp.odds) ?? 10;
-  const n = COUNTS.find((c) => String(c) === sp.n) ?? (set === "draws" ? 4 : 3);
+  const n = set === "best"
+    ? BEST_COUNTS.find((c) => String(c) === sp.n) ?? 10
+    : COUNTS.find((c) => String(c) === sp.n) ?? (set === "draws" ? 4 : 3);
   const link = (o: Partial<Record<keyof SP, string | number>>) =>
-    `/picks?${new URLSearchParams(Object.entries({ set, bar: Math.round(bar * 100), odds: target, n, ...o }).map(([k, v]) => [k, String(v)]))}`;
+    `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), odds: target, n, ...o }).map(([k, v]) => [k, String(v)]))}`;
 
   const { profile } = await myProfile();
   const view = (profile?.view ?? (await cookies()).get("vig_view")?.value) === "detailed" ? "detailed" : "simple";
@@ -68,7 +72,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
     error = "SportyBet or the model file did not answer. Try again in a minute.";
   }
   const blend = await loadBlend();
-  const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, mode: "count", count: MAX_ON_SLIP, sort: "likely" };
+  const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 24, mode: "count", count: MAX_ON_SLIP, sort: "likely" };
   const cands = model ? candidates(model, fixtures, { ...q, now }, blend).candidates : [];
   const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP });
   const all = built.slip.reduce((a, p) => a * p.estimate, 1);
@@ -79,6 +83,13 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   return (
     <main>
       <h1>Our picks</h1>
+      <nav className="pagetabs" aria-label="Our picks">
+        <Link href="/picks?tab=cooked" aria-current={tab === "cooked" ? "page" : undefined}>
+          Cooked slips {cooked?.slates.length ? <span className="count">{cooked.slates.length}</span> : null}
+        </Link>
+        <Link href={`/picks?tab=build&set=${set}`} aria-current={tab === "build" ? "page" : undefined}>Build your own</Link>
+      </nav>
+      {tab === "cooked" && (<>
       <p className="lede">Slips cooked for the rounds published now, named by style and already booked. Open one in SportyBet, or edit it first.</p>
       {cooked && cooked.slates.length > 0 ? (
         <>
@@ -91,17 +102,19 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       ) : (
         <p className="note">Nothing published right now is good enough to cook a slip. Check back when the next round is published.</p>
       )}
+      </>)}
 
-      <h2 className="buildown">Build your own</h2>
+      {tab === "build" && (<>
       <nav className="settabs" aria-label="Pick sets">
         {SETS.map((x) => (
-          <Link key={x.id} href={`/picks?set=${x.id}`} aria-current={x.id === set ? "page" : undefined}>{x.label}</Link>
+          <Link key={x.id} href={`/picks?tab=build&set=${x.id}`} aria-current={x.id === set ? "page" : undefined}>{x.label}</Link>
         ))}
       </nav>
       <p className="lede">{ABOUT[set]}</p>
       {set === "safe" && <Chips name="Chance bar" value={bar} options={OUR_BARS} label={(b) => `${Math.round(b * 100)}%+`} href={(b) => link({ bar: Math.round(b * 100) })} />}
       {set === "odds" && <Chips name="Total odds" value={target} options={TARGETS} label={(t) => `${t} odds`} href={(t) => link({ odds: t })} />}
       {(set === "bold" || set === "draws") && <Chips name="Legs" value={n} options={COUNTS} label={(c) => `${c} legs`} href={(c) => link({ n: c })} />}
+      {set === "best" && <Chips name="Legs" value={n} options={BEST_COUNTS} label={(c) => `${c} legs`} href={(c) => link({ n: c })} />}
       {error && <p className="note warn" role="alert">{error}</p>}
       {model && !error && (
         <p className="status">
@@ -128,6 +141,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
             stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
         )}
       </div>
+      </>)}
     </main>
   );
 }

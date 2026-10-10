@@ -347,6 +347,8 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
     try {
       if (!w.legs) {
         const t = await trackWithPrematch(code, now);
+        // Vig follows vFootball only: a code with other sports is never announced.
+        if (t.foreign) { await claim(`done:${code}`, DONE_SECONDS); await drop(code); continue; }
         if (t.state !== "open") { await final(w, t); continue; }
         w.legs = t.legs.map((l) => ({ eventId: l.eventId, market: l.market, kickoff: l.kickoff, home: l.home, away: l.away, label: l.label }));
         w.settled = Object.fromEntries(t.legs.filter((l) => l.status === "won" || l.status === "lost").map((l) => [legKey(l), l.status === "won"]));

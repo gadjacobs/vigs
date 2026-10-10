@@ -78,7 +78,7 @@ async function logTracked(ts: Tracked[]) {
   if (!user || !storeReady()) return;
   const now = Date.now();
   const fresh = [];
-  for (const t of ts) if (t.legs.some((l) => l.kickoff > now) && !(await has(`logged:${user}`, t.code))) fresh.push(t);
+  for (const t of ts) if (!t.foreign && t.legs.some((l) => l.kickoff > now) && !(await has(`logged:${user}`, t.code))) fresh.push(t);
   if (!fresh.length) return;
   const [{ loadModel }, { loadBlend }, { upcoming }, { candidates }, { DEFAULT_QUERY }, { MARKET_LABELS }, { logOnce }, { rememberEstimates }] =
     await Promise.all([import("@/lib/model"), import("@/lib/blend"), import("@/lib/sportybet"), import("@/lib/picks"),

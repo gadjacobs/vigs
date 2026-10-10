@@ -177,6 +177,7 @@ export function Filters({ initial, saved: savedInitial = null }: { initial: Quer
           <label className="field">Window
             <select value={q.hours} onChange={(e) => set("hours", Number(e.target.value))}>
               {[0.5, 1, 2, 3, 4].map((h) => <option key={h} value={h}>Next {h} h</option>)}
+              <option value={24}>Any time (everything published)</option>
             </select>
           </label>
           <label className="field">Leg odds from

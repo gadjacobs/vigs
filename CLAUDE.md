@@ -60,7 +60,9 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   The tick watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
 - Markets include double chance (DC1X/DC12/DCX2: market chance = sum of the two de-vigged 1X2
   outcomes) and team goals (H_/A_ over/under 0.5–3.5); Python and web settle and price them the same.
-  Slips take up to 50 legs (`MAX_LEGS`). Per-code alert modes (`codealert:`) and followed matches
+  Slips take up to 50 legs (`MAX_LEGS`). Cooked slips and Best per match rank legs by market
+  chance (`bestPerMatch`, max 40% per market), not the model. Codes with non-vFootball legs are
+  shown as such and never tracked, alerted or logged. Per-code alert modes (`codealert:`) and followed matches
   (`fixture:`) live in the store; a code's result is sent once (`done:`).
 - Push (`web/lib/push.ts`, `store.ts`, `/alerts`): Upstash Redis holds subscriptions,
   tip times, watched codes and profiles only; `/api/push/tick` is called by the collector with
