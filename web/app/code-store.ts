@@ -35,6 +35,24 @@ export function saveFinal(ts: Tracked[]) {
   window.dispatchEvent(new Event("vig-codes"));
 }
 
+// The last reading of each open code, shown at once on the next visit (marked as
+// updating) while SportyBet is read again.
+export const OPEN_KEY = "vig_code_open";
+export function readOpen(now = Date.now()): Record<string, Tracked> {
+  try {
+    const all = JSON.parse(localStorage.getItem(OPEN_KEY) ?? "{}") as Record<string, Tracked>;
+    return Object.fromEntries(Object.entries(all).filter(([, t]) => t.lastKickoff + 6 * 3600_000 > now));
+  } catch {
+    return {};
+  }
+}
+export function saveOpen(ts: Tracked[]) {
+  const all = { ...readOpen(), ...Object.fromEntries(ts.map((t) => [t.code, t])) };
+  for (const t of ts) if (t.state !== "open") delete all[t.code];
+  const keep = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].lastKickoff - a[1].lastKickoff).slice(0, 40));
+  try { localStorage.setItem(OPEN_KEY, JSON.stringify(keep)); } catch { /* full or private */ }
+}
+
 /** Codes on this device still to play or in play, for the tab bar's counter. */
 export function openCount(now = Date.now()): number {
   const done = readFinal();

@@ -722,9 +722,11 @@ ol.legs li { grid-template-columns: 20px minmax(0, 1fr) auto auto; }
 .votebtn { align-self: start; }
 
 /* Open codes counter on the Codes tab */
-.navbadge { position: absolute; top: 2px; left: calc(50% + 10px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+/* The badge hangs off the icon's top-right corner, so it never moves the icon or label. */
+.navicon { position: relative; display: inline-flex; }
+.navbadge { position: absolute; top: -7px; left: calc(100% - 8px); z-index: 1; min-width: 18px; pointer-events: none; height: 18px; padding: 0 5px; border-radius: 999px;
   background: var(--house); color: #fff; font-size: 11px; line-height: 18px; font-weight: 800; text-align: center; animation: pop 260ms ease-out; }
-@media (min-width: 641px) { .navbadge { position: static; margin-left: 2px; } }
+@media (min-width: 641px) { .navicon { position: static; } .mainnav a .navbadge { top: -2px; left: auto; right: -6px; } }
 @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .navbadge { animation: none; } }
 
@@ -915,3 +917,11 @@ button:active:not(:disabled), .button:active { transform: scale(0.97); }
 .slates > li { scroll-margin-top: 64px; }
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* Small inline spinner: a card or leg being read again */
+.spin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent;
+  animation: spin 700ms linear infinite; vertical-align: -1px; opacity: .8; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.updating { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
+.legwait { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--ink-muted); }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2s; } }

@@ -1,4 +1,5 @@
 "use server";
+import { after } from "next/server";
 import { cookies } from "next/headers";
 import { trackWithPrematch, type Tracked } from "@/lib/codes";
 import { dropSub, loadSub, pushReady, saveSub, send, subId, watchCode, type OursPrefs } from "@/lib/push";
@@ -69,7 +70,8 @@ export async function trackCodes(codes: string[]): Promise<(Tracked | { code: st
       return { code, error: (e as Error).message };
     }
   }));
-  await logTracked(out.flatMap((t) => ("legs" in t ? [t] : []))).catch(() => undefined);
+  // Logging loads the model and the round; it runs after the reply so Codes isn't kept waiting.
+  after(() => logTracked(out.flatMap((t) => ("legs" in t ? [t] : []))).catch(() => undefined));
   return out;
 }
 

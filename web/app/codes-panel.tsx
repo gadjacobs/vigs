@@ -11,7 +11,7 @@ import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
 import type { SavedCode as Saved } from "@/lib/profile";
 import { shareUrl } from "@/lib/share";
-import { readAll, readCodes, readFinal, readHidden, saveFinal, writeAll, writeHidden } from "./code-store";
+import { readAll, readCodes, readFinal, readHidden, readOpen, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
 
 export type { Saved };
 export { CODES_KEY, readCodes } from "./code-store";
@@ -192,20 +192,34 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const checked = useRef<Record<string, number>>({});
   const lastLive = useRef(0);
 
+  const [updating, setUpdating] = useState<Set<string>>(new Set());
+  const pollRef = useRef<(force?: boolean) => void>(() => undefined);
+
   // Settled codes never change, so they are kept on the device and not checked
-  // again; the rest are checked in batches of 8, newest first.
+  // again. Open ones show their last reading at once, marked as updating, and are
+  // all read again together; live scores are fetched straight after.
   const refresh = useCallback((list: Saved[]) => {
     const done = readFinal();
-    if (Object.keys(done).length) setStatus((s) => ({ ...done, ...s }));
     const todo = list.map((c) => c.code).filter((c) => !done[c]);
+    const known = readOpen();
+    const cached = Object.fromEntries(todo.flatMap((c) => (known[c] ? [[c, known[c]]] : [])));
+    setStatus((s) => ({ ...done, ...cached, ...s }));
     if (!todo.length) return;
-    start(async () => {
-      for (let i = 0; i < todo.length; i += 8) {
-        const res = await trackCodes(todo.slice(i, i + 8)).catch(() => []);
+    setUpdating((u) => new Set([...u, ...todo]));
+    void (async () => {
+      const batches: string[][] = [];
+      for (let i = 0; i < todo.length; i += 8) batches.push(todo.slice(i, i + 8));
+      await Promise.all(batches.map(async (b) => {
+        const res = await trackCodes(b).catch(() => []);
         setStatus((s) => ({ ...s, ...Object.fromEntries(res.map((r) => [r.code, r])) }));
-        saveFinal(res.flatMap((r) => ("legs" in r && (r.state !== "open" || r.foreign) ? [r] : [])));
-      }
-    });
+        const ts = res.flatMap((r) => ("legs" in r ? [r] : []));
+        saveFinal(ts.filter((r) => r.state !== "open" || r.foreign));
+        saveOpen(ts.filter((r) => !r.foreign));
+        setUpdating((u) => new Set([...u].filter((c) => !b.includes(c))));
+        statusRef.current = { ...statusRef.current, ...Object.fromEntries(res.map((r) => [r.code, r])) };
+        pollRef.current(true);
+      }));
+    })();
   }, []);
 
   // Live scores and chances for open codes: every 10 seconds while a leg is in
@@ -249,9 +263,11 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       const r = await trackCodes(again).catch(() => []);
       setStatus((s) => ({ ...s, ...Object.fromEntries(r.map((x) => [x.code, x])) }));
       saveFinal(r.flatMap((x) => ("legs" in x && x.state !== "open" ? [x] : [])));
+      saveOpen(r.flatMap((x) => ("legs" in x && !x.foreign ? [x] : [])));
     }
   }, []);
 
+  pollRef.current = (force = false) => { pollLive(force); };
   const haveStatus = Object.keys(status).length > 0;
   useEffect(() => {
     if (!haveStatus) return;
@@ -397,7 +413,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
           ))}
         </div>
       )}
-      <p className="status codestatus">{pending ? "Updating…" : tab === "open" ? "Scores update every 10 seconds while a leg is in play." : "Settled codes. Removing one hides it here; the record keeps its result."}</p>
+      <p className="status codestatus">{tab === "open" ? "Scores update every 10 seconds while a leg is in play." : "Settled codes. Removing one hides it here; the record keeps its result."}</p>
       {undo && <p className="note undo" role="status">Removed {undo.code}. <button type="button" onClick={restore}>Undo</button></p>}
       {!loaded && <ul className="codecards" aria-busy="true" aria-label="Loading codes"><SkeletonCard /><SkeletonCard /></ul>}
       {loaded && tab === "open" && !openList.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
@@ -431,6 +447,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   {foreign ? <span className="badge state-upcoming">Not vFootball</span>
                     : shownState && <span className={`badge state-${shownState}`}>{STATE[shownState]}</span>}
                   {err && <span className="badge state-lost">Unavailable</span>}
+                  {updating.has(c.code) && <span className="updating" role="status"><i className="spin" aria-hidden="true" />Updating</span>}
                 </div>
                 {foreign ? null : chance !== null && !lostN ? (
                   <div className={`chancebig ${chance >= 0.5 ? "good" : "low"}`} aria-label={`${pctText(chance)}% chance to land`}>
@@ -518,7 +535,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                         {playing && <span className={`livepill ${x!.phase === "HT" ? "ht" : ""}`}>{x!.phase === "HT" ? "HT" : x!.minute !== null ? `${x!.minute}'` : "Live"}</span>}
                         <b className={`score num ${goalFlash.has(l.eventId) ? "goal" : ""}`}>
                           {l.status === "won" || l.status === "lost" ? `${l.score}${l.market.startsWith("FH_") && l.ht ? ` (HT ${l.ht})` : ""}`
-                            : playing ? x!.score : l.kickoff > now ? lagos(l.kickoff) : "Playing"}
+                            : playing ? x!.score : l.kickoff > now ? lagos(l.kickoff)
+                            : <span className="legwait"><i className="spin" aria-hidden="true" />{x?.state === "ended" ? "Settling" : <span className="sr-only">Checking</span>}</span>}
                         </b>
                         {lc !== null && (st === "playing" || st === "waiting") && <small className="legchance">{pctText(lc)}%</small>}
                         <span className="sr-only"> {st}</span>
