@@ -7,7 +7,7 @@ export async function AccountButton() {
   if (!user) return null;
   const label = profile?.prefs?.name || user;
   return (
-    <Link href="/account" className="avatar" aria-label={`Account: ${label}`} title={label}>
+    <Link href="/account" className="avatar" aria-label={`Settings: ${label}`} title={`Settings (${label})`}>
       {profile?.who?.picture
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={profile.who.picture} alt="" referrerPolicy="no-referrer" />

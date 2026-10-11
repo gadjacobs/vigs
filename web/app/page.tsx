@@ -5,6 +5,7 @@ import { lagos } from "./pick-row";
 import { SlipBuilder } from "./slip-builder";
 import { loadBlend } from "@/lib/blend";
 import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
+import { viewOf } from "@/lib/view";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
 import { candidates } from "@/lib/picks";
@@ -19,7 +20,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
   let sp = await searchParams;
   const jar = await cookies();
   const { user, profile } = await myProfile();
-  const view = (profile?.view ?? jar.get("vig_view")?.value) === "simple" ? "simple" : "detailed";
+  const view = viewOf(profile, jar.get("vig_view")?.value);
   // No filters in the URL: reuse the account's last ones, else this device's.
   if (!Object.keys(sp).length) {
     const saved = profile?.query ?? decodeURIComponent(jar.get("vig_q")?.value ?? "");

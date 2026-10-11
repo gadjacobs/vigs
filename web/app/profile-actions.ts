@@ -71,6 +71,7 @@ export async function savePrefs(prefs: Prefs) {
     stake: Number.isFinite(prefs.stake) ? Math.min(10_000_000, Math.max(0, Math.round(Number(prefs.stake)))) : undefined,
     home: prefs.home === "/picks" || prefs.home === "/codes" ? prefs.home : "/",
   };
+  if (prefs.onboarded !== undefined) clean.onboarded = Boolean(prefs.onboarded);
   await updateProfile(user, (p) => ({ ...p, prefs: { ...p.prefs, ...clean } }));
   return true;
 }

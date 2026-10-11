@@ -14,6 +14,7 @@ export type Sub = {
   keys: { p256dh: string; auth: string };
   results: boolean; // tell me when a watched code wins or loses
   swings?: boolean; // goals that move a watched code's chance, and its last leg (default on)
+  codeDefault?: "goals" | "default" | "off"; // for codes without their own choice
   tips: string[]; // "HH:MM" Lagos
   query: string; // Tonight filters for tips when the account has none saved
   user?: string; // account, whose latest filters the tips follow
@@ -294,6 +295,8 @@ export function dueOurs(sub: Pick<Sub, "ours" | "lastOurs">, now: number): boole
   return inside && now - (sub.lastOurs ?? 0) >= o.every * 60 * MIN - 5 * MIN;
 }
 
+type TickOut = { watches: number; live: number; settled: number; swings: number; tips: number; sent: number; errors: number; next: number; busy: boolean; catchUp: boolean };
+
 export type TipBuilder = (query: string, now: number) => Promise<Payload>;
 export type OursBuilder = (set: string, now: number) => Promise<Payload>;
 
@@ -301,7 +304,26 @@ export type OursBuilder = (set: string, now: number) => Promise<Payload>;
  * counts for the log, and `next`: seconds until the collector should call again
  * (short while a watched leg is in play). */
 export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: OursBuilder) {
-  const out = { watches: 0, live: 0, settled: 0, swings: 0, tips: 0, sent: 0, errors: 0, next: 120 };
+  const out = { watches: 0, live: 0, settled: 0, swings: 0, tips: 0, sent: 0, errors: 0, next: 120, busy: false, catchUp: false };
+  // One tick at a time: the collector and a backup heartbeat may both call.
+  if (!(await claim("tick:running", 50).catch(() => true))) return { ...out, busy: true, next: 20 };
+  try {
+    return await runTick(out, buildTip, now, buildOurs);
+  } finally {
+    await del("tick:running").catch(() => undefined);
+  }
+}
+
+/** A code's result is worth a push only while it is news: within 45 minutes of
+ * its last kickoff (a match takes about 30). After that the app still settles
+ * it when opened, but the phone isn't woken for something long over. */
+export const freshResult = (lastKickoff: number, now: number) => now - lastKickoff <= 45 * MIN;
+
+async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOurs?: OursBuilder) {
+  // After a gap (the collector between runs), catch up silently: settle and
+  // update every code and match, but send nothing that happened while away.
+  const prev = await getJson<number>("lastTick");
+  out.catchUp = prev !== null && now - prev > 4 * MIN;
   await setJson("lastTick", now);
   const subs = new Map<string, Sub>();
   for (const id of await members("subs")) {
@@ -318,10 +340,12 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
   // kind "goals" goes only to devices following the code goal by goal; a
   // device that turned a code off hears nothing about it.
   const tell = async (w: Watch, p: Payload, kind: "results" | "swings" | "goals") => {
+    if (out.catchUp) return;
+    if (kind === "results" && !freshResult(w.lastKickoff, now)) return;
     const modes = await codeAlerts(w.code);
     for (const id of w.subs) {
       const s = subs.get(id);
-      const mode = modes[id];
+      const mode = modes[id] ?? (s?.codeDefault === "goals" || s?.codeDefault === "off" ? s.codeDefault : undefined);
       if (!s || mode === "off") continue;
       const wants = mode === "goals" ? true : kind === "results" ? s.results : kind === "swings" ? s.swings !== false : false;
       if (wants && (await send(s, p))) out.sent++;
@@ -406,7 +430,8 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
       // Gone from the live list a while after kickoff: read the match itself for the final score.
       const ev = board.get(id) ?? (now - f.kickoff > 3 * MIN ? await eventMarkets(id, true) : null);
       const news = fixtureNews(f, ev, now);
-      for (const p of news.payloads)
+      if (!out.catchUp && !(news.done && !freshResult(f.kickoff, now)))
+        for (const p of news.payloads)
         for (const sid of f.subs) {
           const sub = subs.get(sid);
           if (sub && (await send(sub, p))) out.sent++;

@@ -9,6 +9,7 @@ import { UpdateToast } from "./update-toast";
 import { BUILD } from "@/lib/build";
 import { ThemeToggle } from "./theme-toggle";
 import { BetaLink } from "./beta-link";
+import { Resume } from "./resume";
 import "./globals.css";
 
 const text = Atkinson_Hyperlegible_Next({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-text" });
@@ -58,6 +59,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <SamsungHint />
         {children}
         <UpdateToast build={BUILD} />
+        <Resume />
       </body>
     </html>
   );

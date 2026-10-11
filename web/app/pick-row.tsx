@@ -38,15 +38,9 @@ export function PickRow({ p, actions, now, view = "detailed" }: { p: Pick; actio
         </div>
         <p className="plain">
           <strong className="num chance">{chance(p.estimate)}</strong>
-          <span>chance, {oneIn(p.estimate)}. At {p.odds.toFixed(2)} it needs {pct(p.breakEven)} to break even, so
-            {p.estimate > p.breakEven ? " on our numbers it pays a little more than its chance." : " the bookmaker keeps the difference."}</span>
+          <span>chance it lands, {oneIn(p.estimate)}.</span>
         </p>
-        {p.odds >= 5 && <p className="why longshot">Long shot: in Vig&apos;s data, prices over 5 have returned far less than they cost (see Record).</p>}
-        <p className="why">
-          {conf} confidence: {CONFIDENCE_WHY[conf]}. Range {pct(p.lo)} to {pct(p.hi)}. Bookmaker {pct(p.marketChance)},
-          history {p.historyRate === null ? "none" : `${pct(p.historyRate)} of ${p.historyN.toLocaleString()}`},
-          edge {naira(p.edge)} per ₦1,000. Grade {p.grade}: {p.why}.
-        </p>
+        {p.odds >= 5 && <p className="why longshot">Long shot: prices this big have paid back far less than they cost.</p>}
         {actions && <div className="row leg-actions">{actions}</div>}
       </li>
     );

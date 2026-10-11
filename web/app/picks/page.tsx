@@ -1,3 +1,4 @@
+import { viewOf } from "@/lib/view";
 import { MAX_LEGS } from "@/lib/slip";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -60,7 +61,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
     `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), odds: target, n, ...o }).map(([k, v]) => [k, String(v)]))}`;
 
   const { profile } = await myProfile();
-  const view = (profile?.view ?? (await cookies()).get("vig_view")?.value) === "detailed" ? "detailed" : "simple";
+  const view = viewOf(profile, (await cookies()).get("vig_view")?.value);
   const now = Date.now();
   let model: ModelFile | null = null;
   let fixtures: Fixture[] = [];

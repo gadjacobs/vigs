@@ -1,3 +1,4 @@
+import { viewOf } from "@/lib/view";
 import { MAX_LEGS } from "@/lib/slip";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -19,7 +20,7 @@ export default async function EditSlate({ searchParams }: { searchParams: Promis
   const cooked = await currentSlates(now).catch(() => null);
   const slate = cooked?.slates.find((s) => s.id === id);
   const { profile } = await myProfile();
-  const view = (profile?.view ?? (await cookies()).get("vig_view")?.value) === "detailed" ? "detailed" : "simple";
+  const view = viewOf(profile, (await cookies()).get("vig_view")?.value);
   const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
   const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, mode: "count", count: MAX_LEGS, sort: "likely" };
   const cands = candidates(model, fixtures, { ...q, now }, blend).candidates;

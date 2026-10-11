@@ -22,6 +22,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
   const [sub, setSub] = useState<PushSubscription | null>(null);
   const [results, setResults] = useState(true);
   const [swings, setSwings] = useState(true);
+  const [codeDefault, setCodeDefault] = useState<"goals" | "default" | "off">("default");
   const [tips, setTips] = useState<string[]>([]);
   const [ours, setOurs] = useState<OursPrefs>(OURS_DEFAULT);
   const [custom, setCustom] = useState("");
@@ -43,6 +44,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       if (p) {
         setResults(p.results);
         setSwings(p.swings);
+        setCodeDefault(p.codeDefault);
         setTips(p.tips);
         if (p.ours) setOurs(p.ours);
       }
@@ -50,9 +52,9 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
     })().catch(() => setState("unsupported"));
   }, []);
 
-  const save = (s: PushSubscription, r: boolean, t: string[], note: string, o: OursPrefs = ours, sw: boolean = swings) =>
+  const save = (s: PushSubscription, r: boolean, t: string[], note: string, o: OursPrefs = ours, sw: boolean = swings, cd = codeDefault) =>
     start(async () => {
-      const res = await subscribePush(s.toJSON() as never, { results: r, tips: t, ours: o, swings: sw });
+      const res = await subscribePush(s.toJSON() as never, { results: r, tips: t, ours: o, swings: sw, codeDefault: cd });
       setMsg(res.ok ? note : res.error);
     });
 
@@ -66,7 +68,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       } catch (e) {
         return setMsg(`This browser could not register with its push service (${(e as Error).message}). Try again, or use Chrome.`);
       }
-      const res = await subscribePush(s.toJSON() as never, { results, tips, ours, swings });
+      const res = await subscribePush(s.toJSON() as never, { results, tips, ours, swings, codeDefault });
       if (!res.ok) return setMsg(res.error);
       setSub(s);
       setState("on");
@@ -107,16 +109,28 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
         </>
       ) : (
         <>
-          <label className="check">
-            <input type="checkbox" checked={results} disabled={pending}
-              onChange={(e) => { setResults(e.target.checked); if (sub) save(sub, e.target.checked, tips, e.target.checked ? "Code results on." : "Code results off."); }} />
-            When a code I book lands or loses
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={swings} disabled={pending}
-              onChange={(e) => { setSwings(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Live swings on." : "Live swings off.", ours, e.target.checked); }} />
-            Goals that swing my codes, and when one leg is left
-          </label>
+          <fieldset className="setgroup">
+            <legend>Your codes</legend>
+            <label className="switch">
+              <span><strong>Results</strong><small>When a code lands or loses</small></span>
+              <input type="checkbox" role="switch" checked={results} disabled={pending}
+                onChange={(e) => { setResults(e.target.checked); if (sub) save(sub, e.target.checked, tips, e.target.checked ? "Results on." : "Results off."); }} />
+            </label>
+            <label className="switch">
+              <span><strong>Big moments</strong><small>A goal that swings a code, and when one leg is left</small></span>
+              <input type="checkbox" role="switch" checked={swings} disabled={pending}
+                onChange={(e) => { setSwings(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Big moments on." : "Big moments off.", ours, e.target.checked); }} />
+            </label>
+            <label className="field">For each new code
+              <select value={codeDefault} disabled={pending}
+                onChange={(e) => { const v = e.target.value as typeof codeDefault; setCodeDefault(v); if (sub) save(sub, results, tips, "Saved.", ours, swings, v); }}>
+                <option value="default">Key moments (the two above)</option>
+                <option value="goals">Every goal, then the result</option>
+                <option value="off">Nothing</option>
+              </select>
+              <span className="hint">Change any one code from the bell on its card.</span>
+            </label>
+          </fieldset>
           <fieldset className="chipgroup">
             <legend>Send me a tip slip at (Lagos time)</legend>
             {[...new Set([...PRESETS, ...tips])].sort().map((t) => (

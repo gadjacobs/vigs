@@ -2,10 +2,14 @@ name: Collect vFootball data
 
 # Polls SportyBet every 4 minutes for pre-match odds (published only for the
 # next round) and results, and commits them to the `data` branch.
-# Each run lasts just under 6 hours; runs start every 6 hours.
+# Each run lasts just under 6 hours. GitHub delays scheduled runs, sometimes by
+# hours (18:17 started at 21:58 on 11 Oct), so the schedule fires every 30
+# minutes: with the concurrency group below, the newest trigger waits as the one
+# pending run and starts the moment the current run ends, so runs follow each
+# other back to back. Superseded pending runs show as cancelled; they cost nothing.
 on:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "7,37 * * * *"
   workflow_dispatch:
     inputs:
       chunks:

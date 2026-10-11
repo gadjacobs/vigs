@@ -1,6 +1,22 @@
 "use client";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { openCount } from "./code-store";
+
+/** Open codes on this device, kept current as codes are booked and settle. */
+function useOpenCount() {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const upd = () => setN(openCount());
+    upd();
+    addEventListener("vig-codes", upd);
+    addEventListener("storage", upd);
+    const t = setInterval(upd, 60_000);
+    return () => { removeEventListener("vig-codes", upd); removeEventListener("storage", upd); clearInterval(t); };
+  }, []);
+  return n;
+}
 
 const I = (d: string) => (
   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2"
@@ -23,12 +39,14 @@ function Pending() {
 
 export function Nav() {
   const path = usePathname();
-  if (path === "/login" || path === "/welcome") return null;
+  const open = useOpenCount();
+  if (path === "/login" || path === "/welcome" || path === "/onboarding") return null;
   return (
     <nav aria-label="Main" className="mainnav">
       {LINKS.map((l) => (
         <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}>
           {l.icon}<span>{l.label}</span><Pending />
+          {l.href === "/codes" && open > 0 && <b className="navbadge" aria-label={`${open} open`}>{open > 99 ? "99+" : open}</b>}
         </Link>
       ))}
     </nav>

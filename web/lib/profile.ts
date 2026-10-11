@@ -18,7 +18,10 @@ export type Profile = {
 };
 
 export type SavedFilter = { name: string; qs: string };
-export type Prefs = { name?: string; stake?: number; home?: "/" | "/picks" | "/codes" };
+export type Prefs = {
+  name?: string; stake?: number; home?: "/" | "/picks" | "/codes";
+  onboarded?: boolean; // finished (or skipped) the first-run tour
+};
 export const DEFAULT_STAKE = 1000;
 
 const KEEP_DAYS = 30;

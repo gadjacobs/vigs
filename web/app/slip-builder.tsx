@@ -41,7 +41,7 @@ function ViewToggle({ view, setView }: { view: View; setView: (v: View) => void 
       <div className="segmented" role="radiogroup" aria-label="How picks are shown">
         {(["simple", "detailed"] as const).map((v) => (
           <button key={v} type="button" role="radio" aria-checked={view === v} onClick={() => choose(v)}>
-            {v === "simple" ? "Chance" : "Full numbers"}
+            {v === "simple" ? "Simple" : "Rich"}
           </button>
         ))}
       </div>
@@ -133,11 +133,10 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
             <p className="plain">
               <strong className="num chance">{chance(s.model)}</strong>
               <span>chance all {legs.length} {legs.length === 1 ? "leg lands" : "legs land"}, {oneIn(s.model)}.
-                Total odds <strong className="num">{s.odds.toFixed(2)}</strong> need {pct(1 / s.odds)} to break even.</span>
+                Total odds <strong className="num">{s.odds.toFixed(2)}</strong>.</span>
             </p>
             <p className="why">
-              <span className={`badge conf-${conf.toLowerCase()}`}>{conf} confidence</span>{" "}
-              {conf === "High" ? "Every leg: " : "At least one leg: "}{CONFIDENCE_WHY[conf]}. Bookmaker {pct(s.market)}, edge {naira(s.edge)} per ₦1,000.
+              <span className={`badge conf-${conf.toLowerCase()}`}>{conf} confidence</span>
             </p>
           </div>
         ) : (
@@ -151,7 +150,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
         )}
         {stake > 0 && legs.length > 0 && (
           <p className="returns">₦{stake.toLocaleString("en-NG")} returns <strong className="num">₦{Math.round(stake * s.odds).toLocaleString("en-NG")}</strong> if every leg lands.
-            {" "}On average about <strong className="num">₦{Math.round(stake * s.odds * s.market).toLocaleString("en-NG")}</strong> comes back, by the bookmaker&apos;s own chances; each leg costs its cut.</p>
+            {view === "detailed" && <>{" "}On average about <strong className="num">₦{Math.round(stake * s.odds * s.market).toLocaleString("en-NG")}</strong> comes back, by the bookmaker&apos;s own chances; each leg costs its cut.</>}</p>
         )}
         {flex && legs.length > 1 && <FlexTable legs={legs} />}
         {legs.length > 1 && s.model < LOW_CHANCE && (

@@ -720,3 +720,94 @@ ol.legs li { grid-template-columns: 20px minmax(0, 1fr) auto auto; }
 .kindpick input:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 .kindpick input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
 .votebtn { align-self: start; }
+
+/* Open codes counter on the Codes tab */
+.navbadge { position: absolute; top: 2px; left: calc(50% + 10px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--house); color: #fff; font-size: 11px; line-height: 18px; font-weight: 800; text-align: center; animation: pop 260ms ease-out; }
+@media (min-width: 641px) { .navbadge { position: static; margin-left: 2px; } }
+@keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .navbadge { animation: none; } }
+
+/* Loading skeletons */
+.skel { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--paper-sunk) 0%, var(--rule) 40%, var(--paper-sunk) 80%);
+  background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+.skel-code { width: 130px; height: 28px; }
+.skel-chance { width: 64px; height: 40px; margin-left: auto; }
+.skel-line { height: 14px; width: 70%; margin: 10px 0; }
+.skel-line.short { width: 40%; }
+.skel-bar { height: 8px; width: 100%; margin: 12px 0; }
+.skel-btn { height: 40px; width: 160px; }
+.skel-btn.small { width: 90px; }
+.codecard.skeleton { border-left-color: var(--rule); }
+.codeline .skel-line { display: inline-block; width: 160px; margin: 0; vertical-align: middle; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+/* Small confirmation toast (settings saved, alerts changed) */
+.savedtoast { position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom)); transform: translate(-50%, 12px); z-index: 60;
+  margin: 0; max-width: min(92vw, 420px); padding: 10px 16px; border-radius: 12px; background: var(--ink); color: var(--paper);
+  font-size: 14px; line-height: 20px; box-shadow: var(--shadow-slip); opacity: 0; pointer-events: none; transition: opacity 200ms, transform 200ms; }
+.savedtoast.on { opacity: 1; transform: translate(-50%, 0); }
+.savedtoast:empty { padding: 0; }
+@media (min-width: 641px) { .savedtoast { bottom: 24px; } }
+
+/* ---- Polish: motion and touch feedback ---- */
+main { animation: page-in 240ms ease-out both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.codecards > li, .slates > li, ul.picks > li, .ideas > li, .w-grid > *, .setcard {
+  animation: enter 320ms cubic-bezier(.2, .7, .2, 1) both; }
+.codecards > li:nth-child(2), .slates > li:nth-child(2), ul.picks > li:nth-child(2), .ideas > li:nth-child(2), .setcard:nth-of-type(2) { animation-delay: 40ms; }
+.codecards > li:nth-child(3), .slates > li:nth-child(3), ul.picks > li:nth-child(3), .ideas > li:nth-child(3), .setcard:nth-of-type(3) { animation-delay: 80ms; }
+.codecards > li:nth-child(4), .slates > li:nth-child(4), ul.picks > li:nth-child(4), .ideas > li:nth-child(4), .setcard:nth-of-type(4) { animation-delay: 120ms; }
+.codecards > li:nth-child(n+5), .slates > li:nth-child(n+5), ul.picks > li:nth-child(n+5), .ideas > li:nth-child(n+5), .setcard:nth-of-type(n+5) { animation-delay: 160ms; }
+@keyframes enter { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: none; } }
+button, .button { transition: transform 120ms ease-out, background-color 160ms, border-color 160ms, color 160ms, box-shadow 160ms; }
+button:active:not(:disabled), .button:active { transform: scale(0.97); }
+.codecard, .slate, .setcard { transition: box-shadow 200ms, transform 200ms; }
+@media (hover: hover) { .codecard:hover, .slate:hover { box-shadow: 0 10px 24px -18px rgba(15, 61, 46, 0.45); } }
+.codetabs button, .pagetabs a { transition: color 160ms, border-color 220ms; }
+.topbar nav.mainnav a svg { transition: background-color 200ms, color 200ms, padding 200ms; }
+.legs { animation: enter 220ms ease-out both; }
+.alertpop { animation: enter 160ms ease-out both; transform-origin: top right; }
+@media (prefers-reduced-motion: reduce) {
+  main, .codecards > li, .slates > li, ul.picks > li, .ideas > li, .w-grid > *, .setcard, .legs, .alertpop { animation: none; }
+  button:active:not(:disabled), .button:active { transform: none; }
+}
+
+/* ---- Settings ---- */
+.settings .acct-hero { margin-bottom: 8px; }
+.setindex { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 4px 0 16px; padding-bottom: 2px; position: sticky; top: 0; z-index: 4; background: var(--ground); padding-top: 6px; }
+.setindex a { flex: none; text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--rule); background: var(--paper); }
+.setcard { background: var(--paper); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; margin: 0 0 14px; display: grid; gap: 12px; scroll-margin-top: 56px; }
+.setcard h2 { margin: 0; font-size: 18px; line-height: 24px; }
+.setcard .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; }
+.setcard input[type="text"], .setcard select { min-height: 44px; padding: 8px 12px; font: inherit; font-weight: 400; color: var(--ink); background: var(--paper-sunk); border: 1px solid var(--edge); border-radius: 8px; }
+.setcard .alerts.panel { border: 0; padding: 0; background: transparent; }
+.setlinks { display: flex; flex-wrap: wrap; gap: 8px; }
+.signout { margin: 8px 0 24px; }
+.viewpick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.viewpick button { display: grid; gap: 4px; justify-items: start; text-align: left; padding: 12px; border-radius: 12px; border: 2px solid var(--rule); background: var(--paper); min-height: 0; }
+.viewpick button[aria-checked="true"] { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 60%, transparent); }
+.viewpick small { font-weight: 400; font-size: 12px; line-height: 17px; color: var(--ink-muted); }
+.vp-mock { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 6px; width: 100%; padding: 10px; border-radius: 8px; background: var(--paper-sunk); margin-bottom: 4px; }
+.vp-mock b { font-family: var(--font-num); font-size: 26px; line-height: 26px; color: var(--fair); }
+.vp-mock i { font-style: normal; font-size: 11px; color: var(--ink-muted); }
+.vp-mock em { font-style: normal; font-weight: 800; }
+.vp-bar { grid-column: 1 / -1; position: relative; height: 6px; border-radius: 3px; background: var(--rule); }
+.vp-bar > span { position: absolute; left: 70%; width: 10%; top: 0; bottom: 0; background: var(--fair); opacity: .5; border-radius: 3px; }
+.vp-bar > i { position: absolute; left: 78%; top: -3px; bottom: -3px; width: 2px; background: var(--house); }
+.stakepick { display: flex; flex-wrap: wrap; gap: 6px; }
+.stakepick button { min-height: 40px; padding: 6px 12px; border-radius: 999px; font-size: 14px; }
+.stakepick button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.stakepick input { width: 110px; }
+.setgroup { border: 0; padding: 0; margin: 0 0 12px; display: grid; gap: 10px; }
+.setgroup legend { font-weight: 800; font-size: 15px; margin-bottom: 4px; }
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 8px 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.switch span { display: grid; gap: 2px; }
+.switch small { color: var(--ink-muted); font-size: 13px; line-height: 18px; }
+.switch input { appearance: none; -webkit-appearance: none; flex: none; width: 46px; height: 28px; border-radius: 999px; background: var(--rule); position: relative; transition: background-color 180ms; cursor: pointer; }
+.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform 180ms; }
+.switch input:checked { background: var(--fair); }
+.switch input:checked::after { transform: translateX(18px); }
+.switch input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 420px) { .viewpick { grid-template-columns: 1fr; } }

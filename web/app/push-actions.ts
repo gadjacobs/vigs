@@ -6,7 +6,7 @@ import { SETS } from "@/lib/ourpicks";
 import { myProfile } from "@/lib/profile";
 import { buildOurs, buildTip } from "@/lib/tips";
 
-export type PushPrefs = { results: boolean; tips: string[]; ours?: OursPrefs; swings?: boolean };
+export type PushPrefs = { results: boolean; tips: string[]; ours?: OursPrefs; swings?: boolean; codeDefault?: "goals" | "default" | "off" };
 type Raw = { endpoint: string; keys: { p256dh: string; auth: string } };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -22,14 +22,15 @@ export async function subscribePush(raw: Raw, prefs: PushPrefs) {
   const o = prefs.ours;
   const ours = o && (o.set === "cooked" || SETS.some((x) => x.id === o.set)) && TIME.test(o.from) && TIME.test(o.to)
     ? { set: o.set, every: Math.min(24, Math.max(0, Math.round(Number(o.every) || 0))), from: o.from, to: o.to } : undefined;
-  await saveSub({ endpoint: raw.endpoint, keys: raw.keys, results: Boolean(prefs.results), swings: prefs.swings !== false, tips, query, user: user ?? undefined, ours });
+  const codeDefault = prefs.codeDefault === "goals" || prefs.codeDefault === "off" ? prefs.codeDefault : "default";
+  await saveSub({ endpoint: raw.endpoint, keys: raw.keys, results: Boolean(prefs.results), swings: prefs.swings !== false, codeDefault, tips, query, user: user ?? undefined, ours });
   return { ok: true as const };
 }
 
 export async function pushPrefs(endpoint: string) {
   if (!pushReady()) return null;
   const s = await loadSub(await subId(endpoint));
-  return s ? { results: s.results, swings: s.swings !== false, tips: s.tips, query: s.query, ours: s.ours } : null;
+  return s ? { results: s.results, swings: s.swings !== false, codeDefault: s.codeDefault ?? "default", tips: s.tips, query: s.query, ours: s.ours } : null;
 }
 
 export async function unsubscribePush(endpoint: string) {

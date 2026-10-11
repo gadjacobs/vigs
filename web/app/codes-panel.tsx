@@ -11,58 +11,12 @@ import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
 import type { SavedCode as Saved } from "@/lib/profile";
 import { shareUrl } from "@/lib/share";
+import { readAll, readCodes, readFinal, readHidden, saveFinal, writeAll, writeHidden } from "./code-store";
 
 export type { Saved };
-export const CODES_KEY = "vig_codes";
+export { CODES_KEY, readCodes } from "./code-store";
 const PAGE = 10;
 const DAY = 24 * 3600 * 1000;
-
-function readAll(): Saved[] {
-  try {
-    return JSON.parse(localStorage.getItem(CODES_KEY) ?? "[]") as Saved[];
-  } catch {
-    return [];
-  }
-}
-
-function writeAll(list: Saved[]) {
-  try {
-    localStorage.setItem(CODES_KEY, JSON.stringify(list.slice(0, 60)));
-  } catch { /* private mode */ }
-}
-
-const FINAL_KEY = "vig_code_final";
-function readFinal(): Record<string, Tracked> {
-  try {
-    return JSON.parse(localStorage.getItem(FINAL_KEY) ?? "{}") as Record<string, Tracked>;
-  } catch {
-    return {};
-  }
-}
-function saveFinal(ts: Tracked[]) {
-  if (!ts.length) return;
-  const all = { ...readFinal(), ...Object.fromEntries(ts.map((t) => [t.code, t])) };
-  const keep = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].lastKickoff - a[1].lastKickoff).slice(0, 80));
-  try { localStorage.setItem(FINAL_KEY, JSON.stringify(keep)); } catch { /* full or private */ }
-}
-
-const HIDDEN_KEY = "vig_codes_hidden";
-function readHidden(): Set<string> {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "[]") as string[]);
-  } catch {
-    return new Set();
-  }
-}
-function writeHidden(h: Set<string>) {
-  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...h].slice(-300))); } catch { /* private mode */ }
-}
-
-/** Every code on this device except removed ones, newest first. */
-export const readCodes = (): Saved[] => {
-  const hidden = readHidden();
-  return readAll().filter((c) => !hidden.has(c.code)).sort((a, b) => b.at - a.at);
-};
 
 /** Remember a code on this device and in the account, and tell the panel. */
 export function rememberCode(c: Saved) {
@@ -126,6 +80,18 @@ function chanceParts(t: Tracked, live: Record<string, LiveLeg>): { p: number; mi
     else p *= x.chance;
   }
   return { p, missing: missing + settling, settling };
+}
+
+function SkeletonCard() {
+  return (
+    <li className="codecard skeleton" aria-hidden="true">
+      <div className="codetop"><span className="skel skel-code" /><span className="skel skel-chance" /></div>
+      <span className="skel skel-line short" />
+      <span className="skel skel-bar" />
+      <span className="skel skel-line" />
+      <div className="codeactions"><span className="skel skel-btn" /><span className="skel skel-btn small" /></div>
+    </li>
+  );
 }
 
 const ALERT_MODES = [
@@ -194,8 +160,9 @@ const Icon = ({ d }: { d: string }) => (
 const ICON: Record<string, string> = { won: "✓", lost: "✗", playing: "…", waiting: "", unknown: "?" };
 const STATE: Record<Tracked["state"] | "upcoming", string> = { upcoming: "Upcoming", open: "In play", won: "Landed", lost: "Lost" };
 
-export function CodesPanel({ stake = 1000 }: { stake?: number }) {
+export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; view?: "simple" | "detailed" }) {
   const [codes, setCodes] = useState<Saved[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [status, setStatus] = useState<Record<string, Tracked | { code: string; error: string }>>({});
   const [entry, setEntry] = useState("");
   const [pending, start] = useTransition();
@@ -212,6 +179,13 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
   const [modes, setModes] = useState<Record<string, "goals" | "off">>({});
   const [follows, setFollows] = useState<Set<string>>(new Set());
   const [goalFlash, setGoalFlash] = useState<Set<string>>(new Set());
+  const [note, setNote] = useState("");
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const say = (m: string) => {
+    setNote(m);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => setNote(""), 3500);
+  };
   const lastScores = useRef<Record<string, string>>({});
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -295,12 +269,14 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
     if (!endpoint) return;
     setModes((m) => { const n = { ...m }; if (mode === "default") delete n[code]; else n[code] = mode; return n; });
     setCodeAlertAction(endpoint, code, mode, lastKickoff).catch(() => undefined);
+    say(mode === "goals" ? `${code}: every goal in every leg, then the result.` : mode === "off" ? `${code}: no notifications.` : `${code}: the result and big moments.`);
   };
   const toggleFollow = (l: Tracked["legs"][number]) => {
     if (!endpoint) return;
     const on = !follows.has(l.eventId);
     setFollows((f) => { const n = new Set(f); if (on) n.add(l.eventId); else n.delete(l.eventId); return n; });
     followMatch(endpoint, { eventId: l.eventId, home: l.home, away: l.away, league: l.league, kickoff: l.kickoff }, on).catch(() => undefined);
+    say(on ? `Following ${l.home} v ${l.away}: kick-off, goals, half time and full time.` : `Stopped following ${l.home} v ${l.away}.`);
   };
   useEffect(() => {
     setSwing(readSwing());
@@ -314,6 +290,7 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
     const load = () => {
       const list = readCodes();
       setCodes(list);
+      setLoaded(true);
       refresh(list);
     };
     load();
@@ -326,6 +303,9 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
       })
       .catch(() => undefined);
     window.addEventListener("vig-codes", load);
+    // Back in the foreground: re-read every open code and the live scores now.
+    const resume = () => { refresh(readCodes().filter((c) => { const st = statusRef.current[c.code]; return !st || !("legs" in st) || st.state === "open"; })); pollLive(true); };
+    window.addEventListener("vig-resume", resume);
     // Live scores come from the live feed; SportyBet's share endpoint is only
     // read again for codes not loaded yet, or with a leg that should be over.
     const stale = (c: Saved) => {
@@ -336,9 +316,10 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
     const t = setInterval(() => document.visibilityState === "visible" && refresh(readCodes().filter(stale)), 60_000);
     return () => {
       window.removeEventListener("vig-codes", load);
+      window.removeEventListener("vig-resume", resume);
       clearInterval(t);
     };
-  }, [refresh]);
+  }, [refresh, pollLive]);
 
   const track = (e: React.FormEvent) => {
     e.preventDefault();
@@ -418,7 +399,8 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
       )}
       <p className="status codestatus">{pending ? "Updating…" : tab === "open" ? "Scores update every 10 seconds while a leg is in play." : "Settled codes. Removing one hides it here; the record keeps its result."}</p>
       {undo && <p className="note undo" role="status">Removed {undo.code}. <button type="button" onClick={restore}>Undo</button></p>}
-      {tab === "open" && !openList.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
+      {!loaded && <ul className="codecards" aria-busy="true" aria-label="Loading codes"><SkeletonCard /><SkeletonCard /></ul>}
+      {loaded && tab === "open" && !openList.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
       {tab === "history" && !shownHistory.length && <p className="note">Nothing settled here yet.</p>}
       <ul className="codecards">
         {list.map(({ c, t, err }) => {
@@ -478,7 +460,7 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
               )}
               <p className="codeline">
                 {t ? <><b>{wonN}</b> won · <b>{lostN}</b> lost · <b>{left}</b> to play{next ? <span className="muted"> · next {lagos(next.kickoff)}</span> : null}</>
-                  : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : "Checking…"}
+                  : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : <span className="skel skel-line" aria-label="Loading" />}
               </p>
               {hist.length > 1 && chance !== null && !lostN && <Spark points={hist} />}
               </>)}
@@ -526,7 +508,7 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
                     <li key={l.eventId} className={`leg-${st} ${course ? `course-${course}` : ""}`}>
                       <span className="legicon" aria-hidden="true">{ICON[st]}</span>
                       <span className="legmain">{l.home} v {l.away}
-                        <small>{l.label} · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"} · {lagos(l.kickoff)}</small>
+                        <small>{l.label}{view === "detailed" ? <> · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"}</> : l.odds ? <> · <span className="num">{l.odds.toFixed(2)}</span></> : null} · {lagos(l.kickoff)}</small>
                         {lc !== null && (st === "playing" || st === "waiting") && (
                           <span className="legmeter" aria-hidden="true"><span style={{ width: `${Math.round(lc * 100)}%` }} /></span>
                         )}
@@ -555,6 +537,7 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
           );
         })}
       </ul>
+      <p className={`savedtoast ${note ? "on" : ""}`} role="status" aria-live="polite">{note}</p>
       {hedge && <HedgeSheet code={hedge.code} leg={hedge.leg} odds={hedge.odds} stake={stake} onClose={closeHedge} />}
       {more > 0 && <button type="button" className="moreb" onClick={() => setPages((p) => p + 1)}>Show {Math.min(more, PAGE)} more</button>}
     </section>
