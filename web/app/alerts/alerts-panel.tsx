@@ -9,7 +9,7 @@ const OURS_DEFAULT: OursPrefs = { set: "cooked", every: 0, from: "09:00", to: "2
 
 const PRESETS = ["09:00", "13:00", "18:00", "20:00", "22:00"];
 
-function keyBytes(base64: string) {
+export function keyBytes(base64: string) {
   const pad = "=".repeat((4 - (base64.length % 4)) % 4);
   const raw = atob((base64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));

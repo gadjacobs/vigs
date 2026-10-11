@@ -75,3 +75,16 @@ export async function savePrefs(prefs: Prefs) {
   await updateProfile(user, (p) => ({ ...p, prefs: { ...p.prefs, ...clean } }));
   return true;
 }
+
+/** The first-run tour is done (or skipped): keep the choices made in it. */
+export async function finishOnboarding(choice: { view?: "simple" | "detailed"; stake?: number }) {
+  const user = await me();
+  if (!user) return false;
+  const view = choice.view === "detailed" || choice.view === "simple" ? choice.view : undefined;
+  const stake = Number.isFinite(choice.stake) && Number(choice.stake) > 0 ? Math.min(10_000_000, Math.round(Number(choice.stake))) : undefined;
+  await updateProfile(user, (p) => ({
+    ...p, ...(view ? { view } : {}),
+    prefs: { ...p.prefs, onboarded: true, ...(stake ? { stake } : {}) },
+  }));
+  return true;
+}

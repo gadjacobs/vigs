@@ -473,8 +473,9 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 {t && !settled && !foreign && endpoint && (
                   <details className="alertmenu">
                     <summary aria-label={`Alerts for ${c.code}: ${ALERT_MODES.find(([v]) => v === (mode ?? "default"))![1]}`}
-                      className={mode === "goals" ? "on" : mode === "off" ? "off" : ""}>
+                      className={mode === "goals" ? "on" : mode === "off" ? "off" : "key"}>
                       <Icon d={mode === "off" ? BELL_OFF : BELL} />
+                      <span className="alertlabel" aria-hidden="true">{mode === "goals" ? "Goals" : mode === "off" ? "Off" : "Key"}</span>
                     </summary>
                     <div className="alertpop" role="radiogroup" aria-label={`Alerts for ${c.code}`}>
                       {ALERT_MODES.map(([v, label, hint]) => (

@@ -1,10 +1,11 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { Filters } from "./filters";
 import { ScrollOnBuild } from "./scroll-on-build";
 import { lagos } from "./pick-row";
 import { SlipBuilder } from "./slip-builder";
 import { loadBlend } from "@/lib/blend";
-import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
+import { DEFAULT_STAKE, myProfile, needsTour } from "@/lib/profile";
 import { viewOf } from "@/lib/view";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
@@ -20,6 +21,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
   let sp = await searchParams;
   const jar = await cookies();
   const { user, profile } = await myProfile();
+  if (needsTour(user, profile, jar.get("vig_onb")?.value)) redirect("/onboarding");
   const view = viewOf(profile, jar.get("vig_view")?.value);
   // No filters in the URL: reuse the account's last ones, else this device's.
   if (!Object.keys(sp).length) {
@@ -78,7 +80,11 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
           model fitted on {model.fitted_on.toLocaleString()} results.
           {blended.length
             ? ` Blend of market price and model in use for ${blended.join(", ")}.`
-            : ` Estimates are weighted 85/15 toward the market price, which has beaten the results model so far${blend ? `; the blend switches on once proven (${blend.matches.toLocaleString()} of ${blend.min_matches.toLocaleString()} settled matches)` : ""}.`}
+            : ` Estimates are weighted 95/5 toward the market price, which has beaten the results model so far${blend
+              ? blend.matches < blend.min_matches
+                ? `; a blend switches on once proven (${blend.matches.toLocaleString()} of ${blend.min_matches.toLocaleString()} settled matches)`
+                : `; a blend switches on for a market only when it beats the market price on held-out matches (${blend.matches.toLocaleString()} settled so far)`
+              : ""}.`}
         </p>
       )}
       </div>

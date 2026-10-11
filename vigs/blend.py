@@ -4,8 +4,9 @@ For each market: P(win) = sigmoid(a + b1 * logit(market chance) + b2 * logit(mod
 Trained on settled matches with a pre-kickoff odds snapshot. The model input is
 point-in-time: for matches on day D it comes from a model fitted on results
 before D. A blend switches on for a market only when there is enough data and
-it beats the results model on the most recent 30% of matches, which it did not
-train on. Until then the app and `likely` use `guarded`: a constant 85/15 weighting
+it beats both the results model and the market price on the most recent 30% of
+matches (at least 500), which it did not train on. Until then the app and `likely`
+use `guarded`: a constant 95/5 weighting
 toward the market price, with a range that spans both views.
 """
 from __future__ import annotations

@@ -7,7 +7,7 @@ import type { Slate } from "@/lib/slates";
 
 export function SlateCard({ s }: { s: Slate }) {
   return (
-    <li className={`slate conf-edge-${s.confidence.toLowerCase()}`}>
+    <li id={`slip-${s.style}`} className={`slate conf-edge-${s.confidence.toLowerCase()}`}>
       <div className="slatehead">
         <h3>{s.name}</h3>
         <span className={`badge conf-${s.confidence.toLowerCase()}`}>{s.confidence} confidence</span>

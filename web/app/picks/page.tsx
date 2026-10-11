@@ -98,6 +98,11 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
             {cooked.slates.length} slips cooked at {lagos(cooked.cooked_at)} Lagos. Which slips appear depends on what this round offers:
             each needs enough legs at its confidence level. They are recooked when a new round is published.
           </p>
+          <nav className="slipjump" aria-label="Jump to a slip">
+            {cooked.slates.map((s) => (
+              <a key={s.id} href={`#slip-${s.style}`}><span>{s.name}</span><b className="num">{s.odds < 100 ? s.odds.toFixed(2) : Math.round(s.odds).toLocaleString("en-NG")}</b></a>
+            ))}
+          </nav>
           <ul className="slates">{cooked.slates.map((s) => <SlateCard key={s.id} s={s} />)}</ul>
         </>
       ) : (

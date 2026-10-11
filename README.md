@@ -222,6 +222,19 @@ store connected, an account's booked codes, last filters, Chance/Full view and
 theme sync across every device signed in to it; the first sync merges what
 each device already had. Push tips follow the account's latest filters.
 
+## First run and Settings
+
+A new account starts with a short tour: Simple or Rich view, a usual stake,
+five real screens of the app with the part that matters highlighted, and
+notifications. It can be skipped and replayed from Settings.
+
+**Simple** (the default) shows the chance a leg or slip lands, the odds and
+what it pays. **Rich** adds break-even, the bookmaker's own chance, the 90%
+range, edge and grade. **Settings** (the avatar) holds the view, name, usual
+stake, start page, theme, this device's notifications, saved filters, help and,
+for admins, invites and a setup check. The Codes tab shows how many codes are
+open, and reopening the app refreshes everything without a pull.
+
 ## Your codes and notifications
 
 **Codes** has two tabs, like SportyBet: **Open** (in play, 10 at a time) and
@@ -281,7 +294,15 @@ deployed or a new round is published. Setup, once:
 Every open code on a signed-in account is watched, however it was booked
 (built, cooked, copied, opened or tracked). The collector calls the tick about
 every 20 seconds while a watched leg is in play and every 2 minutes otherwise
-(the tick tells it which). Push signing keys
+(the tick tells it which). GitHub starts the collector every 30 minutes (each
+run waits behind the one in progress, so runs chain end to end even when GitHub
+starts them late). Only one tick runs at a time; after a gap of more than 4
+minutes the first tick catches up quietly (it records what changed without
+sending stale news), and a result is never sent for a code whose last match
+kicked off more than 45 minutes earlier. Settled codes still settle in the app on the
+next refresh. For extra safety an outside scheduler (cron-job.org, free) can
+POST to the tick URL every minute with `Authorization: Bearer <PUSH_TICK_SECRET>`.
+Push signing keys
 are made on first use and kept in the store (or set `VAPID_PUBLIC_KEY` and
 `VAPID_PRIVATE_KEY`). The store holds only push subscriptions, tip times,
 filters and watched codes; no SportyBet details.

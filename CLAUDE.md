@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Vig: history-backed selections for SportyBet virtual football. Python 3.10+,
-stdlib only in `vigs/` (Playwright only in `tools/record_feed.py`).
+stdlib only in `vigs/` (Playwright only in `tools/record_feed.py` and `tools/tour_shots.py`).
 
 ## The idea
 Odds say what the bookmaker thinks and what you're paid; history says what
@@ -58,12 +58,18 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   every 10 s while a leg plays; chance to land = SportyBet's live probability per open leg
   (1/0 once the score decides it). Hedge only does arithmetic and books a code; never bets.
   The tick watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
+  One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no
+  result is sent > 45 min after a code's last kickoff. Collector cron is every 30 min (runs chain).
 - Markets include double chance (DC1X/DC12/DCX2: market chance = sum of the two de-vigged 1X2
   outcomes) and team goals (H_/A_ over/under 0.5–3.5); Python and web settle and price them the same.
   Slips take up to 50 legs (`MAX_LEGS`). Cooked slips and Best per match rank legs by market
   chance (`bestPerMatch`, max 40% per market), not the model. Codes with non-vFootball legs are
   shown as such and never tracked, alerted or logged. Per-code alert modes (`codealert:`) and followed matches
   (`fixture:`) live in the store; a code's result is sent once (`done:`).
+- Settings (`/account`) and the first-run tour (`/onboarding`, `web/lib/tour.ts`): `prefs.onboarded`
+  (or cookie `vig_onb`) ends the redirect from `/` and `/start`. Tour screens are real captures
+  made by `tools/tour_shots.py` (Playwright) with their spots in `web/lib/tour-spots.json`;
+  re-run it when those screens change. View is Simple (chance first) unless the account picks Rich.
 - Beta (`web/lib/beta.ts`, `/feedback`, Account): ideas/bugs with votes; admins (`ADMIN_ACCOUNTS`,
   default `me`) answer and invite testers by Google address (stored `invites`, `.i.` sessions).
 - Push (`web/lib/push.ts`, `store.ts`, `/alerts`): Upstash Redis holds subscriptions,

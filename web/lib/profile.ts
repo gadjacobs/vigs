@@ -63,3 +63,8 @@ export const myProfile = cache(async () => {
   const user = await currentUser();
   return { user, profile: await loadProfile(user) };
 });
+
+/** A signed-in account that has not seen the first-run tour on any device (or this one). */
+export function needsTour(user: string | null, profile: Profile | null, seenHere: string | undefined): boolean {
+  return Boolean(user) && storeReady() && !profile?.prefs?.onboarded && seenHere !== "1";
+}
