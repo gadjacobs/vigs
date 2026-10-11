@@ -84,17 +84,23 @@ market, P(win) = sigmoid(a + b1·logit(market chance) + b2·logit(model)) from
 settled matches with captured pre-kickoff odds. The model input is
 point-in-time (fitted on results before each match's day). The collector runs
 `export-blend` hourly and publishes `blend.json`. A market's blend switches on
-only once 2,000 settled matches with odds exist **and** it beats the results
-model on the most recent 30% of matches, which it did not train on. The app and
+only once 2,000 settled matches with odds exist **and**, on the most recent 30%
+of matches (which it did not train on, at least 500 rows), it beats both the
+results model and the market price itself. At 2,774 matches the blend beat the
+model in 33 of 44 markets but the market in only 11, by under 0.004 in log loss,
+mostly on about 190 rows and by leaning away from the model, so beating the
+model alone no longer switches it on. The app and
 `likely` pick this up automatically, label blended estimates, and the Record
 page's Accuracy table shows the held-out comparison for every market.
 
-Until then the estimate is **guarded**: 0.7·logit(market chance) + 0.3·logit(model),
-with a 90% range that spans the market chance and the model's own range. On the
-first 269 settled matches with odds the market price beat the results model on
-log loss in all 10 markets checked, and Lean picks landed 28 of 52 against 35.4
-expected, so the raw model was overconfident where it disagreed with the market.
-With the guard a pick reaches Lean only once a proven blend says so.
+Until then the estimate is **guarded**: 0.95·logit(market chance) + 0.05·logit(model),
+with a 90% range that spans the market chance and the model's own range. On
+2,774 settled matches with odds (76,579 selections, each model fitted only on
+earlier days) mean log loss was 0.49694 at 85/15, 0.49681 at 95/5 and 0.49679 on
+the market alone; 95/5 and the market alone beat 85/15 in both halves of the
+data. The market price is the best estimate we have; the model now mostly
+widens the range where it disagrees. With the guard a pick reaches Lean only
+once a proven blend says so.
 
 ## Chance view
 
@@ -174,6 +180,23 @@ statuses and stories, `/api/share/<code>`) and text formatted for WhatsApp
 Instagram (story image plus caption) or plain text. Cards show prematch odds,
 results so far and Vig's chance when Vig knew every leg before kickoff, with
 "18+ · estimates, not promises". No link back to Vig yet.
+
+## Beta
+
+**Feedback** (top bar, and Account → Ideas and bugs): anyone signed in can post
+an idea or a bug and back others; admins (`ADMIN_ACCOUNTS`, default `me`) set a
+status (New, Planned, Done, Not now) and reply, and get a push for each new post.
+**Invites** (Account, admins only): add a friend's Google address and an
+account name; they sign in with Google without a change to `GOOGLE_ACCOUNTS` or
+a redeploy, and get their own codes, record, alerts and settings. Removing an
+invite stops new sign-ins; changing `AUTH_SECRET` ends sessions already open.
+
+**Load on SportyBet.** The collector makes about one request a minute (odds,
+live list, results). The app reads the live list at most every 8 seconds per
+server instance, and a code's share page only when it loads or a leg should be
+over; the tick checks for a new round at most once a minute and re-reads
+accounts every two minutes. That is less than one person browsing SportyBet,
+and the collector logs show no refusals.
 
 ## Accounts
 

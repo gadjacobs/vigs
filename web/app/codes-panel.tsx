@@ -326,7 +326,14 @@ export function CodesPanel({ stake = 1000 }: { stake?: number }) {
       })
       .catch(() => undefined);
     window.addEventListener("vig-codes", load);
-    const t = setInterval(() => document.visibilityState === "visible" && refresh(readCodes()), 60_000);
+    // Live scores come from the live feed; SportyBet's share endpoint is only
+    // read again for codes not loaded yet, or with a leg that should be over.
+    const stale = (c: Saved) => {
+      const st = statusRef.current[c.code];
+      if (!st || !("legs" in st)) return true;
+      return st.state === "open" && !st.foreign && st.legs.some((l) => (l.status === "waiting" || l.status === "playing") && l.kickoff + 30 * 60_000 < Date.now());
+    };
+    const t = setInterval(() => document.visibilityState === "visible" && refresh(readCodes().filter(stale)), 60_000);
     return () => {
       window.removeEventListener("vig-codes", load);
       clearInterval(t);

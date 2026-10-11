@@ -29,12 +29,19 @@ PRIOR = (0.0, 1.0, 0.0)     # shrink toward "trust the market"
 RIDGE = 2.0                 # prior strength, in pseudo-observations
 REPS = 20
 EPS = 1e-6
-# Until a blend is proven: 0.85 * logit(market) + 0.15 * logit(model). The market
+# Until a blend is proven: 0.95 * logit(market) + 0.05 * logit(model). The market
 # price beat the results model on log loss in every market checked; where the two
-# disagree by 8+ points, results follow the market. On 1,032 settled matches with
-# odds (23,870 selections), weights of 0.8-0.9 on the market beat 0.7 in both
-# halves of the data (first half 0.4946-0.4950 vs 0.4954; second 0.4948 vs 0.4949).
-GUARD = (0.0, 0.85, 0.15)
+# disagree by 8+ points, results follow the market. On 2,774 settled matches with
+# odds (76,579 selections, each model fitted only on earlier days), mean log loss
+# was 0.49694 at 0.85, 0.49681 at 0.95 and 0.49679 at 1.0; 0.95 and 1.0 beat 0.85
+# in both halves (first 0.49436 / 0.49438 vs 0.49443; second 0.49925 / 0.49919
+# vs 0.49946). Earlier (1,032 matches) 0.8-0.9 had beaten 0.7.
+GUARD = (0.0, 0.95, 0.05)
+# A blend switches on only where it beats the market price itself (not just the
+# model) on enough held-out rows: at 2,774 matches it beat the model in 33 of 44
+# markets but the market in only 11, by under 0.004 in log loss, mostly on ~190
+# rows and by leaning away from the model.
+MIN_TEST = 500
 
 
 def logit(p: float) -> float:
@@ -174,9 +181,13 @@ def evaluate(rows: list[dict], seed: int = 0) -> dict:
             entry["reason"] = "too few rows for this market"
         elif t["blend"] >= t["model"]:
             entry["reason"] = "the blend did not beat the results model on held-out matches"
+        elif t["blend"] >= t["market"]:
+            entry["reason"] = "the blend did not beat the market price on held-out matches"
+        elif t["n"] < MIN_TEST:
+            entry["reason"] = f"the blend beat the market on {t['n']} held-out rows; it needs {MIN_TEST}"
         else:
             entry["active"] = True
-            entry["reason"] = "the blend beat the results model on held-out matches"
+            entry["reason"] = "the blend beat the market price and the results model on held-out matches"
         if len(rs) >= 100:
             xs = [(logit(r["q"]), logit(r["p"])) for r in rs]
             ys = [r["y"] for r in rs]

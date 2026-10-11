@@ -309,8 +309,11 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
     if (s) subs.set(id, s);
   }
   // Every open code on a subscribed account is watched, however it was booked.
-  for (const { sub, code, last } of await accountCodes([...subs.values()], now).catch(() => []))
-    await watchCode(code, sub.id, last).catch(() => undefined);
+  // Accounts are re-read at most every two minutes: the tick runs every 20
+  // seconds while something plays, and each re-read costs store commands.
+  if (await claim("scan:accounts", 110).catch(() => true))
+    for (const { sub, code, last } of await accountCodes([...subs.values()], now).catch(() => []))
+      await watchCode(code, sub.id, last).catch(() => undefined);
 
   // kind "goals" goes only to devices following the code goal by goal; a
   // device that turned a code off hears nothing about it.

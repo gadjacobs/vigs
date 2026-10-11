@@ -8,6 +8,7 @@ import { SamsungHint } from "./samsung-hint";
 import { UpdateToast } from "./update-toast";
 import { BUILD } from "@/lib/build";
 import { ThemeToggle } from "./theme-toggle";
+import { BetaLink } from "./beta-link";
 import "./globals.css";
 
 const text = Atkinson_Hyperlegible_Next({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-text" });
@@ -50,6 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="topbar">
           <a className="wordmark" href="/">Vig</a>
           <Nav />
+          <BetaLink />
           <ThemeToggle initial={theme ?? "system"} />
           <AccountButton />
         </header>

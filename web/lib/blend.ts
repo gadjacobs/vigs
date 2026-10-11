@@ -29,8 +29,9 @@ export function applyBlend(coef: [number, number, number], q: number, p: number)
 }
 
 // Mirrors vigs/blend.py GUARD and guarded(): used while no blend is active. The
-// market price beat the results model on every market checked so far.
-export const GUARD: [number, number, number] = [0, 0.85, 0.15];
+// market price beat the results model on every market checked; on 2,774 matches
+// 95/5 and pure market tied, and both beat 85/15 in both halves of the data.
+export const GUARD: [number, number, number] = [0, 0.95, 0.05];
 
 /** Estimate weighted toward the market; the range spans market and model views. */
 export function guardedEstimate(q: number, model: { p: number; lo: number; hi: number }) {

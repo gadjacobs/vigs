@@ -679,3 +679,44 @@ ol.legs li { grid-template-columns: 20px minmax(0, 1fr) auto auto; }
 .followbtn svg { width: 16px; height: 16px; }
 .followbtn:not(.on) { color: var(--edge); }
 .chancebig > span small:first-child:not(:last-child) { font-size: 18px; margin-right: 1px; }
+
+/* Beta: feedback and invites */
+.betatag { font-size: 12px; font-weight: 700; text-decoration: none; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  background: var(--paper-sunk); border: 1px solid var(--rule); color: var(--ink); }
+.betatag[aria-current="page"] { background: var(--signal); border-color: var(--signal); color: var(--on-signal); }
+.ideaform { display: grid; gap: 10px; margin-bottom: 16px; }
+.ideaform textarea, .ideaform input:not([type="radio"]), .invites input { width: 100%; min-height: 44px; padding: 8px 12px; font: inherit; color: var(--ink);
+  background: var(--paper-sunk); border: 1px solid var(--edge); border-radius: 3px; }
+.ideaform .field, .invites .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 700; }
+.ideaform button { justify-self: start; }
+.ideas { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.idea { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.votebtn { flex-direction: column; justify-content: center; gap: 0; min-height: 56px; padding: 4px; border-radius: 8px; }
+.votebtn b { font-size: 18px; }
+.votebtn.on { background: var(--signal); border-color: var(--signal); color: var(--on-signal); }
+.ideahead { display: flex; gap: 6px; margin: 0 0 4px; }
+.idea h3 { margin: 0 0 4px; font-size: 17px; line-height: 22px; }
+.ideabody { margin: 0 0 6px; font-size: 15px; line-height: 22px; white-space: pre-wrap; }
+.ideaby { font-size: 12px; margin: 0; }
+.ideareply { margin: 8px 0 0; }
+.ideaadmin { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ideaadmin input { flex: 1 1 160px; min-height: 40px; padding: 6px 10px; font: inherit; background: var(--paper-sunk); border: 1px solid var(--edge); border-radius: 3px; color: var(--ink); }
+.kind-bug { background: var(--house-wash); color: var(--house); }
+.kind-idea { background: var(--paper-sunk); }
+.state-planned { background: var(--signal); color: var(--on-signal); }
+.state-done { background: var(--ink); color: var(--paper); }
+.state-declined, .state-new { background: var(--paper-sunk); color: var(--ink-muted); }
+.invites { margin: 16px 0; display: grid; gap: 10px; }
+.invites h2 { margin: 0; font-size: 20px; }
+.invites form { align-items: flex-end; gap: 8px; }
+.invitelist { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.invitelist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid var(--rule); padding-top: 6px; }
+.invitelist small { color: var(--ink-muted); }
+@media (max-width: 640px) { .betatag { padding: 4px 8px; margin-left: auto; } }
+.kindpick { border: 0; padding: 0; margin: 0; display: flex; gap: 8px; }
+.kindpick label { position: relative; }
+.kindpick input { position: absolute; opacity: 0; inset: 0; }
+.kindpick span { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 18px; border: 1px solid var(--edge); border-radius: 999px; font-weight: 700; font-size: 14px; }
+.kindpick input:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.kindpick input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.votebtn { align-self: start; }

@@ -1,6 +1,6 @@
 import { pushReady, tick } from "@/lib/push";
 import { currentSlates } from "@/lib/kitchen";
-import { setJson, storeReady } from "@/lib/store";
+import { claim, setJson, storeReady } from "@/lib/store";
 import { buildOurs, buildTip } from "@/lib/tips";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +16,8 @@ export async function POST(request: Request) {
   }
   if (!pushReady()) return Response.json({ error: "push not configured" }, { status: 503 });
   // Cook (and book) the slips as soon as a round is published, so codes are ready.
-  const cooked = await currentSlates().then((c) => c.slates.length).catch(() => -1);
+  // At most once a minute: each check reads SportyBet's upcoming list.
+  const cooked = (await claim("scan:cook", 55).catch(() => true))
+    ? await currentSlates().then((c) => c.slates.length).catch(() => -1) : null;
   return Response.json({ ...(await tick(buildTip, Date.now(), buildOurs)), cooked });
 }

@@ -39,8 +39,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 - `web/lib` ports the model maths from `vigs/model.py`; `web/tests` pins it to
   Python output. Change both together.
 - Blend (`vigs/blend.py`, `web/lib/blend.ts`): market price + model, per market,
-  on only after 2,000 settled matches with odds and a held-out win over the
-  model. Until then estimates use `guarded` (85/15 toward the market, range
+  on only after 2,000 settled matches with odds and a held-out win (≥ 500 rows) over both the
+  model and the market price. Otherwise estimates use `guarded` (95/5 toward the market, range
   spanning both). Never train on a match with a model that saw its day's results.
 - It reads `model.json`, `blend.json` and `record.json` from the `data` branch and odds live
   from SportyBet; it never places bets. Record maths stays in `vigs/record.py`. Booking codes are created with the `OperId: 2` header.
@@ -64,6 +64,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   chance (`bestPerMatch`, max 40% per market), not the model. Codes with non-vFootball legs are
   shown as such and never tracked, alerted or logged. Per-code alert modes (`codealert:`) and followed matches
   (`fixture:`) live in the store; a code's result is sent once (`done:`).
+- Beta (`web/lib/beta.ts`, `/feedback`, Account): ideas/bugs with votes; admins (`ADMIN_ACCOUNTS`,
+  default `me`) answer and invite testers by Google address (stored `invites`, `.i.` sessions).
 - Push (`web/lib/push.ts`, `store.ts`, `/alerts`): Upstash Redis holds subscriptions,
   tip times, watched codes and profiles only; `/api/push/tick` is called by the collector with
   `PUSH_TICK_SECRET`. Live odds use Shin de-vig (`vigs.odds.LIVE_DEVIG`, `fairProbs`).

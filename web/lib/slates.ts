@@ -10,7 +10,7 @@ import { MAX_LEGS, toTarget } from "./slip";
 // keep value, long shots lose it; market and model agreeing is what
 // confidence measures; draws are priced per league and land about 1 in 4.
 
-export type StyleId = "steady" | "double" | "fiver" | "tenner" | "long" | "hundred" | "thousand" | "goals" | "tight" | "bold" | "draws";
+export type StyleId = "steady" | "double" | "fiver" | "tenner" | "long" | "hundred" | "thousand" | "stack" | "goals" | "tight" | "bold" | "draws";
 export type Slate = {
   id: string; style: StyleId; name: string; blurb: string;
   legs: Pick[]; odds: number; chance: number; confidence: Confidence;
@@ -40,7 +40,7 @@ function make(style: StyleId, name: string, blurb: string, legs: Pick[], flex = 
     id: `${style}-${sorted[0].kickoff}`, style, name, blurb, legs: sorted,
     odds: sorted.reduce((a, p) => a * p.odds, 1), chance: ps.reduce((a, p) => a * p, 1),
     confidence: slipConfidence(sorted), first: sorted[0].kickoff, last: sorted[n - 1].kickoff,
-    flex: flex ? [0, 1, 2].filter((m) => n - m >= 1).map((m) => ({ need: n - m, chance: atLeast(ps, n - m) })) : undefined,
+    flex: flex ? [0, 1, 2, 3].filter((m) => n - m >= 1 && (m < 3 || n >= 10)).map((m) => ({ need: n - m, chance: atLeast(ps, n - m) })) : undefined,
   };
 }
 
@@ -99,6 +99,8 @@ function targetSlip(cands: Pick[], target: number, lo: number, hi: number, tol =
   return byConfidence(band, (pool) => toTarget(bestPerMatch(pool, legsFor(pool, target)), target, tol, MAX_LEGS, market));
 }
 
+const STACK = ["FH_O05", "O15", "BY"];
+
 export function cookSlates(cands: Pick[]): Slate[] {
   const out: (Slate | null)[] = [];
 
@@ -122,8 +124,18 @@ export function cookSlates(cands: Pick[]): Slate[] {
   for (const [style, target, name, lo] of [["long", 20, "Long shot", 1.15], ["hundred", 100, "Hundred", 1.2], ["thousand", 1000, "Thousand", 1.2]] as const) {
     const legs = targetSlip(cands, target, lo, 2.5, 0.15);
     if (legs.length >= 4)
-      out.push(make(style, name, `About ${target.toLocaleString("en-NG")} odds from the likeliest leg per match. Every leg pays the bookmaker's cut, so slips this long land rarely.`, legs));
+      out.push(make(style, name, `About ${target.toLocaleString("en-NG")} odds from the likeliest leg per match. Every leg pays the bookmaker's cut, so slips this long land rarely; Flex shows the chance with a miss or two allowed.`, legs, true));
   }
+
+  // Goal stack: up to 20 matches, one leg each, from the three markets that have
+  // landed above the bookmaker's own prices on our logged legs so far (first half
+  // over 0.5: 635 of 875 vs 609 expected; over 1.5: 653 of 869 vs 634; both teams
+  // score: 530 of 981 vs 510). Not proven: none clears the false-discovery check
+  // yet. A small edge per leg compounds over many legs, in either direction.
+  const stackPool = cands.filter((p) => STACK.includes(p.market) && p.odds >= 1.2);
+  const stack = byConfidence(stackPool, (pool) => onePerMatch(pool, market).slice(0, 20));
+  if (stack.length >= 10)
+    out.push(make("stack", `Goal stack ${stack.length}`, "One goals leg per match from the markets that have landed a little above the bookmaker's prices so far (not proven yet). Flex shows the chance with misses allowed.", stack, true));
 
   // Goals and tight games: the market and model agreeing on how the match goes.
   const goals = onePerMatch(cands.filter((p) => ["O25", "BY", "FH_O15", "O35", "H_O15", "A_O15"].includes(p.market) && market(p) >= 0.55), market);

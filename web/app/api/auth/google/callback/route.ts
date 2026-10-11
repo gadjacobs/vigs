@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { googleAccountFor, googleEnabled, googleSession } from "@/lib/auth";
+import { googleAccountFor, googleEnabled, googleSession, invitedSession } from "@/lib/auth";
+import { invitedAccount } from "@/lib/beta";
 import { updateProfile } from "@/lib/profile";
 import { storeReady } from "@/lib/store";
 
@@ -28,9 +29,12 @@ export async function GET(request: Request) {
     .then((r) => r.json() as Promise<{ email?: string; email_verified?: boolean; name?: string; picture?: string }>)
     .catch(() => ({}) as { email?: string; email_verified?: boolean; name?: string; picture?: string });
   if (!who.email || !who.email_verified) return fail("google");
-  const name = googleAccountFor(who.email);
+  const listed = googleAccountFor(who.email);
+  const invited = listed ? null : storeReady() ? await invitedAccount(who.email).catch(() => null) : null;
+  const name = listed ?? invited;
   if (!name) return fail("notallowed");
-  jar.set("vig_auth", await googleSession(name), { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 90 });
+  jar.set("vig_auth", listed ? await googleSession(name) : await invitedSession(name),
+    { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 90 });
   if (storeReady())
     await updateProfile(name, (p) => ({ ...p, who: { email: who.email!, name: who.name ?? "", picture: who.picture ?? "", via: "google" } }))
       .catch(() => undefined);

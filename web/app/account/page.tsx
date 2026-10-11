@@ -3,6 +3,8 @@ import { logout } from "../actions";
 import { AccountForm } from "./account-form";
 import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
 import { storeSource } from "@/lib/store";
+import { invites, isAdmin } from "@/lib/beta";
+import { Invites } from "./invites";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +28,10 @@ export default async function Account() {
         </div>
       </div>
       {synced && <AccountForm initial={{ name: p.name ?? "", stake: p.stake ?? DEFAULT_STAKE, home: p.home ?? "/" }} filters={profile?.filters ?? []} />}
+      {synced && isAdmin(user) && <Invites list={await invites().catch(() => [])} />}
       <section className="panel acct-links">
         <Link className="button" href="/alerts">Notifications</Link>
+        <Link className="button" href="/feedback">Ideas and bugs</Link>
         <Link className="button" href="/record?tab=yours">Your record</Link>
         <form action={logout}><button type="submit" className="danger-ghost">Sign out</button></form>
       </section>

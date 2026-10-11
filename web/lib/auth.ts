@@ -34,6 +34,7 @@ export async function verify(cookie: string | undefined, env: Record<string, str
   if (!list.length && !googleEnabled(env)) return "me";
   if (!cookie) return null;
   if (cookie.includes(".g.")) return verifyGoogle(cookie, env);
+  if (cookie.includes(".i.")) return verifyInvited(cookie, env);
   const dot = cookie.indexOf(".");
   if (dot > 0) {
     const a = list.find((x) => x.name === cookie.slice(0, dot));
@@ -76,6 +77,18 @@ async function hmac(secret: string, msg: string): Promise<string> {
 /** Session cookie for a Google-signed-in account: "name.g.signature". */
 export const googleSession = async (name: string, env: Record<string, string | undefined> = process.env) =>
   `${name}.g.${await hmac(env.AUTH_SECRET!, `vig-google:${name}`)}`;
+
+// Testers invited from the app (stored invites, see lib/beta.ts) get their own
+// signature domain, so their sessions don't depend on GOOGLE_ACCOUNTS. Rotate
+// AUTH_SECRET to sign every invited session out.
+export const invitedSession = async (name: string, env: Record<string, string | undefined> = process.env) =>
+  `${name}.i.${await hmac(env.AUTH_SECRET!, `vig-invite:${name}`)}`;
+
+export async function verifyInvited(cookie: string, env: Record<string, string | undefined> = process.env): Promise<string | null> {
+  const m = /^([a-z0-9_-]{1,32})\.i\.([0-9a-f]{64})$/.exec(cookie);
+  if (!m || !env.AUTH_SECRET) return null;
+  return (await hmac(env.AUTH_SECRET, `vig-invite:${m[1]}`)) === m[2] ? m[1] : null;
+}
 
 /** Verifies a Google session cookie; the account must still be allowed. */
 export async function verifyGoogle(cookie: string, env: Record<string, string | undefined> = process.env): Promise<string | null> {

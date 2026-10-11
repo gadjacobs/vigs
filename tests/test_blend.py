@@ -52,7 +52,7 @@ class Switch(unittest.TestCase):
     def test_guarded_leans_on_the_market_and_spans_both_views(self):
         p, lo, hi, src = bl.guarded(0.60, 0.72, 0.70, 0.74)
         self.assertEqual(src, "guarded")
-        self.assertAlmostEqual(p, bl.apply([0, .85, .15], 0.60, 0.72))
+        self.assertAlmostEqual(p, bl.apply([0, .95, .05], 0.60, 0.72))
         self.assertTrue(0.60 < p < 0.66)               # much nearer the market
         self.assertEqual((lo, hi), (0.60, 0.74))
         # Market below break-even keeps the range below it too, so no Lean.
@@ -60,12 +60,28 @@ class Switch(unittest.TestCase):
         g = grade_model(1.6, 0.60, p, (lo, hi), 0.7, 400)
         self.assertNotEqual(g.grade, "Lean")
 
-    def test_switches_on_when_the_market_knows_more(self):
+    def test_stays_off_when_the_market_alone_is_best(self):
+        # The market price already holds everything: beating the model is not enough.
         out = bl.evaluate(rows_for(4000, informative=True))
         e = out["markets"]["FH_O05"]
-        self.assertTrue(e["active"], e["reason"])
-        self.assertLess(e["test"]["blend"], e["test"]["model"])
+        self.assertFalse(e["active"])
+        self.assertIn("market price", e["reason"])
         self.assertGreater(e["coef"][1], 0.5)          # leans on the market
+
+    def test_switches_on_when_each_knows_something(self):
+        rng = random.Random(4)
+        rows = []
+        t0 = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        for i in range(4000):
+            u, v = rng.gauss(0.3, 0.7), rng.gauss(0.3, 0.7)   # model knows u, market knows v
+            y = int(rng.random() < bl.sigmoid(u + v))
+            ko = (t0 + timedelta(minutes=i)).isoformat().replace("+00:00", "Z")
+            rows.append({"kickoff": ko, "event": f"e{i}", "market": "FH_O05", "q": bl.sigmoid(v + 0.3),
+                         "p": bl.sigmoid(u + 0.3), "y": y})
+        out = bl.evaluate(rows)
+        e = out["markets"]["FH_O05"]
+        self.assertTrue(e["active"], e["reason"])
+        self.assertLess(e["test"]["blend"], e["test"]["market"])
         p, lo, hi, src = bl.estimate(out, "FH_O05", 0.8, 0.6, [0.58, 0.6, 0.62] * 7)
         self.assertEqual(src, "blend")
         self.assertTrue(lo <= p <= hi)
