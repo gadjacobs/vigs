@@ -35,10 +35,8 @@ export function slipConfidence(legs: { lo: number; hi: number }[]): Confidence {
   }, "High");
 }
 
-/** Whole percent, at most 99 so rounding never claims certainty. Under 1% it keeps
- * a decimal or two (0.08%), so a long shot never reads as 1%. */
-export const chance = (p: number) =>
-  p < 0.0095 ? `${(Math.max(p, 0.0001) * 100).toFixed(p < 0.001 ? 2 : 1)}%` : `${Math.min(99, Math.round(p * 100))}%`;
+/** Whole percent, kept between 1 and 99 so rounding never claims certainty. */
+export const chance = (p: number) => `${Math.min(99, Math.max(1, Math.round(p * 100)))}%`;
 
 /** "about 7 in 10" for likely outcomes, "about 1 in 7" for unlikely ones. */
 export function oneIn(p: number): string {

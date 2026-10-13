@@ -14,14 +14,11 @@ import { upcoming } from "@/lib/sportybet";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditSlate({ searchParams }: { searchParams: Promise<{ slate?: string; legs?: string; name?: string }> }) {
-  const { slate: id, legs: legIds, name } = await searchParams;
+export default async function EditSlate({ searchParams }: { searchParams: Promise<{ slate?: string }> }) {
+  const { slate: id } = await searchParams;
   const now = Date.now();
   const cooked = await currentSlates(now).catch(() => null);
-  // A cooked slip by id, or a slip worked out on the page, passed as its leg ids.
-  const listed = legIds ? legIds.split(",").filter((x) => /^sr:match:\d+\|[A-Z0-9_]+$/.test(x)).slice(0, 50) : [];
-  const slate = cooked?.slates.find((s) => s.id === id)
-    ?? (listed.length ? { name: (name ?? "Your slip").slice(0, 40), legs: listed.map((x) => ({ id: x })), flex: undefined } : undefined);
+  const slate = cooked?.slates.find((s) => s.id === id);
   const { profile } = await myProfile();
   const view = viewOf(profile, (await cookies()).get("vig_view")?.value);
   const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
@@ -42,7 +39,7 @@ export default async function EditSlate({ searchParams }: { searchParams: Promis
             {ids.length < slate.legs.length ? ` ${slate.legs.length - ids.length} leg(s) have kicked off and were left out.` : ""}
           </p>
           <SlipBuilder key={now} cands={cands} q={q} now={now} initialView={view} initialIds={ids}
-            title={slate.name} flex={Boolean(slate.flex)} stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
+            title={slate.name} flex={slate.style === "draws"} stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
         </>
       )}
     </main>

@@ -113,7 +113,7 @@ function Body({ rec, user, tab, n }: { rec: RecordFile; user: string | null; tab
                 <tbody>
                   {Object.entries(rec.slates.by_style).sort((x, y) => y[1].settled - x[1].settled).map(([k, g]) => (
                     <tr key={k}>
-                      <td>{/^x\d+$/.test(k) ? `Ladder: ${Number(k.slice(1)).toLocaleString("en-NG")} odds` : k}</td><td className="n">{g.settled}</td><td className="n">{g.landed}</td>
+                      <td>{k}</td><td className="n">{g.settled}</td><td className="n">{g.landed}</td>
                       <td className="n">{g.expected_vig.toFixed(1)}</td><td className="n">{g.expected_market.toFixed(1)}</td>
                       <td className={`n ${g.roi < 0 ? "loss" : ""}`}>{g.settled ? `${signedPct(g.roi)}${g.settled < 30 ? " (too few)" : ""}` : "None"}</td>
                     </tr>

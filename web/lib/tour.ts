@@ -14,7 +14,7 @@ export const TOUR: TourSlide[] = [
   {
     id: "picks", tab: "Our picks",
     title: "Or take one we cooked",
-    body: "For each payout, from double your stake to 1,000 odds, Vig books the likeliest slip each round. Copy the code into SportyBet.",
+    body: "Each round Vig books ready-made slips, from steady doubles to long shots. Copy the code into SportyBet.",
   },
   {
     id: "codes", tab: "Codes",

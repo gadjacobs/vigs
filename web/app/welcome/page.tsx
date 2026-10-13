@@ -19,7 +19,7 @@ const FEATURES = [
   { icon: I("M4 6h16M4 12h16M4 18h10"), title: "Tonight",
     body: "Every upcoming selection with its odds, break-even, market chance and Vig's estimate with a range. Filter by market, odds, hours and confidence, save the filters you use, and build a slip in one tap." },
   { icon: I("M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"), title: "Our picks",
-    body: "A payout ladder for every round: the likeliest slip at 2, 5, 10, 20, 50, 100 and 1,000 odds, already booked. Open the code in SportyBet, or tweak it first." },
+    body: "Named slips cooked for every round, from steady short prices to bold and draw sets, already booked. Open the code in SportyBet, or tweak it in the editor first." },
   { icon: I("M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2zM9 9h6M9 13h6"), title: "Codes, live",
     body: "Every code you book, open or track, on all your devices. While a leg plays: the minute, the score and the chance the whole code still lands, with a line of how it has swung." },
   { icon: I("M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"), title: "Hedge",

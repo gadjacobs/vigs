@@ -117,34 +117,14 @@ view stays on the card. "Full numbers" shows the original layout.
 
 ## Our picks
 
-**The payout ladder** comes first: each time a round is published, Vig finds
-the likeliest slip at about 2, 5, 10, 20, 50, 100 and 1,000 odds, books each one
-and shows the code, ready to open in SportyBet or tweak in the editor. Every
-cooked code is logged once (account "vig") and scored on Record by rung.
-
-Why a ladder: on 3,678 settled matches SportyBet's prices, with the margin
-removed, match how often things land (total-goals overs 39.6% landed against
-39.7% priced; draws 26.9% against 26.3%), so no selection beats the price on
-average. At a given total price, then, a slip's chance is set by how much of
-the stake the bookmaker keeps, and that compounds once per leg. Legs priced 1.5
-to 5 keep the most for the odds they add: short legs need many legs to reach a
-price, and long ones carry a heavy margin (paid back 0.97 at 1.2 to 2 odds, 0.82
-at 5 to 10, 0.58 above 10). The search (`vigs.odds.likeliest_slip`, ported in
-`web/lib/likelier.ts`) is exact: one selection per match, the highest product of
-chances with total odds at or just above the target. The 12 earlier named
-styles built long slips from many short legs; at the prices they were booked,
-Thousand was set to pay back 66% of stakes on average and Goal stack 60%,
-against about 83% for the ladder's 1,000-odds rung. Each card says how much likelier it is than the best slip of
-the same price from legs under 1.5, and what it pays back on average (always
-less than the stake).
-
-The ladder can be narrowed to slips that finish within 30 minutes, an hour or
-two hours, to goals markets or no draws, or set to any payout; those are worked
-out on the spot and booked with one tap.
-
-**Make it likelier** on Codes does the same for any code with two or more legs
-still to start: the likeliest slip at the same payout from matches that finish
-no later, compared with the code side by side, booked with one tap.
+**Cooked slips** come first: each time a round is published, Vig cooks named
+slips from it (Steady, Double up, Fiver, Tenner, Long shot, Hundred,
+Thousand, Goal rush, Tight games, Bold, Draw trio/four), books each one and shows the code, ready to open in SportyBet
+or tweak in the editor. A slip is only cooked when enough legs clear its
+confidence bar, so the mix changes with the round. Every cooked code is logged
+once (account "vig") and scored on Record by style. Long shot, Hundred and
+Thousand are the likeliest slips near 20, 100 and 1,000 odds (up to 50 legs);
+every leg pays the bookmaker's cut, so they land rarely.
 
 Slips are built from the **best bet per match**, ranked by the bookmaker's
 de-vigged chance rather than Vig's estimate: where the two disagree, results
@@ -152,7 +132,7 @@ have followed the market, and the model leans the same way across many matches
 (under 3.5 about 1.4 points above the market, home wins 2 below), which made
 every slip lean on under 3.5. No market may fill more than 40% of a slip, so a
 match whose top market is already used offers its next one. Our picks opens on
-the payout ladder; **Build your own** is its own tab, starting with Best per
+the cooked slips; **Build your own** is its own tab, starting with Best per
 match (5 to 50 legs).
 
 **Markets** cover 1X2, double chance (home or draw, home or away, draw or
@@ -295,11 +275,6 @@ with the account's last Tonight filters, and an Our picks set on a schedule
 **Every goal** (every goal in any of its legs, plus the result), **Key
 moments** (the device's usual alerts) or **Off**, and the bell on any leg
 follows that match on its own: kick-off, every goal, half time and full time.
-Updates about one code (or one followed match) stack into a single
-notification: the newest on top and the earlier ones listed under it when
-expanded, so the shade keeps one entry per code. Android also bundles four or
-more notifications from the browser into a group by itself; web push offers
-no control over that grouping.
 On iPhone, add Vig to the Home
 Screen first. The app also offers a reload, in a toast, when a new version is
 deployed or a new round is published. Setup, once:

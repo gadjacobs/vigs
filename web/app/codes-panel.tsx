@@ -5,7 +5,6 @@ import { ShareButton } from "./share-sheet";
 import { alertState, followMatch, setCodeAlertAction, trackCodes } from "./push-actions";
 import { liveCodes } from "./live-actions";
 import { HedgeSheet, type HedgeLeg } from "./hedge-sheet";
-import { LikelierSheet } from "./likelier-sheet";
 import type { LiveLeg } from "@/lib/live";
 import { CopyButton } from "./copy-button";
 import { lagos } from "./pick-row";
@@ -176,8 +175,6 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const [swing, setSwing] = useState<Swing>({});
   const [hedge, setHedge] = useState<{ code: string; leg: HedgeLeg; odds: number | null } | null>(null);
   const closeHedge = useCallback(() => setHedge(null), []);
-  const [likelier, setLikelier] = useState<string | null>(null);
-  const closeLikelier = useCallback(() => setLikelier(null), []);
   const [endpoint, setEndpoint] = useState<string | null | undefined>(undefined);
   const [modes, setModes] = useState<Record<string, "goals" | "off">>({});
   const [follows, setFollows] = useState<Set<string>>(new Set());
@@ -509,11 +506,6 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 )}
                 {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
               </div>
-              {t && t.state === "open" && !foreign && !lostN && legs.filter((l) => l.status === "waiting" && l.kickoff > now + 4 * 60_000).length >= 2 && (
-                <button type="button" className="likelierbtn" onClick={() => setLikelier(c.code)}>
-                  <Icon d="M4 17l6-6 4 4 6-8M14 7h6v6" /> Make it likelier
-                </button>
-              )}
               {t && !settled && !foreign && endpoint === null && isOpen && (
                 <p className="hint"><a href="/alerts">Turn on notifications</a> to follow this code or its matches without opening the app.</p>
               )}
@@ -566,7 +558,6 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       </ul>
       <p className={`savedtoast ${note ? "on" : ""}`} role="status" aria-live="polite">{note}</p>
       {hedge && <HedgeSheet code={hedge.code} leg={hedge.leg} odds={hedge.odds} stake={stake} onClose={closeHedge} />}
-      {likelier && <LikelierSheet code={likelier} onClose={closeLikelier} />}
       {more > 0 && <button type="button" className="moreb" onClick={() => setPages((p) => p + 1)}>Show {Math.min(more, PAGE)} more</button>}
     </section>
   );

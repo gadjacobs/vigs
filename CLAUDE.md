@@ -46,12 +46,9 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   from SportyBet; it never places bets. Record maths stays in `vigs/record.py`. Booking codes are created with the `OperId: 2` header.
 - Accounts (`web/lib/auth.ts`, `profile.ts`): `ACCOUNTS` or `APP_PASSWORD`; a profile
   per account in the store syncs codes, filters, view and theme. Never store SportyBet details.
-- Cooked slips (`web/lib/slates.ts`, `kitchen.ts`): a payout ladder (2 to 1,000 odds), each rung
-  the likeliest slip from `likeliestSlip` (`web/lib/likelier.ts`, port of `vigs.odds.likeliest_slip`,
-  pinned by `web/tests/slip-search.test.ts`; legs 1.5-5, ranked by market chance). Cooked and booked
-  once per published round (by the tick or the first viewer), stored as `slates`; each code logged
-  once as user "vig" with origin `slate:x<odds>`. Make it likelier (Codes, `likelier-actions.ts`)
-  rebuilds a code's unstarted legs at the same payout. Never show share-endpoint odds after kickoff.
+- Cooked slips (`web/lib/slates.ts`, `kitchen.ts`): cooked and booked once per published
+  round (by the tick or the first viewer), stored as `slates`; each code logged once as
+  user "vig". Never show share-endpoint odds after kickoff (they are in-play prices).
 - Google sign-in (`/api/auth/google`): `GOOGLE_ACCOUNTS` allowlist maps emails to accounts.
 - Our picks (`web/lib/ourpicks.ts`, `/picks`): sets safe/odds/bold/draws; `vigs ourpicks`
   logs the safe set hourly. Booked codes go to the store's `codelog` with the server's
@@ -77,9 +74,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   default `me`) answer and invite testers by Google address (stored `invites`, `.i.` sessions).
 - Push (`web/lib/push.ts`, `store.ts`, `/alerts`): Upstash Redis holds subscriptions,
   tip times, watched codes and profiles only; `/api/push/tick` is called by the collector with
-  `PUSH_TICK_SECRET`. `public/sw.js` stacks `code-`/`match-` tagged updates into one notification.
-  Admin (`/admin`, `lib/activity.ts`, `lib/seen.ts`): per-account activity from the store and record;
-  results at the usual stake are estimates. Live odds use Shin de-vig (`vigs.odds.LIVE_DEVIG`, `fairProbs`).
+  `PUSH_TICK_SECRET`. Admin (`/admin`, `lib/activity.ts`, `lib/seen.ts`): per-account activity from
+  the store and record; results at the usual stake are estimates. Live odds use Shin de-vig (`vigs.odds.LIVE_DEVIG`, `fairProbs`).
 
 ## Engineering rules
 - All maths in `vigs/odds.py`, `vigs/stats.py`, `vigs/grading.py`; CLI only formats.
