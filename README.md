@@ -295,6 +295,11 @@ with the account's last Tonight filters, and an Our picks set on a schedule
 **Every goal** (every goal in any of its legs, plus the result), **Key
 moments** (the device's usual alerts) or **Off**, and the bell on any leg
 follows that match on its own: kick-off, every goal, half time and full time.
+Updates about one code (or one followed match) stack into a single
+notification: the newest on top and the earlier ones listed under it when
+expanded, so the shade keeps one entry per code. Android also bundles four or
+more notifications from the browser into a group by itself; web push offers
+no control over that grouping.
 On iPhone, add Vig to the Home
 Screen first. The app also offers a reload, in a toast, when a new version is
 deployed or a new round is published. Setup, once:
