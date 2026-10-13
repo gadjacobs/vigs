@@ -1,9 +1,15 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
+import { touchSeen } from "./lib/seen";
 import { verify } from "./lib/auth";
 
 // Personal tool: everything sits behind an account when ACCOUNTS or APP_PASSWORD is set.
 export async function proxy(request: NextRequest) {
-  if (await verify(request.cookies.get("vig_auth")?.value)) return NextResponse.next();
+  const user = await verify(request.cookies.get("vig_auth")?.value);
+  if (user) {
+    // "Last seen" for the admin page, written at most every few minutes per account.
+    after(() => touchSeen(user).catch(() => undefined));
+    return NextResponse.next();
+  }
   // Signed-out visitors to the home page see what Vig is; anything else asks them to sign in.
   return NextResponse.redirect(new URL(request.nextUrl.pathname === "/" ? "/welcome" : "/login", request.url));
 }

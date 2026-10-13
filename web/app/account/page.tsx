@@ -70,11 +70,13 @@ export default async function Settings() {
           <Link href="/feedback" className="button">Ideas and bugs</Link>
           <Link href="/record?tab=yours" className="button">Your record</Link>
         </div>
+        <p className="status">Privacy: Vig&apos;s admins can see which codes your account books or tracks, how they did, and when you last used the app, to improve Vig. They never see SportyBet details or what you stake.</p>
       </section>
 
       {admin && (
         <section id="admin" className="setcard" aria-labelledby="admin-h">
           <h2 id="admin-h">Admin</h2>
+          <p><Link href="/admin" className="button primary">Open the admin page</Link></p>
           {synced && <Invites list={await invites().catch(() => [])} />}
           <SetupCheck />
         </section>

@@ -40,7 +40,7 @@ function Pending() {
 export function Nav() {
   const path = usePathname();
   const open = useOpenCount();
-  if (path === "/login" || path === "/welcome" || path === "/onboarding") return null;
+  if (path === "/login" || path === "/welcome" || path === "/onboarding" || path.startsWith("/admin")) return null;
   return (
     <nav aria-label="Main" className="mainnav">
       {LINKS.map((l) => (

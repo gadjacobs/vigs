@@ -107,7 +107,7 @@ export function Onboarding({ name, view: v0, stake: s0, vapidKey, home }:
               <li><b>Live.</b> Follow your codes as they play.</li>
               <li><b>Honest.</b> Every pick is logged, wins and losses.</li>
             </ul>
-            <p className="onb-fine">About a minute. You can change everything later in Settings.</p>
+            <p className="onb-fine">About a minute. You can change everything later in Settings. Vig&apos;s admins can see the codes you book or track and how they did; never your SportyBet details or stakes.</p>
           </div>
         )}
 
