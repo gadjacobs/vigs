@@ -68,3 +68,62 @@ def combined_prob(probs: Sequence[float]) -> float:
 def house_cut(odds: Sequence[float], probs: Sequence[float]) -> float:
     """Share of the stake the slip is expected to lose at these probabilities."""
     return 1.0 - combined_prob(probs) * combined_odds(odds)
+
+
+# The likeliest slip for a payout. Market chance is calibrated on our data
+# (3,678 settled matches: landed 39.6% vs 39.7% priced on total-goals overs,
+# 26.9% vs 26.3% on draws), so at a given total price the chance a slip lands is
+# set by how much of the stake the bookmaker keeps, compounded once per leg.
+# Legs priced 1.5 to 5 keep the most per unit of odds they add: short legs
+# (under 1.5) need many legs to reach a price, and long ones (over 5) carry a
+# heavy margin (paid back 0.82 at 5-10 and 0.58 above 10, against 0.97 at 1.2-2).
+SLIP_LEG_RANGE = (1.5, 5.0)
+SLIP_STEP = 0.005    # resolution of the search, in log-odds
+SLIP_SLACK = 0.10    # how far above the target the total may land, in log-odds
+
+
+def _bucket(x: float) -> int:
+    return math.floor(x / SLIP_STEP + 0.5)
+
+
+def likeliest_slip(matches: Sequence[tuple[str, Sequence[tuple[str, float, float]]]], target: float,
+                   lo: float = SLIP_LEG_RANGE[0], hi: float = SLIP_LEG_RANGE[1],
+                   slack: float = SLIP_SLACK) -> list[tuple[str, str, float, float]]:
+    """At most one selection per match, total odds at least about `target`, with
+    the highest product of chances. `matches` is (id, [(market, odds, chance)]),
+    in the order to consider them; returns (id, market, odds, chance) in that order.
+    Exact over the search grid (dynamic programming over summed log-odds)."""
+    if target <= 1:
+        return []
+    top = _bucket(math.log(target) + slack)
+    need = math.floor(math.log(target) / SLIP_STEP)
+    neg = float("-inf")
+    best = [neg] * (top + 1)
+    best[0] = 0.0
+    stages = []
+    for mid, options in matches:
+        opts = [(m, o, p, _bucket(math.log(o)), math.log(p)) for m, o, p in options if lo <= o <= hi and 0 < p < 1]
+        nxt = best[:]
+        choice = [-1] * (top + 1)
+        for b in range(top + 1):
+            v0 = best[b]
+            if v0 == neg:
+                continue
+            for j, (_, _, _, k, lp) in enumerate(opts):
+                nb = b + k
+                if nb <= top and v0 + lp > nxt[nb]:
+                    nxt[nb] = v0 + lp
+                    choice[nb] = j
+        stages.append((mid, opts, choice))
+        best = nxt
+    end = max((b for b in range(need, top + 1) if best[b] > neg), key=lambda b: (best[b], -b), default=None)
+    if end is None:
+        return []
+    out = []
+    for mid, opts, choice in reversed(stages):
+        j = choice[end]
+        if j >= 0:
+            m, o, p, k, _ = opts[j]
+            out.append((mid, m, o, p))
+            end -= k
+    return out[::-1]
