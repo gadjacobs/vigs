@@ -16,11 +16,17 @@ import { DEFAULT_QUERY, type Query } from "@/lib/query";
 import { upcoming, type Fixture } from "@/lib/sportybet";
 import { currentSlates, type Cooked } from "@/lib/kitchen";
 import { SlateCard } from "./slate-card";
+import { cookSlates, RUNGS, type Slate } from "@/lib/slates";
+import type { Rule } from "@/lib/likelier";
 
 export const dynamic = "force-dynamic";
 
 const MAX_ON_SLIP = MAX_LEGS;
-type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string };
+type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string; by?: string; rule?: string; pay?: string };
+
+// Ladder controls. The default (any market, any time) shows the cooked, booked slips.
+const FINISH: [string, string, number][] = [["any", "Any time", 0], ["30", "30 min", 30], ["60", "1 hour", 60], ["120", "2 hours", 120]];
+const RULES: [Rule, string][] = [["any", "Any market"], ["goals", "Goals only"], ["nodraw", "No draws"]];
 
 const ABOUT: Record<SetId, string> = {
   best: "One leg per match: its likeliest selection at odds of 1.2 or more, by the bookmaker's own chance, with no market filling more than 40% of the slip, so you get a spread of markets.",
@@ -81,32 +87,76 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const last = built.slip.length ? Math.max(...built.slip.map((p) => p.kickoff)) : now;
   const matches = new Set(fixtures.filter((f) => f.kickoff > now).map((f) => f.eventId)).size;
 
+  // The ladder: the cooked slips by default, otherwise worked out for these controls.
+  const by = FINISH.some((f) => f[0] === sp.by) ? sp.by! : "any";
+  const rule: Rule = RULES.some((r) => r[0] === sp.rule) ? (sp.rule as Rule) : "any";
+  const payN = Number(String(sp.pay ?? "").replace(/[^0-9.]/g, ""));
+  const pay = payN >= 1.3 && payN <= 100000 ? payN : null;
+  const byMin = FINISH.find((f) => f[0] === by)![2];
+  const usingCooked = by === "any" && rule === "any" && !pay && Boolean(cooked?.slates.length);
+  const pool = cands.filter((p) => p.kickoff > now + 3 * 60_000 && (!byMin || p.kickoff <= now + byMin * 60_000));
+  const ladder: Slate[] = usingCooked ? cooked!.slates : cands.length ? cookSlates(pool, rule, pay ? [pay] : RUNGS) : [];
+  const ladderLink = (o: Partial<Record<"by" | "rule" | "pay", string>>) =>
+    `/picks?${new URLSearchParams(Object.entries({ tab: "cooked", by, rule, pay: pay ? String(pay) : "", ...o }).filter(([, v]) => v && !(v === "any")))}`;
+
   return (
     <main>
       <h1>Our picks</h1>
       <nav className="pagetabs" aria-label="Our picks">
         <Link href="/picks?tab=cooked" aria-current={tab === "cooked" ? "page" : undefined}>
-          Cooked slips {cooked?.slates.length ? <span className="count">{cooked.slates.length}</span> : null}
+          Payout ladder
         </Link>
         <Link href={`/picks?tab=build&set=${set}`} aria-current={tab === "build" ? "page" : undefined}>Build your own</Link>
       </nav>
       {tab === "cooked" && (<>
-      <p className="lede">Slips cooked for the rounds published now, named by style and already booked. Open one in SportyBet, or edit it first.</p>
-      {cooked && cooked.slates.length > 0 ? (
-        <>
-          <p className="status">
-            {cooked.slates.length} slips cooked at {lagos(cooked.cooked_at)} Lagos. Which slips appear depends on what this round offers:
-            each needs enough legs at its confidence level. They are recooked when a new round is published.
-          </p>
-          <nav className="slipjump" aria-label="Jump to a slip">
-            {cooked.slates.map((s) => (
-              <a key={s.id} href={`#slip-${s.style}`}><span>{s.name}</span><b className="num">{s.odds < 100 ? s.odds.toFixed(2) : Math.round(s.odds).toLocaleString("en-NG")}</b></a>
+      <p className="lede">The likeliest slip for each payout, from every match published now. Fewer, fairer legs: each priced 1.5 to 5, where the bookmaker keeps the least.</p>
+      <form className="ladderctl" action="/picks" method="get">
+        <input type="hidden" name="tab" value="cooked" />
+        <div className="ctlrow">
+          <span className="ctllabel">Finish by</span>
+          <nav className="segmented" aria-label="Finish by">
+            {FINISH.map(([v, label]) => (
+              <Link key={v} role="radio" aria-checked={by === v} className="button" href={ladderLink({ by: v })}>{label}</Link>
             ))}
           </nav>
-          <ul className="slates">{cooked.slates.map((s) => <SlateCard key={s.id} s={s} />)}</ul>
+        </div>
+        <div className="ctlrow">
+          <span className="ctllabel">Markets</span>
+          <nav className="segmented" aria-label="Markets">
+            {RULES.map(([v, label]) => (
+              <Link key={v} role="radio" aria-checked={rule === v} className="button" href={ladderLink({ rule: v })}>{label}</Link>
+            ))}
+          </nav>
+        </div>
+        <div className="ctlrow">
+          <label className="ctllabel" htmlFor="pay">Your payout</label>
+          <span className="payin">
+            <input id="pay" name="pay" type="text" inputMode="decimal" placeholder="e.g. 35" defaultValue={pay ?? ""} />
+            <input type="hidden" name="by" value={by} /><input type="hidden" name="rule" value={rule} />
+            <button type="submit">Find</button>
+            {pay ? <Link href={ladderLink({ pay: "" })} className="button">Clear</Link> : null}
+          </span>
+        </div>
+      </form>
+      {ladder.length > 0 ? (
+        <>
+          <p className="status">
+            {usingCooked
+              ? <>Cooked at {lagos(cooked!.cooked_at)} Lagos and booked, recooked with each new round.</>
+              : <>Worked out now from {pool.length ? new Set(pool.map((p) => p.eventId)).size : 0} matches{byMin ? ` finishing within ${FINISH.find((f) => f[0] === by)![1].toLowerCase()}` : ""}. Book one to get its code.</>}
+            {" "}Chances are SportyBet&apos;s own prices with the margin removed.
+          </p>
+          {ladder.length > 1 && (
+            <nav className="slipjump" aria-label="Jump to a payout">
+              {ladder.map((s) => (
+                <a key={s.id} href={`#slip-${s.style}`}><span>{s.name}</span><b className="num">{chance(s.chance)}</b></a>
+              ))}
+            </nav>
+          )}
+          <ul className="slates">{ladder.map((s) => <SlateCard key={s.id} s={s} live={!usingCooked} />)}</ul>
         </>
       ) : (
-        <p className="note">Nothing published right now is good enough to cook a slip. Check back when the next round is published.</p>
+        <p className="note">{pay ? "No slip reaches that payout from the matches in this window. Try a smaller payout or a later finish." : "Nothing published right now fits. Check back when the next round is published."}</p>
       )}
       </>)}
 

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { rememberCode } from "../codes-panel";
 import { adoptCode } from "../push-actions";
+import { bookSlip, type Leg } from "../actions";
 import { ShareButton } from "../share-sheet";
 import { shareUrl } from "@/lib/share";
 
@@ -23,6 +24,27 @@ export function SlateActions({ code, legs, odds, last, style }: Props) {
         try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* no clipboard */ }
       }}>{copied ? "Copied" : "Copy code"}</button>
       <span onClickCapture={keep}><ShareButton code={code} /></span>
+    </>
+  );
+}
+
+/** Book a slip worked out for this visit (not one of the cooked codes). Places no bet. */
+export function BookSlate({ legs, style }: { legs: Leg[]; style: string }) {
+  const [res, setRes] = useState<{ code: string } | { error: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (res && "code" in res)
+    return <SlateActions code={res.code} legs={legs.length} odds={legs.reduce((a, l) => a * (l.odds ?? 1), 1)} last={Math.max(...legs.map((l) => l.kickoff))} style={style} />;
+  return (
+    <>
+      <button type="button" className="primary" disabled={busy} onClick={async () => {
+        setBusy(true);
+        const r = await bookSlip(legs, `ladder:${style}`).catch((e) => ({ ok: false as const, error: (e as Error).message }));
+        setBusy(false);
+        if (!r.ok) return setRes({ error: r.error });
+        rememberCode({ code: r.code, at: Date.now(), legs: r.legs, odds: legs.reduce((a, l) => a * (l.odds ?? 1), 1), last: r.lastKickoff });
+        setRes({ code: r.code });
+      }}>{busy ? "Booking…" : "Book this slip"}</button>
+      {res && "error" in res && <span className="status">{res.error}</span>}
     </>
   );
 }

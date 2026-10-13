@@ -121,6 +121,8 @@ describe("plain view", () => {
   it("words chances", () => {
     expect(chance(0.718)).toBe("72%");
     expect(chance(0.999)).toBe("99%");
+    expect(chance(0.0008)).toBe("0.08%");
+    expect(chance(0.004)).toBe("0.4%");
     expect(oneIn(0.72)).toBe("about 7 in 10");
     expect(oneIn(0.14)).toBe("about 1 in 7");
   });

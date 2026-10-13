@@ -952,3 +952,17 @@ html { scroll-behavior: smooth; }
 .lk-odds { font-weight: 800; }
 .lk-chance { text-align: right; font-size: 13px; color: var(--ink-muted); }
 @media (prefers-reduced-motion: reduce) { .lk-compare, .lk-legs li { animation: none; } }
+
+/* Payout ladder controls */
+.ladderctl { display: grid; gap: 10px; margin: 0 0 14px; padding: 12px; background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; }
+.ctlrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ctllabel { flex: 0 0 82px; font-size: 13px; font-weight: 800; color: var(--ink-muted); }
+.ladderctl .segmented { flex-wrap: wrap; }
+.ladderctl .segmented a.button { min-height: 34px; border: 0; border-radius: 999px; background: transparent; padding: 4px 12px; font-size: 14px; color: var(--ink-muted); }
+.ladderctl .segmented a.button[aria-checked="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--edge); }
+.payin { display: flex; gap: 6px; align-items: center; }
+.payin input[type="text"] { width: 96px; min-height: 40px; padding: 6px 10px; font: inherit; border: 1px solid var(--edge); border-radius: 8px; background: var(--paper-sunk); color: var(--ink); }
+.payin button, .payin .button { min-height: 40px; }
+.slatevs { margin: 0 0 8px; font-size: 14px; line-height: 20px; }
+.slatevs strong { color: var(--fair); }
+@media (max-width: 420px) { .ctllabel { flex-basis: 100%; } }
