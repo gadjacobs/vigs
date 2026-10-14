@@ -100,12 +100,19 @@ function targetSlip(cands: Pick[], target: number, lo: number, hi: number, tol =
 }
 
 const STACK = ["FH_O05", "O15", "BY"];
+const UNDER = /^(FH_|H_|A_)?U\d\d$/;
+const TIGHT = ["H_U15", "FH_U15", "U25"];
 
 export function cookSlates(cands: Pick[]): Slate[] {
   const out: (Slate | null)[] = [];
 
-  // Steady: ~90% legs, as many as keep the whole slip at 60% or better.
-  const safe = bestPerMatch(cands.filter((p) => market(p) >= 0.85 && p.odds >= 1.05).filter(atLeastConf("Medium")), 8);
+  // Steady: ~90% legs, as many as keep the whole slip at 60% or better, from
+  // under lines only. On 6,898 matches (9-13 Oct) unders priced at 85% or more
+  // landed 90.7% against 89.8% priced (19,588 selections, z = 4.2; the only
+  // family of markets to pass the false-discovery check), while other markets at
+  // that level landed as priced. Steady built from any market had landed 393 of
+  // 687 against 425 priced.
+  const safe = bestPerMatch(cands.filter((p) => UNDER.test(p.market) && market(p) >= 0.85 && p.odds >= 1.05).filter(atLeastConf("Medium")), 8);
   const steady: Pick[] = [];
   for (const p of safe) {
     if (steady.reduce((a, x) => a * market(x), 1) * market(p) < 0.6 || steady.length >= 8) break;
@@ -141,8 +148,13 @@ export function cookSlates(cands: Pick[]): Slate[] {
   const goals = onePerMatch(cands.filter((p) => ["O25", "BY", "FH_O15", "O35", "H_O15", "A_O15"].includes(p.market) && market(p) >= 0.55), market);
   out.push(make("goals", "Goal rush", "Matches the bookmaker expects to be open: overs, both teams to score, a side scoring twice.",
     byConfidence(goals, (pool) => bestPerMatch(pool, 4).slice(0, 4))));
-  const tight = onePerMatch(cands.filter((p) => ["U25", "BN", "FH_U15", "U15", "H_U15", "A_U15"].includes(p.market) && market(p) >= 0.55), market);
-  out.push(make("tight", "Tight games", "Matches the bookmaker expects to stay low: unders, not both teams to score, a side kept quiet.",
+  // Tight games: the under lines that have landed above their price at 55-85%
+  // (home under 1.5: 67.4% vs 65.2% on 3,812; first half under 1.5: 67.7% vs
+  // 67.0%; under 2.5: 61.6% vs 60.7%). Away under 1.5 and both teams not to score
+  // landed below price there and are left out. The style landed 221 of 584
+  // against 170 priced with them in.
+  const tight = onePerMatch(cands.filter((p) => TIGHT.includes(p.market) && market(p) >= 0.55), market);
+  out.push(make("tight", "Tight games", "Matches the bookmaker expects to stay low: unders, and a home side kept to one goal or fewer.",
     byConfidence(tight, (pool) => bestPerMatch(pool, 4).slice(0, 4))));
 
   // Bold: bigger prices only where market and model agree closely.

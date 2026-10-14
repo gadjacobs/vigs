@@ -126,6 +126,15 @@ once (account "vig") and scored on Record by style. Long shot, Hundred and
 Thousand are the likeliest slips near 20, 100 and 1,000 odds (up to 50 legs);
 every leg pays the bookmaker's cut, so they land rarely.
 
+**Steady** and **Tight games** use under lines only. On 6,898 matches (9 to 13
+Oct) unders priced at 85% or more landed 90.7% against 89.8% priced (19,588
+selections), the only family of markets to pass the false-discovery check;
+other markets at that level landed as priced. Tight games keeps the unders that
+landed above their price at 55 to 85% (home team under 1.5, first half under
+1.5, under 2.5) and leaves out away team under 1.5 and both teams not to score,
+which landed below it. Both still pay back a little less than the stake on
+average.
+
 Slips are built from the **best bet per match**, ranked by the bookmaker's
 de-vigged chance rather than Vig's estimate: where the two disagree, results
 have followed the market, and the model leans the same way across many matches
