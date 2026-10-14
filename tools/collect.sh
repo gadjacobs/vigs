@@ -67,11 +67,9 @@ if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
 fi
 
 # The watcher runs for the whole job in the background, so odds, live prices and
-# results are captured every 4 minutes without pause. Publishing (model, picks,
-# ledger, record) reads the whole ledger several times and now takes 15-30
-# minutes; when it ran in between watch chunks, every round in that window went
-# unpriced (39 hours of gaps over 9-13 Oct). If the watcher crashes it is
-# started again.
+# results are captured every 4 minutes without pause, including while the model,
+# picks, ledger and record are published (about 6 minutes). If the watcher
+# crashes it is started again.
 TOTAL=$((CHUNKS * MINUTES))
 END=$(( $(date +%s) + TOTAL * 60 ))
 python -m vigs fetch results --data "$DATA" --days 0.25 > /dev/null || true
@@ -90,16 +88,19 @@ trap 'kill $WATCHER ${TICKER:-} 2>/dev/null' EXIT
 
 publish
 save
+# Save every 15 minutes (so a job killed at its time limit loses at most that)
+# and publish about once an hour. Runs used to be 6 x (55 min + publish) = about
+# 366 minutes against a 355-minute limit, and three of five were killed before
+# their last save, losing up to an hour of prices each time.
+last_pub=$(date +%s)
 while [ "$(date +%s)" -lt "$END" ]; do
-  # Publish about once an hour while the watcher keeps collecting.
-  wait_s=$(( MINUTES * 60 ))
-  [ $(( $(date +%s) + wait_s )) -gt "$END" ] && wait_s=$(( END - $(date +%s) ))
-  [ "$wait_s" -gt 0 ] && sleep "$wait_s"
-  # A publish can take half an hour; too close to the job's time limit, leave it
-  # to the next run, which publishes as it starts.
-  [ $(( END - $(date +%s) )) -lt $(( 30 * 60 )) ] && break
-  echo "publish at $(date -u +%H:%MZ)"
-  publish
+  left=$(( END - $(date +%s) ))
+  sleep $(( left < 900 ? left : 900 ))
+  if [ $(( $(date +%s) - last_pub )) -ge $(( MINUTES * 60 )) ] && [ $(( END - $(date +%s) )) -ge $(( 20 * 60 )) ]; then
+    echo "publish at $(date -u +%H:%MZ)"
+    publish
+    last_pub=$(date +%s)
+  fi
   save
 done
 wait "$WATCHER" 2>/dev/null
