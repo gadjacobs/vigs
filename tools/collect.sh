@@ -64,14 +64,43 @@ if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
     done
   ) &
   TICKER=$!
-  trap 'kill $TICKER 2>/dev/null' EXIT
 fi
+
+# The watcher runs for the whole job in the background, so odds, live prices and
+# results are captured every 4 minutes without pause. Publishing (model, picks,
+# ledger, record) reads the whole ledger several times and now takes 15-30
+# minutes; when it ran in between watch chunks, every round in that window went
+# unpriced (39 hours of gaps over 9-13 Oct). If the watcher crashes it is
+# started again.
+TOTAL=$((CHUNKS * MINUTES))
+END=$(( $(date +%s) + TOTAL * 60 ))
+python -m vigs fetch results --data "$DATA" --days 0.25 > /dev/null || true
+(
+  while [ "$(date +%s)" -lt "$END" ]; do
+    left=$(( (END - $(date +%s)) / 60 ))
+    [ "$left" -lt 5 ] && break
+    # A clean exit means the time is up; only a crash is restarted.
+    python -u -m vigs fetch watch --data "$DATA" --minutes "$left" --interval 240 && break
+    echo "watcher stopped; restarting"
+    sleep 30
+  done
+) &
+WATCHER=$!
+trap 'kill $WATCHER ${TICKER:-} 2>/dev/null' EXIT
 
 publish
 save
-for i in $(seq 1 "$CHUNKS"); do
-  echo "chunk $i/$CHUNKS"
-  python -u -m vigs fetch watch --data "$DATA" --minutes "$MINUTES" --interval 240
+while [ "$(date +%s)" -lt "$END" ]; do
+  # Publish about once an hour while the watcher keeps collecting.
+  wait_s=$(( MINUTES * 60 ))
+  [ $(( $(date +%s) + wait_s )) -gt "$END" ] && wait_s=$(( END - $(date +%s) ))
+  [ "$wait_s" -gt 0 ] && sleep "$wait_s"
+  # A publish can take half an hour; too close to the job's time limit, leave it
+  # to the next run, which publishes as it starts.
+  [ $(( END - $(date +%s) )) -lt $(( 30 * 60 )) ] && break
+  echo "publish at $(date -u +%H:%MZ)"
   publish
   save
 done
+wait "$WATCHER" 2>/dev/null
+save

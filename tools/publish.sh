@@ -2,8 +2,8 @@
 # new steps take effect without restarting the collector). Uses $DATA.
 # Model for the web app, then log the coming hour's picks (shadow mode) and
 # settle earlier ones, so every list the method produces is scored.
-# Results first, so restarts or outages never leave gaps (the archive goes back a year).
-python -m vigs fetch results --data "$DATA" --days 0.25 > /dev/null || true
+# Results come from the watcher running alongside (every 4 minutes, 2 hours back),
+# and collect.sh fills the last 6 hours when a job starts.
 python -m vigs export-model --data "$DATA" --out "$DATA/model.json" || true
 python -m vigs export-blend --data "$DATA" --out "$DATA/blend.json" || true
 for m in FH_O05 BY O15; do
