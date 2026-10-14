@@ -1,3 +1,4 @@
+import type { LeanRow } from "./insights";
 import type { Pick } from "./picks";
 import { confidence } from "./plain";
 import { bestPerMatch } from "./slates";
@@ -15,8 +16,15 @@ import { toTarget } from "./slip";
 //   Italy), with the chance that at least k of n land for SportyBet's Flex.
 // - best: the best bet per match, ranked by the bookmaker's de-vigged chance
 //   at odds of 1.2 or more, with no market filling more than 40% of the slip.
-export type SetId = "best" | "safe" | "odds" | "bold" | "draws";
+// - top: 50 of the likeliest selections, one per match, leaning toward markets
+//   that have landed above their price at that chance level (see `lean`).
+// - trusted: the same, only where the bookmaker's price and the model agree
+//   closely (High confidence) and the market's record at that level is at or
+//   above its price, and a chance of 60% or more.
+export type SetId = "top" | "trusted" | "best" | "safe" | "odds" | "bold" | "draws";
 export const SETS: { id: SetId; label: string }[] = [
+  { id: "top", label: "Top 50: likeliest" },
+  { id: "trusted", label: "Top 50: most confident" },
   { id: "best", label: "Best per match" },
   { id: "safe", label: "Safe ~90%" },
   { id: "odds", label: "Target odds" },
@@ -28,6 +36,31 @@ export const OUR_DEFAULT = 0.88;
 export const TARGETS = [2, 5, 10, 20] as const;
 export const COUNTS = [2, 3, 4, 5, 6] as const;
 export const BEST_COUNTS = [5, 10, 20, 30, 50] as const;
+export const TOP_COUNTS = [10, 20, 30, 40, 50] as const;
+export const FLOORS = [1.05, 1.1, 1.2, 1.3] as const; // lowest price a leg may have
+export const FLOOR_DEFAULT = 1.1;
+const TRUSTED_MIN = 0.6; // "most confident" legs are likely ones too; the slip takes as many as qualify
+
+/** How far a selection's market has landed above (or below) its price at this
+ * chance level in our data, per selection, shrunk toward zero when there are few
+ * settled examples (k = 2,000). 0 when there is no record. */
+export function leanOf(lean: LeanRow[] | undefined, market: string, chance: number): { adj: number; z: number | null } {
+  const r = lean?.find((x) => x.market === market && chance >= x.lo && chance < x.hi);
+  if (!r || !r.n) return { adj: 0, z: null };
+  return { adj: ((r.landed - r.priced) / r.n) * (r.n / (r.n + 2000)), z: r.z };
+}
+
+/** One leg per match, the likeliest after the lean, best first. */
+export function topPicks(cands: Pick[], lean: LeanRow[] | undefined, floor: number, trusted: boolean): Pick[] {
+  const score = (p: Pick) => p.marketChance + leanOf(lean, p.market, p.marketChance).adj;
+  const ok = (p: Pick) => {
+    if (p.odds < floor) return false;
+    if (!trusted) return true;
+    const z = leanOf(lean, p.market, p.marketChance).z;
+    return p.marketChance >= TRUSTED_MIN && confidence(p.lo, p.hi) === "High" && z !== null && z >= 0;
+  };
+  return onePerMatch(cands.filter(ok), score);
+}
 
 export function ourPicks(cands: Pick[], bar = OUR_DEFAULT): Pick[] {
   const best = new Map<string, Pick>();
@@ -51,7 +84,16 @@ function onePerMatch(ps: Pick[], key: (p: Pick) => number): Pick[] {
 
 export type Built = { pool: Pick[]; slip: Pick[]; flex: boolean };
 
-export function buildSet(id: SetId, cands: Pick[], o: { bar: number; target: number; n: number; maxSlip: number }): Built {
+export function buildSet(id: SetId, cands: Pick[], o: { bar: number; target: number; n: number; maxSlip: number; floor?: number; lean?: LeanRow[] }): Built {
+  if (id === "top" || id === "trusted") {
+    const legs = topPicks(cands, o.lean, o.floor ?? FLOOR_DEFAULT, id === "trusted");
+    // Each match's six likeliest selections stay available, so legs can be switched or added.
+    const by = new Map<string, Pick[]>();
+    for (const p of cands) if (p.odds >= (o.floor ?? FLOOR_DEFAULT)) (by.get(p.eventId) ?? by.set(p.eventId, []).get(p.eventId)!).push(p);
+    const pool = [...by.values()].flatMap((ps) => ps.sort((a, b) => b.marketChance - a.marketChance).slice(0, 6));
+    for (const l of legs) if (!pool.includes(l)) pool.push(l);
+    return { pool, slip: legs.slice(0, o.n), flex: true };
+  }
   if (id === "odds") {
     const pool = cands.filter((p) => p.odds >= 1.25 && p.odds <= 2.2 && confidence(p.lo, p.hi) !== "Low");
     return { pool, slip: toTarget(pool, o.target, 0.1, 12), flex: false };

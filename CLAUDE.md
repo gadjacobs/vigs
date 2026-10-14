@@ -50,7 +50,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   round (by the tick or the first viewer), stored as `slates`; each code logged once as
   user "vig". Never show share-endpoint odds after kickoff (they are in-play prices).
 - Google sign-in (`/api/auth/google`): `GOOGLE_ACCOUNTS` allowlist maps emails to accounts.
-- Our picks (`web/lib/ourpicks.ts`, `/picks`): sets safe/odds/bold/draws; `vigs ourpicks`
+- Our picks (`web/lib/ourpicks.ts`, `/picks`): templates top/trusted (Top 50, leaning on
+  `insights.json` `lean`, per-market landed vs priced by chance level), sets safe/odds/bold/draws; `vigs ourpicks`
   logs the safe set hourly. Booked codes go to the store's `codelog` with the server's
   clock and are copied into the ledger by `vigs ledger import-codes`; legs that had
   kicked off when booked are never scored. `vigs export-insights` feeds Record.

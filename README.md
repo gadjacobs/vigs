@@ -135,6 +135,17 @@ landed above their price at 55 to 85% (home team under 1.5, first half under
 which landed below it. Both still pay back a little less than the stake on
 average.
 
+**Top 50 templates** (Build your own) start a 10- to 50-leg slip, one leg per
+match, that can be edited, booked and played with Flex. *Likeliest* takes each
+match's likeliest selection at or above a price floor (1.05 to 1.30). *Most
+confident* takes only selections at 60% or more where the bookmaker's price and
+the model agree closely and whose market has landed at or above its price at
+that chance level. Both lean on `lean` in insights.json, published hourly: for
+each market at three chance levels (under 55%, 55 to 85%, 85% or more), how
+often it landed against its de-vigged price. A selection's chance is nudged by
+its market's record there, shrunk toward zero when examples are few, so the
+templates follow whatever the data favours (unders, lately) without a fixed list.
+
 Slips are built from the **best bet per match**, ranked by the bookmaker's
 de-vigged chance rather than Vig's estimate: where the two disagree, results
 have followed the market, and the model leans the same way across many matches

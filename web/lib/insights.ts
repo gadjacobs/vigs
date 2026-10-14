@@ -7,7 +7,10 @@ export type Insights = {
   bands: { lo: number; hi: number; n: number; landed: number; market: number; break_even: number; roi: number; se: number }[];
   sportybet_prob?: { n: number; sportybet: number; market: number } | null;
   leagues: { league: string; n: number; goals: number; home: number; draw: number; away: number; nil_nil: number; btts: number; first_half_share: number }[];
+  lean?: LeanRow[];
 };
+/** One market at one chance level: how often it landed against its de-vigged price. */
+export type LeanRow = { market: string; lo: number; hi: number; n: number; landed: number; priced: number; z: number };
 
 export const INSIGHTS_URL =
   process.env.INSIGHTS_URL ?? "https://raw.githubusercontent.com/gadjacobs/vigs/data/insights.json";

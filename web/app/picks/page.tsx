@@ -8,7 +8,8 @@ import { SlipBuilder } from "../slip-builder";
 import { loadBlend } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
-import { BEST_COUNTS, buildSet, COUNTS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, type SetId } from "@/lib/ourpicks";
+import { BEST_COUNTS, buildSet, COUNTS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
+import { loadInsights } from "@/lib/insights";
 import { candidates } from "@/lib/picks";
 import { chance, oneIn } from "@/lib/plain";
 import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
@@ -20,9 +21,11 @@ import { SlateCard } from "./slate-card";
 export const dynamic = "force-dynamic";
 
 const MAX_ON_SLIP = MAX_LEGS;
-type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string };
+type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string; floor?: string };
 
 const ABOUT: Record<SetId, string> = {
+  top: "The likeliest selection in each match, at the price floor or above, best first. Ties lean toward markets that have landed above their price at that chance level in our data (unders, lately) and away from those below it. Edit freely; Flex shows the chance with a miss or two.",
+  trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely and whose market has landed at or above its price at that chance level in our data. Up to 50, as many as qualify.",
   best: "One leg per match: its likeliest selection at odds of 1.2 or more, by the bookmaker's own chance, with no market filling more than 40% of the slip, so you get a spread of markets.",
   safe: "For every published match, the best-paying selection with a chance at or above the bar.",
   odds: "The likeliest slip near your total odds, built from legs priced 1.25 to 2.2 that the market and model broadly agree on. In the settled data, prices under 2 lost 1-2% of stakes on average while prices over 5 lost 24-48%, so several short legs keep more value than one long shot.",
@@ -50,15 +53,18 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   } catch {
     cooked = null;
   }
-  const set: SetId = SETS.find((x) => x.id === sp.set)?.id ?? "best";
+  const set: SetId = SETS.find((x) => x.id === sp.set)?.id ?? "top";
+  const top = set === "top" || set === "trusted";
+  const floor = FLOORS.find((f) => String(f) === sp.floor) ?? FLOOR_DEFAULT;
   const tab = sp.tab === "build" || (sp.set && sp.tab !== "cooked") ? "build" : "cooked";
   const bar = OUR_BARS.find((b) => String(Math.round(b * 100)) === sp.bar) ?? OUR_DEFAULT;
   const target = TARGETS.find((t) => String(t) === sp.odds) ?? 10;
-  const n = set === "best"
+  const n = top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? 50
+    : set === "best"
     ? BEST_COUNTS.find((c) => String(c) === sp.n) ?? 10
     : COUNTS.find((c) => String(c) === sp.n) ?? (set === "draws" ? 4 : 3);
   const link = (o: Partial<Record<keyof SP, string | number>>) =>
-    `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), odds: target, n, ...o }).map(([k, v]) => [k, String(v)]))}`;
+    `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), odds: target, n, floor, ...o }).map(([k, v]) => [k, String(v)]))}`;
 
   const { profile } = await myProfile();
   const view = viewOf(profile, (await cookies()).get("vig_view")?.value);
@@ -75,7 +81,8 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const blend = await loadBlend();
   const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 24, mode: "count", count: MAX_ON_SLIP, sort: "likely" };
   const cands = model ? candidates(model, fixtures, { ...q, now }, blend).candidates : [];
-  const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP });
+  const lean = top ? (await loadInsights())?.lean : undefined;
+  const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP, floor, lean });
   const all = built.slip.reduce((a, p) => a * p.estimate, 1);
   const odds = built.slip.reduce((a, p) => a * p.odds, 1);
   const last = built.slip.length ? Math.max(...built.slip.map((p) => p.kickoff)) : now;
@@ -121,6 +128,8 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       {set === "odds" && <Chips name="Total odds" value={target} options={TARGETS} label={(t) => `${t} odds`} href={(t) => link({ odds: t })} />}
       {(set === "bold" || set === "draws") && <Chips name="Legs" value={n} options={COUNTS} label={(c) => `${c} legs`} href={(c) => link({ n: c })} />}
       {set === "best" && <Chips name="Legs" value={n} options={BEST_COUNTS} label={(c) => `${c} legs`} href={(c) => link({ n: c })} />}
+      {top && <Chips name="Legs" value={n} options={TOP_COUNTS} label={(c) => `${c} legs`} href={(c) => link({ n: c })} />}
+      {top && <Chips name="Lowest price per leg" value={floor} options={FLOORS} label={(f) => `${f.toFixed(2)}+`} href={(f) => link({ floor: f })} />}
       {error && <p className="note warn" role="alert">{error}</p>}
       {model && !error && (
         <p className="status">

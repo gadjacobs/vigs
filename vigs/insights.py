@@ -49,6 +49,9 @@ def _compare(rows: list[tuple[float, float, int]]) -> dict | None:
             "market": sum(_ll(b, y) for _, b, y in rows) / len(rows)}
 
 
+CHANCE_BANDS = ((0.0, 0.55), (0.55, 0.85), (0.85, 1.0001))
+
+
 def export_insights(data_dir: str) -> dict:
     with open(os.path.join(data_dir, "results.csv"), newline="", encoding="utf-8") as fh:
         results = list(csv.DictReader(fh))
@@ -57,6 +60,7 @@ def export_insights(data_dir: str) -> dict:
     margins: dict[str, list[float]] = defaultdict(list)
     sp_ll: list[tuple[float, float, int]] = []   # (SportyBet prob, our market chance, landed)
     bands: dict[int, list[tuple[float, float, int]]] = defaultdict(list)   # (odds, market chance, won)
+    lean: dict[tuple[str, int], list[float]] = defaultdict(lambda: [0, 0, 0.0, 0.0])  # n, landed, priced, variance
     matches = 0
     for e, s in snaps.items():
         r = by_id.get(e)
@@ -77,6 +81,11 @@ def export_insights(data_dir: str) -> dict:
                     continue
                 i = next(i for i, (lo, hi) in enumerate(BANDS) if lo <= odds[k] < hi)
                 bands[i].append((odds[k], fair[k], int(y)))
+                c = lean[(k, next(j for j, (lo, hi) in enumerate(CHANCE_BANDS) if lo <= fair[k] < hi))]
+                c[0] += 1
+                c[1] += int(y)
+                c[2] += fair[k]
+                c[3] += fair[k] * (1 - fair[k])
                 if k in prob:
                     sp_ll.append((prob[k], fair[k], int(y)))
     band_rows = []
@@ -111,4 +120,10 @@ def export_insights(data_dir: str) -> dict:
                           key=lambda x: x["margin"]),
         "bands": band_rows, "leagues": league_rows,
         "sportybet_prob": _compare(sp_ll),
+        # Each market at three chance levels: how often it landed against what its
+        # (de-vigged) price said. Our picks leans toward selections whose market has
+        # landed above its price at that level, and away from those below it.
+        "lean": [{"market": k, "lo": CHANCE_BANDS[j][0], "hi": CHANCE_BANDS[j][1], "n": int(n), "landed": int(l),
+                  "priced": pr, "z": (l - pr) / var ** 0.5 if var > 0 else 0.0}
+                 for (k, j), (n, l, pr, var) in sorted(lean.items()) if n >= 100],
     }

@@ -121,6 +121,8 @@ describe("plain view", () => {
   it("words chances", () => {
     expect(chance(0.718)).toBe("72%");
     expect(chance(0.999)).toBe("99%");
+    expect(chance(0.0008)).toBe("0.08%");
+    expect(chance(0.004)).toBe("0.4%");
     expect(oneIn(0.72)).toBe("about 7 in 10");
     expect(oneIn(0.14)).toBe("about 1 in 7");
   });
@@ -165,5 +167,27 @@ describe("double chance and team goals", () => {
     const f = fairProbs(odds);
     expect(f.DC1X).toBeCloseTo(f["1"] + f.X, 12);
     expect(f.H_O05 + f.H_U05).toBeCloseTo(1, 12);
+  });
+});
+
+describe("top 50 templates", async () => {
+  const { topPicks, leanOf } = await import("../lib/ourpicks");
+  const pick = (eventId: string, market: string, chance: number, odds: number, lo = chance - 0.01, hi = chance + 0.01) =>
+    ({ id: `${eventId}|${market}`, eventId, market, marketChance: chance, odds, lo, hi, estimate: chance, kickoff: 1 }) as never;
+  const lean = [
+    { market: "U35", lo: 0.85, hi: 1.0001, n: 8000, landed: 7300, priced: 7200, z: 2.5 },
+    { market: "O05", lo: 0.85, hi: 1.0001, n: 8000, landed: 7150, priced: 7200, z: -1.2 },
+  ];
+  it("shrinks the lean toward zero with few examples", () => {
+    expect(leanOf(lean, "U35", 0.9).adj).toBeCloseTo((100 / 8000) * (8000 / 10000), 9);
+    expect(leanOf(lean, "BY", 0.9)).toEqual({ adj: 0, z: null });
+  });
+  it("keeps one leg per match, leaning toward markets above their price", () => {
+    const got = topPicks([pick("a", "O05", 0.905, 1.1), pick("a", "U35", 0.9, 1.1), pick("b", "O05", 0.95, 1.04)], lean, 1.1, false);
+    expect(got.map((p: { id: string }) => p.id)).toEqual(["a|U35"]);
+  });
+  it("most confident needs agreement and a record at or above price", () => {
+    const got = topPicks([pick("a", "O05", 0.92, 1.1), pick("b", "U35", 0.9, 1.1), pick("c", "U35", 0.9, 1.1, 0.8, 0.95)], lean, 1.1, true);
+    expect(got.map((p: { id: string }) => p.id)).toEqual(["b|U35"]);
   });
 });
