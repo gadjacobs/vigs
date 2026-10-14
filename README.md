@@ -144,7 +144,7 @@ that chance level. Both lean on `lean` in insights.json, published hourly: for
 each market at three chance levels (under 55%, 55 to 85%, 85% or more), how
 often it landed against its de-vigged price. A selection's chance is nudged by
 its market's record there, shrunk toward zero when examples are few, so the
-templates follow whatever the data favours (unders, lately) without a fixed list.
+templates follow whatever the data favours (unders, lately) rather than a hand-picked list.
 
 Slips are built from the **best bet per match**, ranked by the bookmaker's
 de-vigged chance rather than Vig's estimate: where the two disagree, results
