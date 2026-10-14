@@ -5,7 +5,10 @@ export type Group = {
   expected_vig: number; expected_market: number; roi: number; roi_low: number; roi_high: number;
 };
 export type LegStats = { settled: number; hits: number; expected_vig: number; expected_market: number };
+export type HabitRow = { settled: number; landed: number; expected_market: number; odds: number; roi: number };
+export type Habits = { length: Record<string, HabitRow>; time: Record<string, HabitRow>; origin: Record<string, HabitRow> };
 export type CodeGroup = {
+  habits?: Habits;
   markets?: Record<string, LegStats>;
   codes: number; settled: number; landed: number; expected_vig: number; expected_market: number; roi: number;
   legs: { settled: number; hits: number; expected_vig: number; expected_market: number };

@@ -2,8 +2,9 @@ import Link from "next/link";
 import { loadBlend, type BlendFile } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadInsights, type Insights } from "@/lib/insights";
-import { myProfile } from "@/lib/profile";
-import { loadRecord, type CodeGroup, type Group, type LegStats, type RecordFile } from "@/lib/record";
+import { habitNotes, LENGTH_ORDER, TIME_ORDER } from "@/lib/habits";
+import { DEFAULT_STAKE, myProfile } from "@/lib/profile";
+import { loadRecord, type CodeGroup, type Group, type HabitRow, type LegStats, type RecordFile } from "@/lib/record";
 import { ProfitChart } from "./profit-chart";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +81,7 @@ function Accuracy({ blend }: { blend: BlendFile | null }) {
   );
 }
 
-function Body({ rec, user, tab, n }: { rec: RecordFile; user: string | null; tab: Tab; n: number }) {
+function Body({ rec, user, tab, n, stake }: { rec: RecordFile; user: string | null; tab: Tab; n: number; stake: number }) {
   const mine = (user && rec.mycodes?.by_user?.[user]) || (rec.mycodes?.by_user ? null : rec.mycodes) || null;
   const series = ["Lean", "Rough"]
     .filter((g) => rec.curve[g]?.length)
@@ -97,6 +98,7 @@ function Body({ rec, user, tab, n }: { rec: RecordFile; user: string | null; tab
         <section className="block" aria-labelledby="mine">
           <h2 id="mine">Your codes</h2>
           <CodeTiles g={mine} />
+          {mine.habits && <YourHabits g={mine} stake={stake} />}
           {mine.markets && Object.keys(mine.markets).length > 0 && <MarketLegs m={mine.markets} />}
           <p className="status">Every code {user ? `${user} booked` : "booked"} in Vig, copied to the ledger with the time it was booked. Legs that had already kicked off when booked are not scored. {mine.codes - mine.settled} code(s) still open.</p>
         </section>
@@ -113,7 +115,7 @@ function Body({ rec, user, tab, n }: { rec: RecordFile; user: string | null; tab
                 <tbody>
                   {Object.entries(rec.slates.by_style).sort((x, y) => y[1].settled - x[1].settled).map(([k, g]) => (
                     <tr key={k}>
-                      <td>{k}</td><td className="n">{g.settled}</td><td className="n">{g.landed}</td>
+                      <td>{/^x\d+$/.test(k) ? `${Number(k.slice(1)).toLocaleString("en-NG")} odds (trial)` : k}</td><td className="n">{g.settled}</td><td className="n">{g.landed}</td>
                       <td className="n">{g.expected_vig.toFixed(1)}</td><td className="n">{g.expected_market.toFixed(1)}</td>
                       <td className={`n ${g.roi < 0 ? "loss" : ""}`}>{g.settled ? `${signedPct(g.roi)}${g.settled < 30 ? " (too few)" : ""}` : "None"}</td>
                     </tr>
@@ -265,6 +267,50 @@ function Body({ rec, user, tab, n }: { rec: RecordFile; user: string | null; tab
 
 /** Your legs by market, against what Vig and the market expected; the
  * takeaway names a market only once it has 20 settled legs. */
+const ORIGIN: Record<string, string> = { tonight: "Tonight", cooked: "Cooked", ourpicks: "Our picks", tracked: "Tracked", other: "Other" };
+
+function HabitTable({ title, rows, order, label = (k) => k }: { title: string; rows: Record<string, HabitRow>; order?: string[]; label?: (k: string) => string }) {
+  const keys = (order ?? Object.keys(rows).sort((a, b) => rows[b].settled - rows[a].settled)).filter((k) => rows[k]?.settled);
+  if (!keys.length) return null;
+  return (
+    <div className="tablewrap">
+      <table className="habittable">
+        <thead><tr><th>{title}</th><th className="n">Codes</th><th className="n">Landed</th><th className="n">Expected</th><th className="n">Back</th></tr></thead>
+        <tbody>
+          {keys.map((k) => {
+            const r = rows[k];
+            return (
+              <tr key={k}>
+                <td>{label(k)}</td><td className="n">{r.settled}</td><td className="n">{r.landed}</td>
+                <td className="n">{r.expected_market.toFixed(1)}</td>
+                <td className={`n ${r.roi < 0 ? "loss" : ""}`}>{Math.round((r.roi + 1) * 100)}%</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** How this account's own codes did, by slip length, time and source, with plain notes. */
+function YourHabits({ g, stake }: { g: CodeGroup; stake: number }) {
+  const notes = habitNotes(g, stake);
+  const h = g.habits!;
+  return (
+    <>
+      <h3 className="subhead">Your habits</h3>
+      {notes.length ? (
+        <ul className="habitnotes">{notes.map((n) => <li key={n}>{n}</li>)}</ul>
+      ) : <p className="status">Notes appear once you have at least 8 settled codes.</p>}
+      <HabitTable title="Legs" rows={h.length} order={LENGTH_ORDER} label={(k) => k.replace(/ legs?$/, "")} />
+      <HabitTable title="Booked (Lagos)" rows={h.time} order={TIME_ORDER} label={(k) => k.replace(/^.*\((\d+)-(\d+)\)$/, "$1-$2")} />
+      <HabitTable title="From" rows={h.origin} label={(k) => ORIGIN[k] ?? k} />
+      <p className="status">Expected is how many SportyBet&apos;s own prices said should land; Back is what came back per ₦100 staked on each code. A gap over a few dozen codes is mostly luck.</p>
+    </>
+  );
+}
+
 function MarketLegs({ m }: { m: Record<string, LegStats> }) {
   const rows = Object.entries(m).sort((a, b) => b[1].settled - a[1].settled);
   const judged = rows.filter(([, r]) => r.settled >= 20).map(([k, r]) => ({ k, d: (r.hits - r.expected_market) / r.settled }));
@@ -388,7 +434,8 @@ export default async function RecordPage({ searchParams }: { searchParams: Promi
   }
   const blend = await loadBlend();
   const ins = await loadInsights();
-  const { user } = await myProfile();
+  const { user, profile } = await myProfile();
+  const stake = profile?.prefs?.stake ?? DEFAULT_STAKE;
   return (
     <main>
       <h1>Record</h1>
@@ -401,7 +448,7 @@ export default async function RecordPage({ searchParams }: { searchParams: Promi
           <Link key={t} href={`/record?tab=${t}`} aria-current={t === tab ? "page" : undefined}>{label}</Link>
         ))}
       </nav>
-      {rec && <Body rec={rec} user={user} tab={tab} n={n} />}
+      {rec && <Body rec={rec} user={user} tab={tab} n={n} stake={stake} />}
       {tab === "markets" && <Accuracy blend={blend} />}
       {tab === "data" && (ins ? <DataSays ins={ins} /> : <p className="note">The data summary is published hourly by the collector; it appears after its next run.</p>)}
       {!rec && (

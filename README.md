@@ -244,6 +244,14 @@ stake, start page, theme, this device's notifications, saved filters, help and,
 for admins, invites and a setup check. The Codes tab shows how many codes are
 open, and reopening the app refreshes everything without a pull.
 
+**Your habits** (Record, Your codes) breaks each account's settled codes down
+by slip length, the Lagos time they were booked and where they came from, each
+against how many SportyBet's own prices said should land and what came back per
+₦100 staked, with a few plain notes: which slip lengths have done best and
+worst, long slips that never landed, markets well above or below their price
+(30 or more legs), and the result at the usual stake. Notes need at least 8
+settled codes.
+
 ## Your codes and notifications
 
 **Codes** has two tabs, like SportyBet: **Open** (in play, 10 at a time) and

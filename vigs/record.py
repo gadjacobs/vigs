@@ -105,6 +105,8 @@ def export_record(ledger: Ledger, recent: int = 150) -> dict:
                      "expected_market": sum(l.get("market_prob") or 0 for l, _ in legs)},
             "recent": [{k: v for k, v in c.items() if k != "_legs"}
                        for c in sorted(cs, key=lambda c: -c["booked_at"])[:30]],
+            "habits": {"length": _habit(done, _legs_bucket), "time": _habit(done, _time_bucket),
+                       "origin": _habit(done, lambda c: (c["origin"] or "other").split(":")[0])},
         }
 
     people = [c for c in codes if c["user"] != "vig"]
@@ -138,3 +140,37 @@ def export_record(ledger: Ledger, recent: int = 150) -> dict:
             "won": None if s is None else s["won"], "score": None if s is None else s.get("score"),
         } for p, s in latest],
     }
+
+
+# Habits: how a person's settled codes did, grouped by how long the slip was,
+# when it was booked (Lagos time) and where it came from, each against what
+# the prices said.
+LENGTH_BUCKETS = ((1, 1, "1 leg"), (2, 3, "2-3 legs"), (4, 6, "4-6 legs"), (7, 10, "7-10 legs"),
+                  (11, 20, "11-20 legs"), (21, 999, "21+ legs"))
+TIME_BUCKETS = ((0, 6, "Night (00-06)"), (6, 12, "Morning (06-12)"), (12, 18, "Afternoon (12-18)"),
+                (18, 24, "Evening (18-24)"))
+
+
+def _legs_bucket(c: dict) -> str:
+    n = c["scored"]
+    return next(label for lo, hi, label in LENGTH_BUCKETS if lo <= n <= hi)
+
+
+def _time_bucket(c: dict) -> str:
+    h = (datetime.fromtimestamp(c["booked_at"] / 1000, timezone.utc).hour + 1) % 24  # Lagos is UTC+1
+    return next(label for lo, hi, label in TIME_BUCKETS if lo <= h < hi)
+
+
+def _habit(done: list[dict], key) -> dict:
+    groups: dict[str, list] = defaultdict(list)
+    for c in done:
+        groups[key(c)].append(c)
+    out = {}
+    for k, cs in groups.items():
+        staked = len(cs)
+        back = sum(c["odds"] for c in cs if c["won"])
+        out[k] = {"settled": staked, "landed": sum(bool(c["won"]) for c in cs),
+                  "expected_market": sum(c["market_prob"] for c in cs),
+                  "odds": sum(c["odds"] for c in cs) / staked,
+                  "roi": back / staked - 1}
+    return out
