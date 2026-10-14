@@ -334,6 +334,14 @@ deployed or a new round is published. Setup, once:
    (`https://<your app>/api/push/tick`).
 4. Open Alerts on the phone, turn notifications on, and send a test.
 
+**Slip alerts** (Alerts and Settings, per account) tell you when a saved
+Tonight filter, or one of the Our picks templates, comes up with a slip that
+meets your conditions: at least N legs (for a template, N that qualify), and
+optionally a minimum chance that all land and a minimum total odds. The tick
+checks each account about every 10 minutes and sends an alert at most every 2
+hours, only when its slip has changed, never between midnight and 7am Lagos,
+to every device on the account. "Notify me" on a template opens the form preset.
+
 Every open code on a signed-in account is watched, however it was booked
 (built, cooked, copied, opened or tracked). The collector calls the tick about
 every 20 seconds while a watched leg is in play and every 2 minutes otherwise

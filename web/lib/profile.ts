@@ -14,6 +14,7 @@ export type Profile = {
   hidden?: string[];                       // codes removed from Codes (the record keeps them)
   filters?: SavedFilter[];                 // named Tonight filters
   prefs?: Prefs;
+  watches?: import("./watches").SlipWatch[]; // slip alerts on saved filters and templates
   updated: number;
 };
 

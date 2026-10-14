@@ -1,5 +1,6 @@
 "use server";
-import { currentUser, mergeCodes, updateProfile, type Prefs, type SavedCode, type SavedFilter } from "@/lib/profile";
+import { currentUser, loadProfile, mergeCodes, updateProfile, type Prefs, type SavedCode, type SavedFilter } from "@/lib/profile";
+import type { SlipWatch } from "@/lib/watches";
 import { storeReady } from "@/lib/store";
 
 async function me() {
@@ -87,4 +88,28 @@ export async function finishOnboarding(choice: { view?: "simple" | "detailed"; s
     prefs: { ...p.prefs, onboarded: true, ...(stake ? { stake } : {}) },
   }));
   return true;
+}
+
+/** Add or replace a slip alert (up to 10 per account). */
+export async function saveWatch(w: SlipWatch): Promise<SlipWatch[] | { error: string }> {
+  const user = await me();
+  if (!user) return { error: "Sign in to set slip alerts." };
+  const p0 = await loadProfile(user);
+  const source = String(w.source ?? "");
+  const okSource = source === "template:top" || source === "template:trusted"
+    || (source.startsWith("filter:") && (p0?.filters ?? []).some((f) => `filter:${f.name}` === source));
+  if (!okSource) return { error: "Pick a saved filter or a template." };
+  const minLegs = Math.min(50, Math.max(1, Math.round(Number(w.minLegs) || 1)));
+  const minChance = Number(w.minChance) > 0 ? Math.min(0.99, Number(w.minChance)) : undefined;
+  const minOdds = Number(w.minOdds) > 1 ? Math.min(1_000_000, Number(w.minOdds)) : undefined;
+  const clean: SlipWatch = { id: /^[a-z0-9]{6,12}$/.test(String(w.id)) ? w.id : Math.random().toString(36).slice(2, 10), source, minLegs, minChance, minOdds };
+  const p = await updateProfile(user, (p) => ({ ...p, watches: [clean, ...(p.watches ?? []).filter((x) => x.id !== clean.id)].slice(0, 10) }));
+  return p.watches ?? [];
+}
+
+export async function removeWatch(id: string): Promise<SlipWatch[] | null> {
+  const user = await me();
+  if (!user) return null;
+  const p = await updateProfile(user, (p) => ({ ...p, watches: (p.watches ?? []).filter((x) => x.id !== id) }));
+  return p.watches ?? [];
 }

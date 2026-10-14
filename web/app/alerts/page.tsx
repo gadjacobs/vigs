@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { AlertsPanel } from "./alerts-panel";
+import { SlipAlerts } from "./slip-alerts";
 import { SHORT_LABELS } from "@/lib/markets";
 import { pushReady, vapidPublicKey } from "@/lib/push";
 import { isAdmin } from "@/lib/beta";
@@ -11,7 +12,8 @@ import { logout } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function Alerts() {
+export default async function Alerts({ searchParams }: { searchParams: Promise<{ watch?: string; legs?: string }> }) {
+  const sp = await searchParams;
   const { user, profile } = await myProfile();
   const saved = profile?.query ?? decodeURIComponent((await cookies()).get("vig_q")?.value ?? "");
   const q = parseQuery(saved ? Object.fromEntries(new URLSearchParams(saved)) : {});
@@ -28,6 +30,13 @@ export default async function Alerts() {
         </p>
       ) : (
         <AlertsPanel vapidKey={await vapidPublicKey()} filters={filters} />
+      )}
+      {user && storeSource() && pushReady() && (
+        <section id="slips" className="panel" aria-labelledby="slips-h">
+          <h2 id="slips-h">Slip alerts</h2>
+          <SlipAlerts initial={profile?.watches ?? []} filters={(profile?.filters ?? []).map((f) => f.name)}
+            preset={sp.watch ? { source: sp.watch, legs: Number(sp.legs) || undefined } : undefined} />
+        </section>
       )}
       <section className="panel account" aria-labelledby="acct">
         <h2 id="acct">Account</h2>

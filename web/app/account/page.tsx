@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { logout } from "../actions";
 import { ThemeToggle } from "../theme-toggle";
 import { AlertsPanel } from "../alerts/alerts-panel";
+import { SlipAlerts } from "../alerts/slip-alerts";
 import { SetupCheck } from "../alerts/setup-check";
 import { SavedFilters, SettingsForm } from "./account-form";
 import { Invites } from "./invites";
@@ -58,6 +59,10 @@ export default async function Settings() {
         <h2 id="alerts-h">Notifications</h2>
         <p className="status">For this device. Each phone or laptop you use has its own.</p>
         {pushReady() ? <AlertsPanel vapidKey={await vapidPublicKey()} filters={filters} /> : <p className="note">Notifications aren&apos;t available right now.</p>}
+        {pushReady() && synced && (<>
+          <h3 className="subhead">Slip alerts</h3>
+          <SlipAlerts initial={profile?.watches ?? []} filters={(profile?.filters ?? []).map((f) => f.name)} />
+        </>)}
       </section>
 
       {synced && <SavedFilters initial={profile?.filters ?? []} />}

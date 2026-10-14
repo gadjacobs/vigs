@@ -76,7 +76,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   default `me`) answer and invite testers by Google address (stored `invites`, `.i.` sessions).
 - Push (`web/lib/push.ts`, `store.ts`, `/alerts`): Upstash Redis holds subscriptions,
   tip times, watched codes and profiles only; `/api/push/tick` is called by the collector with
-  `PUSH_TICK_SECRET`. Admin (`/admin`, `lib/activity.ts`, `lib/seen.ts`): per-account activity from
+  `PUSH_TICK_SECRET`. Slip alerts (`lib/watches.ts`, `profile.watches`, run by the tick): saved
+  filters/templates meeting conditions, per account every 10 min, each at most every 2 h. Admin (`/admin`, `lib/activity.ts`, `lib/seen.ts`): per-account activity from
   the store and record; results at the usual stake are estimates. Live odds use Shin de-vig (`vigs.odds.LIVE_DEVIG`, `fairProbs`).
 
 ## Engineering rules

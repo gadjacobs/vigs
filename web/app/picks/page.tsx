@@ -37,11 +37,14 @@ function Chips<T extends string | number>({ name, value, options, label, href }:
   name: string; value: T; options: readonly T[]; label: (v: T) => string; href: (v: T) => string;
 }) {
   return (
-    <nav className="segmented barpick" aria-label={name}>
-      {options.map((v) => (
-        <Link key={String(v)} role="radio" aria-checked={v === value} href={href(v)} className="button">{label(v)}</Link>
-      ))}
-    </nav>
+    <div className="chiprow">
+      <span className="chiplabel">{name}</span>
+      <nav className="segmented barpick" aria-label={name}>
+        {options.map((v) => (
+          <Link key={String(v)} role="radio" aria-checked={v === value} href={href(v)} className="button" scroll={false}>{label(v)}</Link>
+        ))}
+      </nav>
+    </div>
   );
 }
 
@@ -125,11 +128,12 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       </nav>
       <p className="lede">{ABOUT[set]}</p>
       {set === "safe" && <Chips name="Chance bar" value={bar} options={OUR_BARS} label={(b) => `${Math.round(b * 100)}%+`} href={(b) => link({ bar: Math.round(b * 100) })} />}
-      {set === "odds" && <Chips name="Total odds" value={target} options={TARGETS} label={(t) => `${t} odds`} href={(t) => link({ odds: t })} />}
-      {(set === "bold" || set === "draws") && <Chips name="Legs" value={n} options={COUNTS} label={(c) => `${c} legs`} href={(c) => link({ n: c })} />}
-      {set === "best" && <Chips name="Legs" value={n} options={BEST_COUNTS} label={(c) => `${c} legs`} href={(c) => link({ n: c })} />}
-      {top && <Chips name="Legs" value={n} options={TOP_COUNTS} label={(c) => `${c} legs`} href={(c) => link({ n: c })} />}
-      {top && <Chips name="Lowest price per leg" value={floor} options={FLOORS} label={(f) => `${f.toFixed(2)}+`} href={(f) => link({ floor: f })} />}
+      {set === "odds" && <Chips name="Total odds" value={target} options={TARGETS} label={(t) => String(t)} href={(t) => link({ odds: t })} />}
+      {(set === "bold" || set === "draws") && <Chips name="Legs" value={n} options={COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
+      {set === "best" && <Chips name="Legs" value={n} options={BEST_COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
+      {top && <Chips name="Legs" value={n} options={TOP_COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
+      {top && <Chips name="Lowest price" value={floor} options={FLOORS} label={(f) => `${f.toFixed(2)}+`} href={(f) => link({ floor: f })} />}
+      {top && <p className="hint"><Link href={`/alerts?watch=template:${set}&legs=${n}#slips`}>Notify me</Link> when {n} legs qualify for this set.</p>}
       {error && <p className="note warn" role="alert">{error}</p>}
       {model && !error && (
         <p className="status">

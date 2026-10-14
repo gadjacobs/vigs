@@ -49,8 +49,10 @@ export function topPicks(cands: Pick[], lean: LeanRow[] | undefined, floor: numb
   const ok = (p: Pick) => {
     if (p.odds < floor) return false;
     if (!trusted) return true;
+    // Without the published record (before the first hourly publish), agreement and chance alone.
     const z = leanOf(lean, p.market, p.marketChance).z;
-    return p.marketChance >= TRUSTED_MIN && confidence(p.lo, p.hi) === "High" && z !== null && z >= 0;
+    const recordOk = !lean?.length || (z !== null && z >= 0);
+    return p.marketChance >= TRUSTED_MIN && confidence(p.lo, p.hi) === "High" && recordOk;
   };
   return onePerMatch(cands.filter(ok), score);
 }

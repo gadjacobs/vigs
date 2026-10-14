@@ -2,6 +2,7 @@ import { pushReady, tick } from "@/lib/push";
 import { currentSlates } from "@/lib/kitchen";
 import { claim, setJson, storeReady } from "@/lib/store";
 import { buildOurs, buildTip } from "@/lib/tips";
+import { runWatches } from "@/lib/watches";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,5 +20,8 @@ export async function POST(request: Request) {
   // At most once a minute: each check reads SportyBet's upcoming list.
   const cooked = (await claim("scan:cook", 55).catch(() => true))
     ? await currentSlates().then((c) => c.slates.length).catch(() => -1) : null;
-  return Response.json({ ...(await tick(buildTip, Date.now(), buildOurs)), cooked });
+  const out = await tick(buildTip, Date.now(), buildOurs);
+  // Slip alerts on saved filters and templates (each account at most every 10 minutes).
+  const watches = await runWatches().catch(() => ({ checked: 0, sent: 0, errors: 1 }));
+  return Response.json({ ...out, cooked, watches });
 }
