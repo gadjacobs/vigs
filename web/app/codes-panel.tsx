@@ -11,7 +11,8 @@ import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
 import type { SavedCode as Saved } from "@/lib/profile";
 import { shareUrl } from "@/lib/share";
-import { readAll, readCodes, readFinal, readHidden, readOpen, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
+import { isFinal, readAll, readCodes, readFinal, readHidden, readOpen, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
+import { flexLevels, FlexRow } from "./flex-row";
 
 export type { Saved };
 export { CODES_KEY, readCodes } from "./code-store";
@@ -65,6 +66,19 @@ function codeChance(t: Tracked, live: Record<string, LiveLeg>): number | null {
     p *= c;
   }
   return p;
+}
+
+/** Each leg's chance for Flex: 1 or 0 once decided, else its live or market chance. */
+function legProbs(t: Tracked, live: Record<string, LiveLeg>): number[] | null {
+  const ps: number[] = [];
+  for (const l of t.legs) {
+    const st = effective(l, live);
+    if (st === "won" || st === "lost") { ps.push(st === "won" ? 1 : 0); continue; }
+    const c = live[legKey(l)]?.chance;
+    if (c === undefined || c === null) return null;
+    ps.push(c);
+  }
+  return ps;
 }
 
 /** The chance from the legs that are priced, and how many aren't yet (rounds SportyBet hasn't published). */
@@ -213,7 +227,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
         const res = await trackCodes(b).catch(() => []);
         setStatus((s) => ({ ...s, ...Object.fromEntries(res.map((r) => [r.code, r])) }));
         const ts = res.flatMap((r) => ("legs" in r ? [r] : []));
-        saveFinal(ts.filter((r) => r.state !== "open" || r.foreign));
+        saveFinal(ts.filter((r) => isFinal(r)));
         saveOpen(ts.filter((r) => !r.foreign));
         setUpdating((u) => new Set([...u].filter((c) => !b.includes(c))));
         statusRef.current = { ...statusRef.current, ...Object.fromEntries(res.map((r) => [r.code, r])) };
@@ -228,7 +242,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const pollLive = useCallback(async (force = false) => {
     if (document.visibilityState !== "visible") return;
     const now = Date.now();
-    const open = Object.values(statusRef.current).filter((t): t is Tracked => "legs" in t && t.state === "open" && !t.foreign);
+    // Open codes, and lost ones whose remaining legs a Flex slip still depends on.
+    const open = Object.values(statusRef.current).filter((t): t is Tracked => "legs" in t && !isFinal(t) && t.lost <= 3);
     const legs = open.flatMap((t) => t.legs.filter((l) => l.status === "waiting" || l.status === "playing"));
     if (!legs.length) return;
     const playing = legs.some((l) => l.kickoff <= now);
@@ -262,7 +277,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     if (again.length) {
       const r = await trackCodes(again).catch(() => []);
       setStatus((s) => ({ ...s, ...Object.fromEntries(r.map((x) => [x.code, x])) }));
-      saveFinal(r.flatMap((x) => ("legs" in x && x.state !== "open" ? [x] : [])));
+      saveFinal(r.flatMap((x) => ("legs" in x && isFinal(x) ? [x] : [])));
       saveOpen(r.flatMap((x) => ("legs" in x && !x.foreign ? [x] : [])));
     }
   }, []);
@@ -320,14 +335,14 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       .catch(() => undefined);
     window.addEventListener("vig-codes", load);
     // Back in the foreground: re-read every open code and the live scores now.
-    const resume = () => { refresh(readCodes().filter((c) => { const st = statusRef.current[c.code]; return !st || !("legs" in st) || st.state === "open"; })); pollLive(true); };
+    const resume = () => { refresh(readCodes().filter((c) => { const st = statusRef.current[c.code]; return !st || !("legs" in st) || !isFinal(st); })); pollLive(true); };
     window.addEventListener("vig-resume", resume);
     // Live scores come from the live feed; SportyBet's share endpoint is only
     // read again for codes not loaded yet, or with a leg that should be over.
     const stale = (c: Saved) => {
       const st = statusRef.current[c.code];
       if (!st || !("legs" in st)) return true;
-      return st.state === "open" && !st.foreign && st.legs.some((l) => (l.status === "waiting" || l.status === "playing") && l.kickoff + 30 * 60_000 < Date.now());
+      return !isFinal(st) && st.legs.some((l) => (l.status === "waiting" || l.status === "playing") && l.kickoff + 30 * 60_000 < Date.now());
     };
     const t = setInterval(() => document.visibilityState === "visible" && refresh(readCodes().filter(stale)), 60_000);
     return () => {
@@ -480,6 +495,16 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : <span className="skel skel-line" aria-label="Loading" />}
               </p>
               {hist.length > 1 && chance !== null && !lostN && <Spark points={hist} />}
+              {t && !foreign && legs.length >= 3 && lostN <= Math.max(...flexLevels(legs.length)) && (() => {
+                const ps = legProbs(t, live);
+                if (!ps) return null;
+                const decided = left === 0;
+                if (decided && lostN === 0) return null;
+                const note = lostN === 0 ? undefined
+                  : decided ? `${wonN} of ${legs.length} landed: played with Flex at ${wonN} of ${legs.length} or lower, this slip pays a reduced amount.`
+                  : `${lostN} leg${lostN > 1 ? "s" : ""} lost. Played with Flex, this slip can still pay.`;
+                return <FlexRow ps={ps} note={note} />;
+              })()}
               </>)}
               <div className="codeactions">
                 <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { lagos, pct } from "../pick-row";
+import { lagos } from "../pick-row";
+import { FlexRow } from "../flex-row";
 import { SlateActions } from "./slate-actions";
 import { MARKET_LABELS } from "@/lib/markets";
 import { chance, oneIn } from "@/lib/plain";
@@ -31,16 +32,7 @@ export function SlateCard({ s }: { s: Slate }) {
         ))}
       </ol>
       </details>
-      {s.flex && (
-        <table className="flextable">
-          <caption>With Flex on in SportyBet, the slip pays a reduced amount when legs miss.</caption>
-          <tbody>
-            {s.flex.map((f) => (
-              <tr key={f.need}><td>{f.need === s.legs.length ? `All ${f.need}` : `At least ${f.need} of ${s.legs.length}`}</td><td className="n">{pct(f.chance)}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <FlexRow ps={s.legs.map((p) => p.estimate)} />
       <div className="row slateactions">
         {s.code ? (
           <SlateActions code={s.code} legs={s.legs.length} odds={s.odds} last={s.last} style={s.style} />

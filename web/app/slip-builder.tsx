@@ -10,7 +10,7 @@ import { ShareButton } from "./share-sheet";
 import { lagos, naira, pct, PickRow, type View } from "./pick-row";
 import { MARKET_LABELS } from "@/lib/markets";
 import type { Pick } from "@/lib/picks";
-import { atLeast } from "@/lib/flex";
+import { FlexRow } from "./flex-row";
 import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
 import type { Query } from "@/lib/query";
 import { slipStats, smartSwitch, toTarget, topN, MAX_LEGS } from "@/lib/slip";
@@ -49,24 +49,7 @@ function ViewToggle({ view, setView }: { view: View; setView: (v: View) => void 
   );
 }
 
-function FlexTable({ legs }: { legs: Pick[] }) {
-  const ps = legs.map((p) => p.estimate);
-  const n = legs.length;
-  const rows = [0, 1, 2].filter((m) => n - m >= 1);
-  return (
-    <table className="flextable">
-      <caption>With Flex on in SportyBet, the slip still pays a reduced amount when legs miss.</caption>
-      <thead><tr><th>Legs that must land</th><th className="n">Chance</th></tr></thead>
-      <tbody>
-        {rows.map((m) => (
-          <tr key={m}><td>{m === 0 ? `All ${n}` : `At least ${n - m} of ${n}`}</td><td className="n">{pct(atLeast(ps, n - m))}</td></tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip", flex = false, stake = 1000 }: Props) {
+export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip", stake = 1000 }: Props) {
   const [view, setView] = useState<View>(initialView);
   const { mode, count, target, sort } = q;
   const initial = useMemo(
@@ -152,7 +135,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
           <p className="returns">₦{stake.toLocaleString("en-NG")} returns <strong className="num">₦{Math.round(stake * s.odds).toLocaleString("en-NG")}</strong> if every leg lands.
             {view === "detailed" && <>{" "}On average about <strong className="num">₦{Math.round(stake * s.odds * s.market).toLocaleString("en-NG")}</strong> comes back, by the bookmaker&apos;s own chances; each leg costs its cut.</>}</p>
         )}
-        {flex && legs.length > 1 && <FlexTable legs={legs} />}
+        <FlexRow ps={legs.map((p) => p.estimate)} note="Flex pays a reduced amount when legs miss; set it in SportyBet before you place the slip." />
         {legs.length > 1 && s.model < LOW_CHANCE && (
           <p className="note warn">As one accumulator this lands {pct(s.model)} of the time on Vig's estimate. Most slips like this lose; singles keep each leg's own odds.</p>
         )}

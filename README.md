@@ -252,6 +252,13 @@ worst, long slips that never landed, markets well above or below their price
 (30 or more legs), and the result at the usual stake. Notes need at least 8
 settled codes.
 
+**Flex** chances show on every slip of three or more legs (Tonight, Our picks
+and each code on Codes): the chance all legs land, and the chance at least one
+or two fewer do (three fewer from ten legs), which is what SportyBet's Flex
+option still pays on, at a reduced amount. On Codes a decided level shows ✓ or
+✗, and a code that has lost a leg keeps updating until every leg is decided,
+since a slip played with Flex can still pay.
+
 ## Your codes and notifications
 
 **Codes** has two tabs, like SportyBet: **Open** (in play, 10 at a time) and

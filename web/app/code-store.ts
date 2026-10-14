@@ -19,6 +19,14 @@ export function writeAll(list: Saved[]) {
   } catch { /* private mode */ }
 }
 
+/** A code that can't change any more: landed, every leg decided, long past its
+ * last kick-off, or outside vFootball. A lost code with legs still to play stays
+ * live, since a slip played with Flex can still pay. */
+export function isFinal(t: Tracked, now = Date.now()): boolean {
+  return t.foreign || t.state === "won" || t.legs.every((l) => l.status === "won" || l.status === "lost")
+    || t.lastKickoff + 3 * 3600_000 < now;
+}
+
 export const FINAL_KEY = "vig_code_final";
 export function readFinal(): Record<string, Tracked> {
   try {
@@ -48,15 +56,15 @@ export function readOpen(now = Date.now()): Record<string, Tracked> {
 }
 export function saveOpen(ts: Tracked[]) {
   const all = { ...readOpen(), ...Object.fromEntries(ts.map((t) => [t.code, t])) };
-  for (const t of ts) if (t.state !== "open") delete all[t.code];
+  for (const t of ts) if (isFinal(t)) delete all[t.code];
   const keep = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].lastKickoff - a[1].lastKickoff).slice(0, 40));
   try { localStorage.setItem(OPEN_KEY, JSON.stringify(keep)); } catch { /* full or private */ }
 }
 
 /** Codes on this device still to play or in play, for the tab bar's counter. */
 export function openCount(now = Date.now()): number {
-  const done = readFinal();
-  return readCodes().filter((c) => !done[c.code] && c.last + 3 * 3600_000 > now).length;
+  const done = readFinal(), seen = readOpen(now);
+  return readCodes().filter((c) => !done[c.code] && seen[c.code]?.state !== "lost" && c.last + 3 * 3600_000 > now).length;
 }
 
 export const HIDDEN_KEY = "vig_codes_hidden";
