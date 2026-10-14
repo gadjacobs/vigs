@@ -2,9 +2,11 @@ import { loadBlend } from "./blend";
 import { rememberEstimates, rememberPrematch } from "./codes";
 import { logBooking } from "./codelog";
 import { MARKET_LABELS } from "./markets";
+import { loadInsights } from "./insights";
 import { loadModel } from "./model";
 import { candidates } from "./picks";
 import { DEFAULT_QUERY } from "./query";
+import { buildSet } from "./ourpicks";
 import { cookSlates, type Slate } from "./slates";
 import { book, selection, upcoming } from "./sportybet";
 import { addTo, claim, getJson, setJson, storeReady } from "./store";
@@ -13,7 +15,7 @@ import { addTo, claim, getJson, setJson, storeReady } from "./store";
 // keeps them in the store so every viewer (and the notifications) see the same
 // slips and codes. Without a store they are cooked per server instance.
 
-export type Cooked = { round: string; cooked_at: number; slates: Slate[] };
+export type Cooked = { round: string; cooked_at: number; slates: Slate[]; templates?: { set: string; code: string; legs: number }[] };
 const FRESH = 15 * 60 * 1000;
 let memory: Cooked | null = null;
 
@@ -24,9 +26,11 @@ async function roundKey(now: number) {
 }
 
 async function cook(round: string, now: number, bookCodes: boolean): Promise<Cooked> {
-  const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
+  const [model, fixtures, blend, insights] = await Promise.all([loadModel(), upcoming(), loadBlend(), loadInsights()]);
   const q = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, now };
-  const slates = cookSlates(candidates(model, fixtures, q, blend).candidates);
+  const cands = candidates(model, fixtures, q, blend).candidates;
+  const slates = cookSlates(cands, insights?.lean);
+  const templates: NonNullable<Cooked["templates"]> = [];
   if (bookCodes) {
     for (const s of slates) {
       try {
@@ -40,7 +44,22 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
       } catch { /* leave this slip without a code; it can still be booked from the editor */ }
     }
   }
-  return { round, cooked_at: now, slates };
+  // The Top 50 templates are booked and logged too (not shown here), so Record
+  // can score them like the cooked slips: each at its default length.
+  if (bookCodes) {
+    for (const [set, n] of [["top", 50], ["trusted", 20]] as const) {
+      const legs = buildSet(set, cands, { bar: 0, target: 0, n, maxSlip: n, lean: insights?.lean }).slip;
+      if (legs.length < 3) continue;
+      try {
+        const res = await book(legs.map((p) => selection(p.market, p.eventId)));
+        if (res.verified !== legs.length) continue;
+        templates.push({ set, code: res.code, legs: legs.length });
+        await rememberPrematch(res.code, Object.fromEntries(legs.map((p) => [p.eventId, p.odds])));
+        if (Number(await addTo("slatecodes", res.code)) === 1) await logBooking(res.code, legs, `template:${set}`, "vig");
+      } catch { /* try again next round */ }
+    }
+  }
+  return { round, cooked_at: now, slates, templates };
 }
 
 /** The current cooked slips, cooking (and booking) them if the round changed. */

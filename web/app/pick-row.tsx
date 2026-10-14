@@ -1,5 +1,7 @@
 import { MARKET_LABELS } from "@/lib/markets";
 import type { Pick } from "@/lib/picks";
+import type { LeanRow } from "@/lib/insights";
+import { leanOf } from "@/lib/lean";
 import { chance, confidence, CONFIDENCE_WHY, oneIn } from "@/lib/plain";
 
 export type View = "simple" | "detailed";
@@ -22,7 +24,24 @@ function Bar({ p }: { p: Pick }) {
 
 const SOURCE: Record<Pick["source"], string> = { blend: " (blend)", guarded: " (weighted to market)" };
 
-export function PickRow({ p, actions, now, view = "detailed" }: { p: Pick; actions?: React.ReactNode; now?: number; view?: View }) {
+/** ▲ or ▼ when this market has landed clearly above or below its price at this
+ * chance level in our data (|z| >= 1), with the numbers on hover and for readers. */
+function LeanMark({ p, lean }: { p: Pick; lean?: LeanRow[] }) {
+  const { z, row } = leanOf(lean, p.market, p.marketChance);
+  if (z === null || !row || Math.abs(z) < 1) return null;
+  const up = z > 0;
+  const said = `At this chance the market has landed ${pct(row.landed / row.n)} against ${pct(row.priced / row.n)} priced (${row.n.toLocaleString()} matches).`;
+  return <span className={`leanmark ${up ? "up" : "down"}`} title={said}>{up ? "▲ above its price" : "▼ below its price"}<span className="sr-only"> {said}</span></span>;
+}
+
+/** A plain warning when a leg's market has landed well below its price in our data. */
+function LeanWarn({ p, lean }: { p: Pick; lean?: LeanRow[] }) {
+  const { z, row } = leanOf(lean, p.market, p.marketChance);
+  if (z === null || !row || z > -2) return null;
+  return <p className="why longshot">In our data this market, at this chance, has landed {pct(row.landed / row.n)} of the time against {pct(row.priced / row.n)} priced ({row.n.toLocaleString()} matches).</p>;
+}
+
+export function PickRow({ p, actions, now, view = "detailed", lean }: { p: Pick; actions?: React.ReactNode; now?: number; view?: View; lean?: LeanRow[] }) {
   const mins = now ? Math.round((p.kickoff - now) / 60000) : null;
   const conf = confidence(p.lo, p.hi);
   if (view === "simple")
@@ -39,7 +58,9 @@ export function PickRow({ p, actions, now, view = "detailed" }: { p: Pick; actio
         <p className="plain">
           <strong className="num chance">{chance(p.estimate)}</strong>
           <span>chance it lands, {oneIn(p.estimate)}.</span>
+          <LeanMark p={p} lean={lean} />
         </p>
+        <LeanWarn p={p} lean={lean} />
         {p.odds >= 5 && <p className="why longshot">Long shot: prices this big have paid back far less than they cost.</p>}
         {actions && <div className="row leg-actions">{actions}</div>}
       </li>
@@ -62,7 +83,8 @@ export function PickRow({ p, actions, now, view = "detailed" }: { p: Pick; actio
         <div><dt>Edge per ₦1,000</dt><dd>{naira(p.edge)}</dd></div>
       </dl>
       <Bar p={p} />
-      <p className="why">{p.grade}: {p.why}.</p>
+      <p className="why">{p.grade}: {p.why}. <LeanMark p={p} lean={lean} /></p>
+      <LeanWarn p={p} lean={lean} />
       {p.odds >= 5 && <p className="why longshot">Long shot: in Vig&apos;s data, prices over 5 have returned far less than they cost (see Record).</p>}
       {actions && <div className="row leg-actions">{actions}</div>}
     </li>

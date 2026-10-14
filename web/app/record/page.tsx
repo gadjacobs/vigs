@@ -10,6 +10,7 @@ import { ProfitChart } from "./profit-chart";
 export const dynamic = "force-dynamic";
 
 const GRADES = ["Solid", "Lean", "Rough"];
+const STYLE_NAME: Record<string, string> = { "template:top": "Top 50 likeliest", "template:trusted": "Most confident (20)" };
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 const signedPct = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(1)}%`;
 const naira = (x: number) => `${x < 0 ? "−" : x > 0 ? "+" : ""}₦${Math.abs(Math.round(x)).toLocaleString("en-NG")}`;
@@ -111,12 +112,13 @@ function Body({ rec, user, tab, n, stake }: { rec: RecordFile; user: string | nu
           {rec.slates.by_style && (
             <div className="tablewrap">
               <table>
-                <thead><tr><th>Style</th><th className="n">Settled</th><th className="n">Landed</th><th className="n">Vig expected</th><th className="n">Market expected</th><th className="n">Return per code</th></tr></thead>
+                <thead><tr><th>Style</th><th className="n">Settled</th><th className="n">Landed</th><th className="n">Market expected</th><th className="n">Legs landed</th><th className="n">Return per code</th></tr></thead>
                 <tbody>
                   {Object.entries(rec.slates.by_style).sort((x, y) => y[1].settled - x[1].settled).map(([k, g]) => (
                     <tr key={k}>
-                      <td>{/^x\d+$/.test(k) ? `${Number(k.slice(1)).toLocaleString("en-NG")} odds (trial)` : k}</td><td className="n">{g.settled}</td><td className="n">{g.landed}</td>
-                      <td className="n">{g.expected_vig.toFixed(1)}</td><td className="n">{g.expected_market.toFixed(1)}</td>
+                      <td>{STYLE_NAME[k] ?? (/^x\d+$/.test(k) ? `${Number(k.slice(1)).toLocaleString("en-NG")} odds (trial)` : k)}</td><td className="n">{g.settled}</td><td className="n">{g.landed}</td>
+                      <td className="n">{g.expected_market.toFixed(1)}</td>
+                      <td className="n" title="Legs that landed, against the number the prices expected">{g.legs.hits} / {g.legs.expected_market.toFixed(0)}</td>
                       <td className={`n ${g.roi < 0 ? "loss" : ""}`}>{g.settled ? `${signedPct(g.roi)}${g.settled < 30 ? " (too few)" : ""}` : "None"}</td>
                     </tr>
                   ))}
@@ -124,7 +126,7 @@ function Body({ rec, user, tab, n, stake }: { rec: RecordFile; user: string | nu
               </table>
             </div>
           )}
-          <p className="status">Every slip Vig cooked and booked, logged once per code before kickoff and scored like your own.</p>
+          <p className="status">Every slip Vig cooked and booked, logged once per code before kickoff and scored like your own. The Top 50 templates are booked each round too, at their default lengths; with that many legs a whole slip rarely lands, so their legs (landed against what the prices expected) are the measure to watch.</p>
         </section>
       )}
 

@@ -180,7 +180,7 @@ describe("top 50 templates", async () => {
   ];
   it("shrinks the lean toward zero with few examples", () => {
     expect(leanOf(lean, "U35", 0.9).adj).toBeCloseTo((100 / 8000) * (8000 / 10000), 9);
-    expect(leanOf(lean, "BY", 0.9)).toEqual({ adj: 0, z: null });
+    expect(leanOf(lean, "BY", 0.9)).toEqual({ adj: 0, z: null, row: null });
   });
   it("keeps one leg per match, leaning toward markets above their price", () => {
     const got = topPicks([pick("a", "O05", 0.905, 1.1), pick("a", "U35", 0.9, 1.1), pick("b", "O05", 0.95, 1.04)], lean, 1.1, false);

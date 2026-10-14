@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SlipBuilder } from "../../slip-builder";
 import { loadBlend } from "@/lib/blend";
 import { currentSlates } from "@/lib/kitchen";
+import { loadInsights } from "@/lib/insights";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel } from "@/lib/model";
 import { candidates } from "@/lib/picks";
@@ -21,7 +22,7 @@ export default async function EditSlate({ searchParams }: { searchParams: Promis
   const slate = cooked?.slates.find((s) => s.id === id);
   const { profile } = await myProfile();
   const view = viewOf(profile, (await cookies()).get("vig_view")?.value);
-  const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
+  const [model, fixtures, blend, insights] = await Promise.all([loadModel(), upcoming(), loadBlend(), loadInsights()]);
   const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, mode: "count", count: MAX_LEGS, sort: "likely" };
   const cands = candidates(model, fixtures, { ...q, now }, blend).candidates;
   const have = new Set(cands.map((p) => p.id));
@@ -39,7 +40,7 @@ export default async function EditSlate({ searchParams }: { searchParams: Promis
             {ids.length < slate.legs.length ? ` ${slate.legs.length - ids.length} leg(s) have kicked off and were left out.` : ""}
           </p>
           <SlipBuilder key={now} cands={cands} q={q} now={now} initialView={view} initialIds={ids}
-            title={slate.name} flex={slate.style === "draws"} stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
+            title={slate.name} flex={slate.style === "draws"} stake={profile?.prefs?.stake ?? DEFAULT_STAKE} lean={insights?.lean} />
         </>
       )}
     </main>

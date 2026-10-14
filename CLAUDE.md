@@ -48,7 +48,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   per account in the store syncs codes, filters, view and theme. Never store SportyBet details.
 - Cooked slips (`web/lib/slates.ts`, `kitchen.ts`): cooked and booked once per published
   round (by the tick or the first viewer), stored as `slates`; each code logged once as
-  user "vig". Never show share-endpoint odds after kickoff (they are in-play prices).
+  user "vig" (Top 50 templates too, as `template:top`/`template:trusted`). Steady and Tight
+  games pick markets from `lean` (`web/lib/lean.ts`), falling back to fixed under lists. Never show share-endpoint odds after kickoff (they are in-play prices).
 - Google sign-in (`/api/auth/google`): `GOOGLE_ACCOUNTS` allowlist maps emails to accounts.
 - Our picks (`web/lib/ourpicks.ts`, `/picks`): templates top/trusted (Top 50, leaning on
   `insights.json` `lean`, per-market landed vs priced by chance level), sets safe/odds/bold/draws; `vigs ourpicks`

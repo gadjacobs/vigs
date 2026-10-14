@@ -18,3 +18,15 @@ export function landedDist(ps: number[]): number[] {
 export function atLeast(ps: number[], k: number): number {
   return landedDist(ps).slice(Math.max(0, k)).reduce((a, b) => a + b, 0);
 }
+
+/** Which legs to keep so that "all but `miss`" lands at least `target` of the
+ * time: drop the least likely leg, one at a time, but keep at least `min` legs.
+ * Returns the kept indices in their original order. */
+export function flexFriendly(ps: number[], target = 0.5, miss = 2, min = 4): number[] {
+  let keep = ps.map((_, i) => i);
+  while (keep.length > min && atLeast(keep.map((i) => ps[i]), keep.length - miss) < target) {
+    const worst = keep.reduce((w, i) => (ps[i] < ps[w] ? i : w), keep[0]);
+    keep = keep.filter((i) => i !== worst);
+  }
+  return keep;
+}

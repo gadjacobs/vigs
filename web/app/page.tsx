@@ -5,6 +5,7 @@ import { ScrollOnBuild } from "./scroll-on-build";
 import { lagos } from "./pick-row";
 import { SlipBuilder } from "./slip-builder";
 import { loadBlend } from "@/lib/blend";
+import { loadInsights } from "@/lib/insights";
 import { DEFAULT_STAKE, myProfile, needsTour } from "@/lib/profile";
 import { viewOf } from "@/lib/view";
 import { MARKET_LABELS } from "@/lib/markets";
@@ -43,7 +44,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
   } catch {
     error = error || "SportyBet did not answer. Try again in a minute.";
   }
-  const blend = await loadBlend();
+  const [blend, insights] = await Promise.all([loadBlend(), loadInsights()]);
   const r = model ? candidates(model, fixtures, { ...q, now }, blend) : null;
   const blended = q.markets.filter((m) => blend?.markets[m]?.active).map((m) => MARKET_LABELS[m]);
 
@@ -70,7 +71,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
       )}
 
       {r && r.candidates.length > 0 && (
-        <SlipBuilder key={now} cands={r.candidates} q={q} now={now} initialView={view} stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
+        <SlipBuilder key={now} cands={r.candidates} q={q} now={now} initialView={view} stake={profile?.prefs?.stake ?? DEFAULT_STAKE} lean={insights?.lean} />
       )}
 
       {model && r && (

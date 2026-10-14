@@ -10,14 +10,16 @@ import { ShareButton } from "./share-sheet";
 import { lagos, naira, pct, PickRow, type View } from "./pick-row";
 import { MARKET_LABELS } from "@/lib/markets";
 import type { Pick } from "@/lib/picks";
+import type { LeanRow } from "@/lib/insights";
 import { FlexRow } from "./flex-row";
+import { atLeast, flexFriendly } from "@/lib/flex";
 import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
 import type { Query } from "@/lib/query";
 import { slipStats, smartSwitch, toTarget, topN, MAX_LEGS } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
 
-type Props = { cands: Pick[]; q: Query; now: number; initialView: View; initialIds?: string[]; title?: string; flex?: boolean; stake?: number };
+type Props = { cands: Pick[]; q: Query; now: number; initialView: View; initialIds?: string[]; title?: string; flex?: boolean; stake?: number; lean?: LeanRow[] };
 
 /** This device's push subscription, if notifications are on. */
 async function pushEndpoint(): Promise<string | null> {
@@ -49,7 +51,7 @@ function ViewToggle({ view, setView }: { view: View; setView: (v: View) => void 
   );
 }
 
-export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip", stake = 1000 }: Props) {
+export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Your slip", stake = 1000, lean }: Props) {
   const [view, setView] = useState<View>(initialView);
   const { mode, count, target, sort } = q;
   const initial = useMemo(
@@ -136,6 +138,19 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
             {view === "detailed" && <>{" "}On average about <strong className="num">₦{Math.round(stake * s.odds * s.market).toLocaleString("en-NG")}</strong> comes back, by the bookmaker&apos;s own chances; each leg costs its cut.</>}</p>
         )}
         <FlexRow ps={legs.map((p) => p.estimate)} note="Flex pays a reduced amount when legs miss; set it in SportyBet before you place the slip." />
+        {legs.length >= 5 && (() => {
+          // Drop the least likely legs until "all but two" lands at least half the time.
+          const keep = flexFriendly(legs.map((p) => p.estimate));
+          if (keep.length === legs.length) return null;
+          const kept = keep.map((i) => legs[i]);
+          const after = atLeast(kept.map((p) => p.estimate), kept.length - 2);
+          return (
+            <button type="button" className="flexfit" onClick={() => edit(kept.map((p) => p.id),
+              `Dropped the ${legs.length - kept.length} least likely legs: ${kept.length - 2} of ${kept.length} now lands ${chance(after)} of the time.`)}>
+              Make it Flex-friendly: drop the {legs.length - kept.length} least likely legs
+            </button>
+          );
+        })()}
         {legs.length > 1 && s.model < LOW_CHANCE && (
           <p className="note warn">As one accumulator this lands {pct(s.model)} of the time on Vig's estimate. Most slips like this lose; singles keep each leg's own odds.</p>
         )}
@@ -181,7 +196,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
 
       <ol className="picks">
         {legs.map((p) => (
-          <PickRow key={p.id} p={p} now={now} view={view} actions={<>
+          <PickRow key={p.id} p={p} now={now} view={view} lean={lean} actions={<>
             <button type="button" onClick={() => swap(p)}>Smart switch</button>
             <button type="button" onClick={() => remove(p)}>Remove</button>
           </>} />
@@ -192,7 +207,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
         <details className="more" open={!legs.length}>
           <summary>Add from {cands.length - legs.length} other selections</summary>
           <ol className="picks">
-            {rest.map((p) => <PickRow key={p.id} p={p} now={now} view={view} actions={<button type="button" onClick={() => add(p)}>Add to slip</button>} />)}
+            {rest.map((p) => <PickRow key={p.id} p={p} now={now} view={view} lean={lean} actions={<button type="button" onClick={() => add(p)}>Add to slip</button>} />)}
           </ol>
         </details>
       )}

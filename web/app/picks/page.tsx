@@ -25,7 +25,7 @@ type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string;
 
 const ABOUT: Record<SetId, string> = {
   top: "The likeliest selection in each match, at the price floor or above, best first. Ties lean toward markets that have landed above their price at that chance level in our data (unders, lately) and away from those below it. Edit freely; Flex shows the chance with a miss or two.",
-  trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely and whose market has landed at or above its price at that chance level in our data. Up to 50, as many as qualify.",
+  trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely and whose market has landed at or above its price at that chance level in our data. 20 legs to start; up to 50 if that many qualify.",
   best: "One leg per match: its likeliest selection at odds of 1.2 or more, by the bookmaker's own chance, with no market filling more than 40% of the slip, so you get a spread of markets.",
   safe: "For every published match, the best-paying selection with a chance at or above the bar.",
   odds: "The likeliest slip near your total odds, built from legs priced 1.25 to 2.2 that the market and model broadly agree on. In the settled data, prices under 2 lost 1-2% of stakes on average while prices over 5 lost 24-48%, so several short legs keep more value than one long shot.",
@@ -59,7 +59,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const tab = sp.tab === "build" || (sp.set && sp.tab !== "cooked") ? "build" : "cooked";
   const bar = OUR_BARS.find((b) => String(Math.round(b * 100)) === sp.bar) ?? OUR_DEFAULT;
   const target = TARGETS.find((t) => String(t) === sp.odds) ?? 10;
-  const n = top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? 50
+  const n = top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? (set === "trusted" ? 20 : 50)
     : set === "best"
     ? BEST_COUNTS.find((c) => String(c) === sp.n) ?? 10
     : COUNTS.find((c) => String(c) === sp.n) ?? (set === "draws" ? 4 : 3);
@@ -81,7 +81,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const blend = await loadBlend();
   const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 24, mode: "count", count: MAX_ON_SLIP, sort: "likely" };
   const cands = model ? candidates(model, fixtures, { ...q, now }, blend).candidates : [];
-  const lean = top ? (await loadInsights())?.lean : undefined;
+  const lean = (await loadInsights())?.lean;
   const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP, floor, lean });
   const all = built.slip.reduce((a, p) => a * p.estimate, 1);
   const odds = built.slip.reduce((a, p) => a * p.odds, 1);
@@ -153,7 +153,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
         {built.pool.length > 0 && (
           <SlipBuilder key={`${now}-${set}-${bar}-${target}-${n}`} cands={built.pool} q={q} now={now} initialView={view}
             initialIds={built.slip.map((p) => p.id)} title={SETS.find((x) => x.id === set)!.label} flex={built.flex}
-            stake={profile?.prefs?.stake ?? DEFAULT_STAKE} />
+            stake={profile?.prefs?.stake ?? DEFAULT_STAKE} lean={lean} />
         )}
       </div>
       </>)}

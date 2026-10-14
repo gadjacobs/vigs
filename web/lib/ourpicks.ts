@@ -1,4 +1,6 @@
 import type { LeanRow } from "./insights";
+import { leanOf } from "./lean";
+export { leanOf } from "./lean";
 import type { Pick } from "./picks";
 import { confidence } from "./plain";
 import { bestPerMatch } from "./slates";
@@ -23,8 +25,8 @@ import { toTarget } from "./slip";
 //   above its price, and a chance of 60% or more.
 export type SetId = "top" | "trusted" | "best" | "safe" | "odds" | "bold" | "draws";
 export const SETS: { id: SetId; label: string }[] = [
-  { id: "top", label: "Top 50: likeliest" },
-  { id: "trusted", label: "Top 50: most confident" },
+  { id: "top", label: "Top 50 likeliest" },
+  { id: "trusted", label: "Most confident" },
   { id: "best", label: "Best per match" },
   { id: "safe", label: "Safe ~90%" },
   { id: "odds", label: "Target odds" },
@@ -40,15 +42,6 @@ export const TOP_COUNTS = [10, 20, 30, 40, 50] as const;
 export const FLOORS = [1.05, 1.1, 1.2, 1.3] as const; // lowest price a leg may have
 export const FLOOR_DEFAULT = 1.1;
 const TRUSTED_MIN = 0.6; // "most confident" legs are likely ones too; the slip takes as many as qualify
-
-/** How far a selection's market has landed above (or below) its price at this
- * chance level in our data, per selection, shrunk toward zero when there are few
- * settled examples (k = 2,000). 0 when there is no record. */
-export function leanOf(lean: LeanRow[] | undefined, market: string, chance: number): { adj: number; z: number | null } {
-  const r = lean?.find((x) => x.market === market && chance >= x.lo && chance < x.hi);
-  if (!r || !r.n) return { adj: 0, z: null };
-  return { adj: ((r.landed - r.priced) / r.n) * (r.n / (r.n + 2000)), z: r.z };
-}
 
 /** One leg per match, the likeliest after the lean, best first. */
 export function topPicks(cands: Pick[], lean: LeanRow[] | undefined, floor: number, trusted: boolean): Pick[] {

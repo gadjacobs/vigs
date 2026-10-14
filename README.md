@@ -126,14 +126,14 @@ once (account "vig") and scored on Record by style. Long shot, Hundred and
 Thousand are the likeliest slips near 20, 100 and 1,000 odds (up to 50 legs);
 every leg pays the bookmaker's cut, so they land rarely.
 
-**Steady** and **Tight games** use under lines only. On 6,898 matches (9 to 13
-Oct) unders priced at 85% or more landed 90.7% against 89.8% priced (19,588
-selections), the only family of markets to pass the false-discovery check;
-other markets at that level landed as priced. Tight games keeps the unders that
-landed above their price at 55 to 85% (home team under 1.5, first half under
-1.5, under 2.5) and leaves out away team under 1.5 and both teams not to score,
-which landed below it. Both still pay back a little less than the stake on
-average.
+**Steady** and **Tight games** take their markets from the hourly record
+(`lean` in insights.json): Steady from markets whose record at 85% or more is at
+or above their price, Tight games from low-scoring lines (unders, not both teams
+to score) whose record at 55 to 85% is. Lately that means unders, with home
+team under 1.5 leading (67.0% landed against 65.1% priced on 5,227 matches).
+Without a record they fall back to under lines, and to home under 1.5, first
+half under 1.5 and under 2.5. Both still pay back a little less than the stake
+on average.
 
 **Top 50 templates** (Build your own) start a 10- to 50-leg slip, one leg per
 match, that can be edited, booked and played with Flex. *Likeliest* takes each
@@ -145,6 +145,14 @@ each market at three chance levels (under 55%, 55 to 85%, 85% or more), how
 often it landed against its de-vigged price. A selection's chance is nudged by
 its market's record there, shrunk toward zero when examples are few, so the
 templates follow whatever the data favours (unders, lately) rather than a hand-picked list.
+*Most confident* starts at 20 legs. Both are booked every round as user "vig"
+(origins `template:top` at 50 legs and `template:trusted` at 20) so Record
+scores them; with that many legs their legs, landed against what the prices
+expected, are the measure to watch. In every slip builder a leg shows ▲ or ▼
+when its market has landed clearly above or below its price at that chance
+level (|z| of 1 or more), with a plain warning when it is far below (z of -2 or
+less), and **Make it Flex-friendly** drops the least likely legs until "all but
+two" lands at least half the time (keeping at least four).
 
 Slips are built from the **best bet per match**, ranked by the bookmaker's
 de-vigged chance rather than Vig's estimate: where the two disagree, results
