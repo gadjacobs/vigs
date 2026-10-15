@@ -70,7 +70,9 @@ export function summary(t: Tracked): string {
 }
 
 // Prematch prices kept in the store: written when Vig books a code, and filled
-// in whenever a code is tracked before its legs kick off.
+// in whenever a code is tracked before its legs kick off. Kept two weeks, like
+// the estimates below: Vig books hundreds of codes a day.
+export const CODE_KEEP_SECONDS = 14 * 86400;
 
 export async function trackWithPrematch(code: string, now = Date.now()): Promise<Tracked> {
   const key = `codeodds:${code}`;
@@ -79,7 +81,7 @@ export async function trackWithPrematch(code: string, now = Date.now()): Promise
   const fresh = t.legs.filter((l) => !(l.eventId in pre) && l.kickoff > now && l.shareOdds > 1);
   if (fresh.length && storeReady()) {
     for (const l of fresh) pre[l.eventId] = l.shareOdds;
-    await setJson(key, pre).catch(() => undefined);
+    await setJson(key, pre, CODE_KEEP_SECONDS).catch(() => undefined);
   }
   return t;
 }
@@ -88,7 +90,7 @@ export async function trackWithPrematch(code: string, now = Date.now()): Promise
 export async function rememberEstimates(code: string, est: Record<string, number>) {
   if (!storeReady()) return;
   const pre = (await getJson<Record<string, number>>(`codeest:${code}`).catch(() => null)) ?? {};
-  await setJson(`codeest:${code}`, { ...est, ...pre });
+  await setJson(`codeest:${code}`, { ...est, ...pre }, CODE_KEEP_SECONDS);
 }
 export const loadEstimates = async (code: string) =>
   (storeReady() ? await getJson<Record<string, number>>(`codeest:${code}`).catch(() => null) : null) ?? {};
@@ -97,5 +99,5 @@ export async function rememberPrematch(code: string, odds: Record<string, number
   if (!storeReady()) return;
   const key = `codeodds:${code}`;
   const pre = (await getJson<Record<string, number>>(key).catch(() => null)) ?? {};
-  await setJson(key, { ...odds, ...pre });
+  await setJson(key, { ...odds, ...pre }, CODE_KEEP_SECONDS);
 }

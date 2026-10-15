@@ -105,8 +105,8 @@ async function evaluate(w: SlipWatch, p: Profile, ctx: Ctx, now: number): Promis
 }
 
 /** One pass over every account with slip alerts and a device to send to. */
-export async function runWatches(now = Date.now()): Promise<{ checked: number; sent: number; errors: number }> {
-  const out = { checked: 0, sent: 0, errors: 0 };
+export async function runWatches(now = Date.now()): Promise<{ checked: number; sent: number; errors: number; error?: string }> {
+  const out: { checked: number; sent: number; errors: number; error?: string } = { checked: 0, sent: 0, errors: 0 };
   const ids = await members("subs").catch(() => [] as string[]);
   const byUser = new Map<string, Sub[]>();
   for (const id of ids) {
@@ -129,8 +129,9 @@ export async function runWatches(now = Date.now()): Promise<{ checked: number; s
         let ok = false;
         for (const s of subs) ok = (await send(s, r.payload).catch(() => false)) || ok;
         if (ok) { out.sent++; await setJson(key, { at: now, sig: r.sig }); }
-      } catch {
+      } catch (e) {
         out.errors++;
+        out.error ??= (e instanceof Error ? e.message : String(e)).slice(0, 200);
       }
     }
   }

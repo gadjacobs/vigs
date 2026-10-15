@@ -98,12 +98,26 @@ export async function getJson<T>(key: string): Promise<T | null> {
   const s = await cmd<string | null>("GET", P + key);
   return s ? (JSON.parse(s) as T) : null;
 }
-export const setJson = (key: string, v: unknown) => cmd("SET", P + key, JSON.stringify(v));
+/** Store a value; with `seconds`, it expires after that long. */
+export const setJson = (key: string, v: unknown, seconds?: number) =>
+  seconds ? cmd("SET", P + key, JSON.stringify(v), "EX", seconds) : cmd("SET", P + key, JSON.stringify(v));
 export const setJsonIfAbsent = (key: string, v: unknown) => cmd("SET", P + key, JSON.stringify(v), "NX");
 /** A short-lived claim: true if this caller got it. */
 export const claim = async (key: string, seconds: number) => (await cmd<string | null>("SET", P + key, "1", "NX", "EX", seconds)) === "OK";
 export const del = (key: string) => cmd("DEL", P + key);
 export const push = (list: string, v: unknown) => cmd<number>("RPUSH", P + list, JSON.stringify(v));
+/** Keep only the last `keep` entries of a list. */
+export const trim = (list: string, keep: number) => cmd("LTRIM", P + list, -keep, -1);
+export const listLength = (list: string) => cmd<number>("LLEN", P + list).then(Number);
+export const expire = (key: string, seconds: number) => cmd("EXPIRE", P + key, seconds);
+/** One page of keys matching a pattern (without the prefix), and the cursor for the next ("0" when done). */
+export async function scan(match: string, cursor = "0", count = 500): Promise<[string, string[]]> {
+  const [next, keys] = await cmd<[string, string[]]>("SCAN", cursor, "MATCH", P + match, "COUNT", count);
+  return [String(next), keys.map((k) => k.slice(P.length))];
+}
+/** Run a Lua script over keys (without the prefix). */
+export const evalScript = (script: string, keys: string[], args: (string | number)[] = []) =>
+  cmd<unknown>("EVAL", script, keys.length, ...keys.map((k) => P + k), ...args);
 export async function range<T>(list: string, start: number, stop: number): Promise<T[]> {
   return (await cmd<string[]>("LRANGE", P + list, start, stop)).map((s) => JSON.parse(s) as T);
 }

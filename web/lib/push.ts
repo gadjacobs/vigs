@@ -172,7 +172,7 @@ export async function setCodeAlert(code: string, subIdValue: string, mode: CodeA
   const all = await codeAlerts(code);
   if (mode === "default") delete all[subIdValue];
   else all[subIdValue] = mode;
-  await setJson(`codealert:${code}`, all);
+  await setJson(`codealert:${code}`, all, 14 * 86400);
   // The device's own copy, so the Codes tab reads all its choices at once.
   const mine = (await getJson<Record<string, CodeAlert>>(`alertmodes:${subIdValue}`)) ?? {};
   if (mode === "default") delete mine[code];
@@ -295,7 +295,7 @@ export function dueOurs(sub: Pick<Sub, "ours" | "lastOurs">, now: number): boole
   return inside && now - (sub.lastOurs ?? 0) >= o.every * 60 * MIN - 5 * MIN;
 }
 
-type TickOut = { watches: number; live: number; settled: number; swings: number; tips: number; sent: number; errors: number; next: number; busy: boolean; catchUp: boolean };
+type TickOut = { watches: number; live: number; settled: number; swings: number; tips: number; sent: number; errors: number; next: number; busy: boolean; catchUp: boolean; error?: string };
 
 export type TipBuilder = (query: string, now: number) => Promise<Payload>;
 export type OursBuilder = (set: string, now: number) => Promise<Payload>;
@@ -304,7 +304,7 @@ export type OursBuilder = (set: string, now: number) => Promise<Payload>;
  * counts for the log, and `next`: seconds until the collector should call again
  * (short while a watched leg is in play). */
 export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: OursBuilder) {
-  const out = { watches: 0, live: 0, settled: 0, swings: 0, tips: 0, sent: 0, errors: 0, next: 120, busy: false, catchUp: false };
+  const out: TickOut = { watches: 0, live: 0, settled: 0, swings: 0, tips: 0, sent: 0, errors: 0, next: 120, busy: false, catchUp: false };
   // One tick at a time: the collector and a backup heartbeat may both call.
   if (!(await claim("tick:running", 50).catch(() => true))) return { ...out, busy: true, next: 20 };
   try {
@@ -322,12 +322,17 @@ export const freshResult = (lastKickoff: number, now: number) => now - lastKicko
 async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOurs?: OursBuilder) {
   // After a gap (the collector between runs), catch up silently: settle and
   // update every code and match, but send nothing that happened while away.
-  const prev = await getJson<number>("lastTick");
+  // Each step is guarded: one failing read or write must not stop the rest.
+  const fail = (e: unknown) => {
+    out.errors++;
+    out.error ??= e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200);
+  };
+  const prev = await getJson<number>("lastTick").catch((e) => (fail(e), null));
   out.catchUp = prev !== null && now - prev > 4 * MIN;
-  await setJson("lastTick", now);
+  await setJson("lastTick", now).catch(fail);
   const subs = new Map<string, Sub>();
-  for (const id of await members("subs")) {
-    const s = await loadSub(id);
+  for (const id of await members("subs").catch((e) => (fail(e), [] as string[]))) {
+    const s = await loadSub(id).catch((e) => (fail(e), null));
     if (s) subs.set(id, s);
   }
   // Every open code on a subscribed account is watched, however it was booked.
@@ -364,14 +369,14 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
   const final = (w: Watch, t: Tracked) =>
     settle(w, { title: t.state === "won" ? `✓ ${w.code} landed` : `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}` });
 
-  for (const code of await members("watches")) {
+  for (const code of await members("watches").catch((e) => (fail(e), [] as string[]))) {
     out.watches++;
-    const w = await getJson<Watch>(`watch:${code}`);
-    if (!w || now > w.lastKickoff + 6 * 60 * MIN) {
-      await drop(code);
-      continue;
-    }
     try {
+      const w = await getJson<Watch>(`watch:${code}`);
+      if (!w || now > w.lastKickoff + 6 * 60 * MIN) {
+        await drop(code);
+        continue;
+      }
       if (!w.legs) {
         const t = await trackWithPrematch(code, now);
         // Vig follows vFootball only: a code with other sports is never announced.
@@ -410,22 +415,22 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
         ...w, scores: news.scores, chance: news.chance ?? w.chance,
         told: news.last ? [...(w.told ?? []), "last"] : w.told,
       });
-    } catch {
-      out.errors++;
+    } catch (e) {
+      fail(e);
     }
   }
   // Followed matches.
-  for (const id of await members("fixtures")) {
-    const f = await getJson<FollowedFixture>(`fixture:${id}`);
-    if (!f || now > f.kickoff + 3 * 60 * MIN) {
-      for (const sid of f?.subs ?? []) await removeFrom(`follows:${sid}`, id);
-      await del(`fixture:${id}`);
-      await removeFrom("fixtures", id);
-      continue;
-    }
-    if (f.kickoff > now + MIN) continue;
-    out.next = 20;
+  for (const id of await members("fixtures").catch((e) => (fail(e), [] as string[]))) {
     try {
+      const f = await getJson<FollowedFixture>(`fixture:${id}`);
+      if (!f || now > f.kickoff + 3 * 60 * MIN) {
+        for (const sid of f?.subs ?? []) await removeFrom(`follows:${sid}`, id);
+        await del(`fixture:${id}`);
+        await removeFrom("fixtures", id);
+        continue;
+      }
+      if (f.kickoff > now + MIN) continue;
+      out.next = 20;
       const board = await liveBoard();
       // Gone from the live list a while after kickoff: read the match itself for the final score.
       const ev = board.get(id) ?? (now - f.kickoff > 3 * MIN ? await eventMarkets(id, true) : null);
@@ -441,32 +446,31 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
         await del(`fixture:${id}`);
         await removeFrom("fixtures", id);
       } else await setJson(`fixture:${id}`, { ...f, score: news.score, told: news.told });
-    } catch {
-      out.errors++;
+    } catch (e) {
+      fail(e);
     }
   }
 
   for (const s of subs.values()) {
-    if (!buildOurs || !s.ours || !dueOurs(s, now)) continue;
-    out.tips++;
     try {
+      if (!buildOurs || !s.ours || !dueOurs(s, now)) continue;
+      out.tips++;
       if (await send(s, await buildOurs(s.ours.set, now))) out.sent++;
       await setJson(`sub:${s.id}`, { ...s, lastOurs: now });
       s.lastOurs = now;
-    } catch {
-      out.errors++;
+    } catch (e) {
+      fail(e);
     }
   }
   for (const s of subs.values()) {
-    const due = dueTip(s, now);
-    if (due === null) continue;
-    out.tips++;
     try {
+      if (dueTip(s, now) === null) continue;
+      out.tips++;
       const query = (s.user && (await getJson<{ query?: string }>(`profile:${s.user}`))?.query) || s.query;
       if (await send(s, await buildTip(query, now))) out.sent++;
       await setJson(`sub:${s.id}`, { ...(await loadSub(s.id)) ?? s, lastTip: now });
-    } catch {
-      out.errors++;
+    } catch (e) {
+      fail(e);
     }
   }
   return out;
@@ -478,3 +482,7 @@ export const lastTick = async () => (storeReady() ? await getJson<number>("lastT
 
 /** When a tick last arrived with the wrong secret. */
 export const lastRefusedTick = async () => (storeReady() ? await getJson<number>("tickRefused") : null);
+
+export type TickError = { at: number; error: string };
+/** The tick's last error, kept a week, for the Alerts setup check and the collector's log. */
+export const lastTickError = async () => (storeReady() ? await getJson<TickError>("tickError") : null);

@@ -55,7 +55,9 @@ if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
       body=$(curl -sS -m 60 -w "\n%{http_code}" -X POST -H "Authorization: Bearer $PUSH_TICK_SECRET" "$PUSH_TICK_URL") \
         || body=000
       code=${body##*$'\n'}
-      [ "$code" = 200 ] || echo "push tick: HTTP $code"
+      [ "$code" = 200 ] || echo "push tick: HTTP $code $(printf '%s' "${body%$'\n'*}" | tr -s '[:space:]' ' ' | head -c 300)"
+      err=$(printf '%s' "$body" | grep -o '"error":"[^"]*"' | head -c 400 || true)
+      [ "$code" != 200 ] || [ -z "$err" ] || echo "push tick: $err"
       next=$(printf '%s' "$body" | grep -o '"next":[0-9]*' | grep -o '[0-9]*$' || true)
       case "$next" in ''|*[!0-9]*) next=120 ;; esac
       [ "$next" -lt 15 ] && next=15

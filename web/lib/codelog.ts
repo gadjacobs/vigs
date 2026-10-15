@@ -1,4 +1,8 @@
-import { addTo, push, storeReady } from "./store";
+import { addTo, push, storeReady, trim } from "./store";
+
+/** Entries kept in the store's code log. The collector copies the newest 1,000
+ * every hour (about 150 arrive an hour), so older ones are already in the ledger. */
+export const CODELOG_KEEP = 2000;
 
 export type BookedLeg = {
   eventId: string; market: string; kickoff: number;
@@ -19,6 +23,7 @@ export async function logBooking(code: string, legs: BookedLeg[], origin: string
       home: String(l.home ?? ""), away: String(l.away ?? ""), league: String(l.league ?? ""),
     })),
   });
+  await trim("codelog", CODELOG_KEEP).catch(() => undefined);
 }
 
 /** Log a code to the record once per account, however it reached them

@@ -9,7 +9,7 @@ import { DEFAULT_QUERY } from "./query";
 import { buildSet } from "./ourpicks";
 import { cookSlates, type Slate } from "./slates";
 import { book, selection, upcoming } from "./sportybet";
-import { addTo, claim, getJson, setJson, storeReady } from "./store";
+import { claim, getJson, setJson, storeReady } from "./store";
 
 // Cooks the named slips once per newly published round, books each one, and
 // keeps them in the store so every viewer (and the notifications) see the same
@@ -39,8 +39,9 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
         s.code = res.code;
         await rememberPrematch(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.odds])));
         await rememberEstimates(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.estimate])));
-        // Same legs give the same code; log each code to the record once.
-        if (Number(await addTo("slatecodes", res.code)) === 1) await logBooking(res.code, s.legs, `slate:${s.style}`, "vig");
+        // Same legs give the same code (only within a round: later rounds have other
+        // matches), so a day-long claim logs each code to the record once.
+        if (await claim(`slatecode:${res.code}`, 86400)) await logBooking(res.code, s.legs, `slate:${s.style}`, "vig");
       } catch { /* leave this slip without a code; it can still be booked from the editor */ }
     }
   }
@@ -55,7 +56,7 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
         if (res.verified !== legs.length) continue;
         templates.push({ set, code: res.code, legs: legs.length });
         await rememberPrematch(res.code, Object.fromEntries(legs.map((p) => [p.eventId, p.odds])));
-        if (Number(await addTo("slatecodes", res.code)) === 1) await logBooking(res.code, legs, `template:${set}`, "vig");
+        if (await claim(`slatecode:${res.code}`, 86400)) await logBooking(res.code, legs, `template:${set}`, "vig");
       } catch { /* try again next round */ }
     }
   }

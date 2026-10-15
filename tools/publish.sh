@@ -15,6 +15,8 @@ if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
   # Codes booked in the app (yours and the cooked slips), so Record can score them.
   python -m vigs ledger import-codes --ledger "$DATA/ledger.jsonl" \
     --url "${PUSH_TICK_URL%/api/push/tick}/api/codes/log" || true
+  # The notification tick's health, for this log: when it last ran and its last error.
+  echo "push tick status: $(curl -sS -m 30 -H "Authorization: Bearer $PUSH_TICK_SECRET" "$PUSH_TICK_URL" | head -c 700 || true)"
 fi
 python -m vigs ledger settle --ledger "$DATA/ledger.jsonl" --results "$DATA/results.csv" || true
 python -m vigs export-insights --data "$DATA" --out "$DATA/insights.json" || true
