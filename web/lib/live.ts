@@ -62,20 +62,34 @@ export function slipChance(chances: (number | null)[]): number | null {
 }
 
 const BOARD_MARKETS = /^([1X2]|O\d\d|U\d\d)$/; // what the live list carries; the rest needs the event feed
+const MAX_FEEDS = 150; // matches read one by one per call (several 50-leg codes)
+
+/** Run `f` over items, a few at a time. */
+async function pooled<T, R>(items: T[], f: (x: T) => Promise<R>, width = 8): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(width, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await f(items[i]);
+    }
+  }));
+  return out;
+}
 
 /** Live state for each leg, keyed "eventId|market". One read of the live list,
- * plus the single-event feed for first-half and both-teams-score legs. */
+ * plus the single-event feed for first-half, team-goals and both-teams-score
+ * legs. Legs still to play are priced from the upcoming list, or, for a round
+ * SportyBet hasn't listed yet, from the match's own prematch feed. */
 export async function liveLegs(legs: LegRef[], now = Date.now()): Promise<Record<string, LiveLeg>> {
   const out: Record<string, LiveLeg> = {};
   const started = legs.filter((l) => l.kickoff <= now);
   const waiting = legs.filter((l) => l.kickoff > now);
   const board = started.length ? await liveBoard() : new Map<string, LiveEvent>();
-  const extra = new Map<string, LiveEvent | null>();
-  for (const l of started) {
-    const ev = board.get(l.eventId);
-    if (ev && !BOARD_MARKETS.test(l.market) && !extra.has(l.eventId) && extra.size < 10)
-      extra.set(l.eventId, await eventMarkets(l.eventId, true));
-  }
+  const needFeed = [...new Set(started.filter((l) => board.has(l.eventId) && !BOARD_MARKETS.test(l.market)).map((l) => l.eventId))]
+    .slice(0, MAX_FEEDS);
+  const feeds = await pooled(needFeed, (id) => eventMarkets(id, true).catch(() => null));
+  const extra = new Map(needFeed.map((id, i) => [id, feeds[i]]));
   for (const l of started) {
     const key = `${l.eventId}|${l.market}`;
     const base = board.get(l.eventId);
@@ -93,12 +107,15 @@ export async function liveLegs(legs: LegRef[], now = Date.now()): Promise<Record
     };
   }
   if (waiting.length) {
-    const fx = new Map((await upcoming().catch(() => [])).map((f) => [f.eventId, f]));
+    const fx = new Map((await upcoming().catch(() => [])).map((f) => [f.eventId, f.odds]));
+    const unlisted = [...new Set(waiting.filter((l) => !(l.market in (fx.get(l.eventId) ?? {}))).map((l) => l.eventId))].slice(0, MAX_FEEDS);
+    const pre = await pooled(unlisted, (id) => eventMarkets(id, false).catch(() => null));
+    unlisted.forEach((id, i) => { if (pre[i]) fx.set(id, { ...pre[i]!.odds, ...fx.get(id) }); });
     for (const l of waiting) {
-      const f = fx.get(l.eventId);
+      const odds = fx.get(l.eventId);
       out[`${l.eventId}|${l.market}`] = {
         state: "waiting", phase: null, minute: null, score: null, fh: null,
-        chance: f ? fairProbs(f.odds)[l.market] ?? null : null, odds: f?.odds[l.market] ?? null,
+        chance: odds ? fairProbs(odds)[l.market] ?? null : null, odds: odds?.[l.market] ?? null,
       };
     }
   }

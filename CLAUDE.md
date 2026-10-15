@@ -59,7 +59,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   kicked off when booked are never scored. `vigs export-insights` feeds Record.
 - Live (`web/lib/live.ts`, `hedge.ts`, `app/live-actions.ts`): Codes polls SportyBet's live feed
   every 10 s while a leg plays; chance to land = SportyBet's live probability per open leg
-  (1/0 once the score decides it). Hedge only does arithmetic and books a code; never bets.
+  (1/0 once the score decides it); legs to play use the upcoming list, else the match's own prematch
+  feed (the list drops a round ~9 min before kickoff). The tick saves each round's prematch prices
+  (`lib/prematch.ts`, `pre:{kickoff}`, 2 days) so codes first opened after kickoff still get prematch odds.
+  Codes cards: Full or Compact (per device), legs in kickoff order. Hedge only does arithmetic and books a code; never bets.
   The tick watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
   One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no
   result is sent > 45 min after a code's last kickoff. Collector cron is every 30 min (runs chain).

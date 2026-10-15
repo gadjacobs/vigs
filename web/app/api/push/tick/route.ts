@@ -1,5 +1,6 @@
 import { lastTick, lastTickError, pushReady, tick, type TickError } from "@/lib/push";
 import { currentSlates } from "@/lib/kitchen";
+import { snapshotRounds } from "@/lib/prematch";
 import { claim, setJson, storeReady } from "@/lib/store";
 import { tidyStore } from "@/lib/tidy";
 import { buildOurs, buildTip } from "@/lib/tips";
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
   // At most once a minute: each check reads SportyBet's upcoming list.
   const cooked = await step("cook", async () =>
     (await claim("scan:cook", 55).catch(() => true)) ? (await currentSlates()).slates.length : null, -1);
+  // The last prematch prices of the next rounds, for codes first opened after kickoff.
+  const rounds = await step("prices", async () =>
+    (await claim("scan:prematch", 50).catch(() => true)) ? await snapshotRounds(now) : null, null);
   const out = await step("tick", () => tick(buildTip, now, buildOurs), null);
   if (out?.error) errors.push(`tick: ${out.errors} failed, first: ${out.error}`);
   // Slip alerts on saved filters and templates (each account at most every 10 minutes).
@@ -49,7 +53,7 @@ export async function POST(request: Request) {
     console.error(`push tick: ${error}`);
     await setJson("tickError", { at: now, error } satisfies TickError, 7 * 86400).catch(() => undefined);
   }
-  return Response.json({ ...(out ?? { next: 60 }), cooked, alerts, tidy, error });
+  return Response.json({ ...(out ?? { next: 60 }), cooked, rounds, alerts, tidy, error });
 }
 
 /** For the collector's log: when the tick last ran, and its last error. */

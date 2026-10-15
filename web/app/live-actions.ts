@@ -8,9 +8,12 @@ const KEY = /^(1|X|2|BY|BN|DC1X|DC12|DCX2|(FH_|H_|A_)?[OU]\d\d)$/;
 /** Live score, clock and chance for the legs of open codes. The Codes tab calls
  * this every few seconds while something is in play. */
 export async function liveCodes(legs: LegRef[]): Promise<Record<string, LiveLeg>> {
+  // Every open code at once (several 50-leg slips), each leg once.
+  const seen = new Set<string>();
   const clean = legs
     .filter((l) => l && /^sr:match:\d+$/.test(l.eventId) && KEY.test(l.market) && Number.isFinite(l.kickoff))
-    .slice(0, 80);
+    .filter((l) => !seen.has(`${l.eventId}|${l.market}`) && Boolean(seen.add(`${l.eventId}|${l.market}`)))
+    .slice(0, 400);
   return liveLegs(clean).catch(() => ({}));
 }
 

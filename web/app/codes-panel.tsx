@@ -18,6 +18,14 @@ export type { Saved };
 export { CODES_KEY, readCodes } from "./code-store";
 const PAGE = 10;
 const DAY = 24 * 3600 * 1000;
+const DENSITY_KEY = "vig_codes_density";
+
+/** "in 1h 05m" / "in 12 min" until a time, or null once it has passed. */
+function until(at: number, now: number): string | null {
+  const m = Math.round((at - now) / 60000);
+  if (m < 1) return null;
+  return m < 60 ? `in ${m} min` : `in ${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+}
 
 /** Remember a code on this device and in the account, and tell the panel. */
 export function rememberCode(c: Saved) {
@@ -183,6 +191,16 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const [tab, setTab] = useState<"open" | "history">("open");
   const [filter, setFilter] = useState<"all" | "won" | "lost">("all");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  // Card density, kept on this device: compact rows or the full card.
+  const [compact, setCompact] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  useEffect(() => { try { setCompact(localStorage.getItem(DENSITY_KEY) === "compact"); } catch { /* private mode */ } }, []);
+  const chooseDensity = (c: boolean) => {
+    setCompact(c);
+    setExpanded(new Set());
+    try { localStorage.setItem(DENSITY_KEY, c ? "compact" : "full"); } catch { /* private mode */ }
+  };
+  const flipCard = (code: string) => setExpanded((e) => { const n = new Set(e); if (n.has(code)) n.delete(code); else n.add(code); return n; });
   const [pages, setPages] = useState(1);
   const [undo, setUndo] = useState<Saved | null>(null);
   const [live, setLive] = useState<Record<string, LiveLeg>>({});
@@ -428,6 +446,12 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
           ))}
         </div>
       )}
+      {loaded && list.length > 0 && (
+        <div className="density" role="radiogroup" aria-label="Card size">
+          <button type="button" role="radio" aria-checked={!compact} onClick={() => chooseDensity(false)}>Full</button>
+          <button type="button" role="radio" aria-checked={compact} onClick={() => chooseDensity(true)}>Compact</button>
+        </div>
+      )}
       <p className="status codestatus">{tab === "open" ? "Scores update every 10 seconds while a leg is in play." : "Settled codes. Removing one hides it here; the record keeps its result."}</p>
       {undo && <p className="note undo" role="status">Removed {undo.code}. <button type="button" onClick={restore}>Undo</button></p>}
       {!loaded && <ul className="codecards" aria-busy="true" aria-label="Loading codes"><SkeletonCard /><SkeletonCard /></ul>}
@@ -435,7 +459,12 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       {tab === "history" && !shownHistory.length && <p className="note">Nothing settled here yet.</p>}
       <ul className="codecards">
         {list.map(({ c, t, err }) => {
-          const legs = t?.legs ?? [];
+          // Legs in kick-off order, so the list reads as the evening plays out.
+          const legs = [...(t?.legs ?? [])].sort((a, b) => a.kickoff - b.kickoff || a.home.localeCompare(b.home));
+          const lastKo = legs.length ? legs[legs.length - 1].kickoff : 0;
+          const lastIn = lastKo ? until(lastKo, now) : null;
+          // Big slips with several legs per round read best grouped under each kick-off time.
+          const grouped = legs.length >= 8 && new Set(legs.map((l) => l.kickoff)).size * 2 <= legs.length;
           const eff = (l: (typeof legs)[number]) => effective(l, live);
           const next = legs.filter((l) => eff(l) === "waiting").sort((a, b) => a.kickoff - b.kickoff)[0];
           const left = legs.filter((l) => eff(l) === "waiting" || eff(l) === "playing").length;
@@ -454,6 +483,45 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
           const mode = modes[c.code];
           const settled = t && t.state !== "open";
           const foreign = Boolean(t?.foreign);
+          const chanceEl = foreign ? null : chance !== null && !lostN ? (
+              <div className={`chancebig ${chance >= 0.5 ? "good" : "low"}`} aria-label={`${pctText(chance)}% chance to land`}>
+                <span className="num"><Ticker value={chance * 100} /><small>%</small></span>
+                <em>{delta !== 0 ? <b className={delta > 0 ? "up" : "down"}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</b> : null} to land</em>
+              </div>
+            ) : parts && parts.missing && !lostN ? (
+              <div className="chancebig low" aria-label={`at most ${pctText(parts.p)}% chance to land`}>
+                <span className="num"><small>≤</small>{pctText(parts.p)}<small>%</small></span>
+                <em>{parts.missing - parts.settling ? `${parts.missing - parts.settling} not priced yet` : `${parts.settling} settling`}</em>
+              </div>
+            ) : settled ? (
+              <div className={`chancebig done-${t!.state}`}><span>{t!.state === "won" ? "✓" : "✗"}</span><em>{t!.state === "won" ? "landed" : "lost"}</em></div>
+            ) : null;
+          if (compact && !expanded.has(c.code)) {
+            return (
+              <li key={c.code} className={`codecard compact ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""}`}>
+                <button type="button" className="compactrow" onClick={() => flipCard(c.code)} aria-expanded={false}
+                  aria-label={`${c.code}: show the full card`}>
+                  <span className="cr-head">
+                    <strong className="num codeid">{c.code}</strong>
+                    {foreign ? <span className="badge state-upcoming">Not vFootball</span>
+                      : shownState && <span className={`badge state-${shownState}`}>{STATE[shownState]}</span>}
+                  </span>
+                  <span className="cr-meta">
+                    {odds ? <span><b className="num">{odds.toFixed(2)}</b> odds ·</span> : null}
+                    {legs.length ? <span><b>{wonN}</b> of {legs.length} won</span> : `${c.legs} legs`}
+                    {!settled && lastKo ? <span>· last game {lagos(lastKo)}</span> : null}
+                    {updating.has(c.code) ? <i className="spin" aria-hidden="true" /> : null}
+                  </span>
+                  <span className="cr-chance">{chanceEl}</span>
+                </button>
+                {legs.length > 0 && !foreign && (
+                  <div className="legbar thin" aria-hidden="true">
+                    {legs.map((l) => <span key={l.eventId} className={`seg seg-${eff(l)} ${goalFlash.has(l.eventId) ? "flash" : ""}`} />)}
+                  </div>
+                )}
+              </li>
+            );
+          }
           return (
             <li key={c.code} className={`codecard ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""}`}>
               <div className="codetop">
@@ -464,23 +532,13 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   {err && <span className="badge state-lost">Unavailable</span>}
                   {updating.has(c.code) && <span className="updating" role="status"><i className="spin" aria-hidden="true" />Updating</span>}
                 </div>
-                {foreign ? null : chance !== null && !lostN ? (
-                  <div className={`chancebig ${chance >= 0.5 ? "good" : "low"}`} aria-label={`${pctText(chance)}% chance to land`}>
-                    <span className="num"><Ticker value={chance * 100} /><small>%</small></span>
-                    <em>{delta !== 0 ? <b className={delta > 0 ? "up" : "down"}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</b> : null} to land</em>
-                  </div>
-                ) : parts && parts.missing && !lostN ? (
-                  <div className="chancebig low" aria-label={`at most ${pctText(parts.p)}% chance to land`}>
-                    <span className="num"><small>≤</small>{pctText(parts.p)}<small>%</small></span>
-                    <em>{parts.missing - parts.settling ? `${parts.missing - parts.settling} not priced yet` : `${parts.settling} settling`}</em>
-                  </div>
-                ) : settled ? (
-                  <div className={`chancebig done-${t!.state}`}><span>{t!.state === "won" ? "✓" : "✗"}</span><em>{t!.state === "won" ? "landed" : "lost"}</em></div>
-                ) : null}
+                {chanceEl}
               </div>
               <p className="codemeta">
                 {odds ? <><strong className="num">{odds.toFixed(2)}</strong> odds · </> : null}
-                {legs.length || c.legs} legs · booked {lagos(c.at)}
+                {legs.length || c.legs} legs
+                {lastKo && !settled ? <> · last game <b className="num lastko">{lagos(lastKo)}</b>{lastIn ? <span className="muted"> ({lastIn})</span> : null}</> : null}
+                {" "}· booked {lagos(c.at)}
               </p>
               {foreign ? (
                 <p className="codeline">Vig follows vFootball only, so this code&apos;s results aren&apos;t tracked here. Check it in SportyBet.</p>
@@ -529,6 +587,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                     </div>
                   </details>
                 )}
+                {compact && <button type="button" className="ghost" onClick={() => flipCard(c.code)}>Compact</button>}
                 {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
               </div>
               {t && !settled && !foreign && endpoint === null && isOpen && (
@@ -541,17 +600,23 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
               )}
               {isOpen && legs.length > 0 && (
                 <ol className="legs">
-                  {legs.map((l) => {
+                  {legs.flatMap((l, i) => {
                     const st = eff(l), x = live[legKey(l)];
                     const playing = x?.state === "playing" && x.score;
                     const lc = x?.chance ?? null;
                     const course = st === "won" ? "won" : st === "lost" ? "lost" : playing && lc !== null ? (lc >= 0.5 ? "on" : "off") : "";
                     const followed = follows.has(l.eventId);
-                    return (
+                    // A divider where the kick-off time changes; the last one is marked.
+                    const sep = grouped && (i === 0 || legs[i - 1].kickoff !== l.kickoff) ? [
+                      <li key={`ko-${l.kickoff}`} className="legsep" aria-hidden="true">
+                        {lagos(l.kickoff)}{l.kickoff === lastKo && i > 0 ? " · last game" : ""}
+                        <span>{legs.filter((y) => y.kickoff === l.kickoff).length}</span>
+                      </li>] : [];
+                    return [...sep, (
                     <li key={l.eventId} className={`leg-${st} ${course ? `course-${course}` : ""}`}>
                       <span className="legicon" aria-hidden="true">{ICON[st]}</span>
                       <span className="legmain">{l.home} v {l.away}
-                        <small>{l.label}{view === "detailed" ? <> · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"}</> : l.odds ? <> · <span className="num">{l.odds.toFixed(2)}</span></> : null} · {lagos(l.kickoff)}</small>
+                        <small>{!grouped && l.kickoff === lastKo && legs[0].kickoff !== lastKo && !settled ? <b className="lasttag">Last game</b> : null}{l.label}{view === "detailed" ? <> · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"}</> : l.odds ? <> · <span className="num">{l.odds.toFixed(2)}</span></> : null} · {lagos(l.kickoff)}</small>
                         {lc !== null && (st === "playing" || st === "waiting") && (
                           <span className="legmeter" aria-hidden="true"><span style={{ width: `${Math.round(lc * 100)}%` }} /></span>
                         )}
@@ -573,7 +638,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                           onClick={() => toggleFollow(l)}><Icon d={followed ? BELL : BELL} /></button>
                       )}
                     </li>
-                    );
+                    )];
                   })}
                 </ol>
               )}

@@ -987,3 +987,27 @@ html { scroll-behavior: smooth; }
 .watchnums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .watchnums .field { font-size: 12px; }
 @media (max-width: 420px) { .watchnums { grid-template-columns: 1fr 1fr; } }
+
+/* Codes: card size switch, compact rows, kick-off dividers */
+.density { display: inline-flex; float: right; margin: 2px 0 0 12px; border: 1px solid var(--rule); border-radius: 999px; padding: 2px; background: var(--paper); }
+.density button { min-height: 32px; padding: 2px 12px; border: 0; border-radius: 999px; background: transparent; font-size: 13px; color: var(--ink-muted); }
+.density button[aria-checked="true"] { background: var(--ink); color: var(--paper); }
+.codecard.compact { padding: 8px 12px 10px; }
+.compactrow { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "head chance" "meta chance"; gap: 2px 12px; align-items: center;
+  width: 100%; padding: 0; border: 0; background: transparent; text-align: left; min-height: 0; color: inherit; font: inherit; }
+.compactrow .cr-head { grid-area: head; display: flex; gap: 8px; align-items: center; min-width: 0; }
+.compactrow .cr-meta { grid-area: meta; font-size: 13px; color: var(--ink-muted); display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.compactrow .cr-meta b { color: var(--ink); }
+.compactrow .cr-chance { grid-area: chance; }
+.compactrow .chancebig { min-width: 56px; }
+.compactrow .chancebig > span { font-size: 26px; line-height: 28px; }
+.compactrow .chancebig > span small { font-size: 14px; }
+.compactrow .chancebig em { font-size: 11px; }
+.legbar.thin { height: 4px; margin: 8px 0 0; gap: 2px; }
+.codemeta .lastko { color: var(--ink); }
+ol.legs li.legsep { display: flex; justify-content: space-between; padding: 10px 0 2px; border: 0; font-size: 12px; font-weight: 600;
+  letter-spacing: .02em; color: var(--ink-muted); text-transform: uppercase; }
+ol.legs li.legsep span { font-weight: 400; }
+ol.legs .lasttag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; background: var(--ink); color: var(--paper);
+  font-size: 11px; font-weight: 600; line-height: 18px; text-transform: uppercase; letter-spacing: .02em; }
+.codecard.compact .codeid { font-size: 22px; }

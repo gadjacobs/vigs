@@ -1,5 +1,6 @@
 import { MARKET_LABELS } from "./markets";
 import { decodeShare, VFOOTBALL } from "./sportybet";
+import { savedPrices } from "./prematch";
 import { marketKey, score, settle } from "./settle";
 import { getJson, setJson, storeReady } from "./store";
 
@@ -79,8 +80,18 @@ export async function trackWithPrematch(code: string, now = Date.now()): Promise
   const pre = (storeReady() ? await getJson<Record<string, number>>(key).catch(() => null) : null) ?? {};
   const t = await trackCode(code, now, pre);
   const fresh = t.legs.filter((l) => !(l.eventId in pre) && l.kickoff > now && l.shareOdds > 1);
+  // A leg first seen after kickoff: its round's last prematch price, saved by the tick.
+  const late = storeReady() ? t.legs.filter((l) => l.odds === null && l.kickoff <= now) : [];
+  if (late.length) {
+    const saved = await savedPrices(late.map((l) => l.kickoff)).catch(() => ({}) as Awaited<ReturnType<typeof savedPrices>>);
+    for (const l of late) {
+      const o = saved[l.eventId]?.[l.market];
+      if (o) { l.odds = o; fresh.push(l); }
+    }
+    if (t.legs.every((l) => l.odds)) t.odds = t.legs.reduce((a, l) => a * (l.odds as number), 1);
+  }
   if (fresh.length && storeReady()) {
-    for (const l of fresh) pre[l.eventId] = l.shareOdds;
+    for (const l of fresh) pre[l.eventId] = l.odds ?? l.shareOdds;
     await setJson(key, pre, CODE_KEEP_SECONDS).catch(() => undefined);
   }
   return t;
