@@ -9,7 +9,7 @@ from . import backtest as bt
 from .data import group_weeks, load_csv, market_label, synthesize, write_csv
 from .evidence import STATS_VERSION, analyze, calibration, grade_obs
 from .grading import GRADES, RANK, GradeConfig
-from .ledger import Ledger, LedgerError, summarize
+from .ledger import Ledger, LedgerError, segments, summarize
 from .odds import combined_odds, combined_prob, house_cut
 from .patterns import build_candidates
 from .sheet import LOW_CHANCE, SheetQuery, build_sheet
@@ -266,7 +266,14 @@ def cmd_ledger(a) -> None:
     except LedgerError as e:
         sys.exit(str(e))
     if a.action == "verify":
-        print(f"{a.ledger}: {len(led.records)} records, hash chain intact, head {led.head[:12]}")
+        parts = len(segments(a.ledger))
+        print(f"{a.ledger}: {len(led.records)} records{f' ({parts} sealed segment(s) before it)' if parts else ''}, "
+              f"hash chain intact, head {led.head[:12]}")
+        return
+    if a.action == "seal":
+        name = led.seal(int(a.max_mb * 1024 * 1024))
+        print(f"sealed {name}; the chain carries on in {a.ledger}" if name else
+              f"{a.ledger} is under {a.max_mb:g} MB; nothing sealed")
         return
     if a.action == "settle":
         if not a.results:
@@ -741,10 +748,12 @@ def main(argv: list[str] | None = None) -> None:
     p.set_defaults(fn=cmd_sheet)
 
     p = sub.add_parser("ledger", help="verify, settle or report the pick ledger")
-    p.add_argument("action", choices=("report", "settle", "verify", "import-codes"))
+    p.add_argument("action", choices=("report", "settle", "verify", "import-codes", "seal"))
     p.add_argument("--ledger", default="ledger.jsonl")
     p.add_argument("--results")
     p.add_argument("--url", help="import-codes: the app's /api/codes/log")
+    p.add_argument("--max-mb", type=float, default=40,
+                   help="seal: start a new segment once the ledger file reaches this size")
     p.set_defaults(fn=cmd_ledger)
 
     p = sub.add_parser("slip", help="combined odds, chance and house cut")

@@ -404,6 +404,9 @@ branch contains no SportyBet data; the `data` branch does.
    JSONL file (shadow mode: no stakes). Editing any record breaks the chain and
    the ledger refuses to load. `ledger report` shows hit rate vs expected and ROI
    with a 90% interval per grade, and whether the Solid interval is above zero.
+   Past 40 MB the file is sealed unchanged as `ledger.000.jsonl`,
+   `ledger.001.jsonl`, … (`ledger seal`) and the chain carries on in a fresh
+   `ledger.jsonl`; loading checks the chain across every segment.
 
 ## What the checks show (synthetic data only)
 

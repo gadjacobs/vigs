@@ -142,6 +142,37 @@ class LedgerRules(unittest.TestCase):
             with self.assertRaises(LedgerError):
                 Ledger(path)
 
+    def test_sealed_segments_keep_one_chain(self):
+        ms = [m for m in synthesize(weeks=3, played=2, seed=2) if not m.settled]
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "ledger.jsonl")
+            led = Ledger(path)
+            led.add_pick(self._pick(), ms[0])
+            self.assertIsNone(led.seal(max_bytes=10**9))              # small: stays put
+            first = open(path, "rb").read()
+            self.assertEqual(led.seal(max_bytes=1), os.path.join(d, "ledger.000.jsonl"))
+            self.assertEqual(open(os.path.join(d, "ledger.000.jsonl"), "rb").read(), first)  # moved unchanged
+            self.assertFalse(os.path.exists(path))
+            led.add_pick(self._pick(), ms[1])                         # chain carries on
+            Ledger(path).seal(max_bytes=1)
+            Ledger(path).add_pick(self._pick(), ms[2])
+            again = Ledger(path)
+            self.assertEqual(len(again.records), 3)
+            self.assertEqual(len(again.picks()), 3)
+            self.assertEqual(again.records[1]["prev"], again.records[0]["hash"])
+            # Tampering with a sealed segment, or losing one, breaks the chain.
+            seg = os.path.join(d, "ledger.001.jsonl")
+            text = open(seg).read()
+            with open(seg, "w") as fh:
+                fh.write(text.replace('"odds": 1.4', '"odds": 2.4'))
+            with self.assertRaises(LedgerError):
+                Ledger(path)
+            with open(seg, "w") as fh:
+                fh.write(text)
+            os.remove(os.path.join(d, "ledger.000.jsonl"))
+            with self.assertRaises(LedgerError):
+                Ledger(path)
+
 
 class BannedWords(unittest.TestCase):
     BANNED = re.compile(r"\b(sure|banker|guaranteed|fixed|lock|hack)\b|can't lose|100%", re.I)

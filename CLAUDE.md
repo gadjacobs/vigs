@@ -14,7 +14,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 1. Every pick shows odds, break-even, market chance, history rate with n, Vig
    estimate with 90% interval, edge, grade, and why.
 2. Picks are logged to the append-only hash-chained ledger before kickoff and
-   settled by appending. Never edit or delete ledger records.
+   settled by appending. Never edit or delete ledger records. Past 40 MB `ledger seal`
+   renames the file unchanged to `ledger.NNN.jsonl`; the chain continues across segments.
 3. Banned in product text: the words listed in `tests/test_evidence.py::BannedWords`.
    The test scans `vigs/` and README.md.
 4. Grades are earned: Solid needs ≥ 300 samples, walk-forward validation, the

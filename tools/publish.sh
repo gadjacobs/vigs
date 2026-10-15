@@ -5,6 +5,9 @@
 # Results come from the watcher running alongside (every 4 minutes, 2 hours back),
 # and collect.sh fills the last 6 hours when a job starts.
 python -m vigs export-model --data "$DATA" --out "$DATA/model.json" || true
+# Past 40 MB the ledger file is sealed, unchanged, as ledger.NNN.jsonl and the
+# hash chain carries on in a fresh ledger.jsonl (git hosts refuse files over 100 MB).
+python -m vigs ledger seal --ledger "$DATA/ledger.jsonl" || true
 python -m vigs export-blend --data "$DATA" --out "$DATA/blend.json" || true
 for m in FH_O05 BY O15; do
   python -m vigs likely --market "$m" --hours 1 --count 20 --data "$DATA" \

@@ -3,6 +3,11 @@
 Every pick is written before kickoff and settled later by appending a
 settlement record. Nothing is ever edited or deleted: each record carries the
 hash of the one before it, so any edit breaks the chain and loading fails.
+
+A long ledger is kept in segments so no file outgrows git hosting: `seal()`
+renames the current file, unchanged, to the next sealed segment
+(ledger.000.jsonl, ledger.001.jsonl, ...) and the chain carries on in a fresh
+ledger.jsonl. Loading reads every segment in order and checks the whole chain.
 """
 from __future__ import annotations
 
@@ -17,6 +22,7 @@ from typing import Any, Iterable
 from .data import Match
 
 GENESIS = "0" * 64
+SEGMENT_MAX_BYTES = 40 * 1024 * 1024  # seal well under GitHub's 50 MB warning
 
 
 class LedgerError(Exception):
@@ -33,30 +39,53 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def segments(path: str) -> list[str]:
+    """Sealed segments of the ledger at `path`, oldest first."""
+    stem, ext = os.path.splitext(path)
+    out = []
+    while os.path.exists(f"{stem}.{len(out):03d}{ext}"):
+        out.append(f"{stem}.{len(out):03d}{ext}")
+    return out
+
+
 class Ledger:
     def __init__(self, path: str) -> None:
         self.path = path
         self.records: list[dict[str, Any]] = []
-        if os.path.exists(path):
-            self._load()
+        files = segments(path) + ([path] if os.path.exists(path) else [])
+        if files:
+            self._load(files)
 
-    def _load(self) -> None:
+    def _load(self, files: list[str]) -> None:
         prev = GENESIS
-        with open(self.path, encoding="utf-8") as fh:
-            for i, line in enumerate(fh):
-                if not line.strip():
-                    continue
-                try:
-                    rec = json.loads(line)
-                    ok = (rec["seq"] == i and rec["prev"] == prev
-                          and rec["hash"] == _digest(rec["seq"], rec["type"], prev, rec["data"]))
-                except (ValueError, KeyError, TypeError):
-                    ok = False
-                if not ok:
-                    raise LedgerError(f"{self.path}: record {i} fails the hash chain; "
-                                      "the ledger was edited")
-                self.records.append(rec)
-                prev = rec["hash"]
+        for name in files:
+            with open(name, encoding="utf-8") as fh:
+                for line in fh:
+                    if not line.strip():
+                        continue
+                    i = len(self.records)
+                    try:
+                        rec = json.loads(line)
+                        ok = (rec["seq"] == i and rec["prev"] == prev
+                              and rec["hash"] == _digest(rec["seq"], rec["type"], prev, rec["data"]))
+                    except (ValueError, KeyError, TypeError):
+                        ok = False
+                    if not ok:
+                        raise LedgerError(f"{name}: record {i} fails the hash chain; "
+                                          "the ledger was edited")
+                    self.records.append(rec)
+                    prev = rec["hash"]
+
+    def seal(self, max_bytes: int = SEGMENT_MAX_BYTES) -> str | None:
+        """Once the current file reaches `max_bytes`, rename it (unchanged) to the
+        next sealed segment; later records go to a fresh file at `path`, still
+        chained to the last one. Returns the segment's name, or None."""
+        if not os.path.exists(self.path) or os.path.getsize(self.path) < max_bytes:
+            return None
+        stem, ext = os.path.splitext(self.path)
+        name = f"{stem}.{len(segments(self.path)):03d}{ext}"
+        os.rename(self.path, name)
+        return name
 
     @property
     def head(self) -> str:
