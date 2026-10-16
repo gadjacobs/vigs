@@ -20,7 +20,10 @@ import random
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
+from statistics import NormalDist
+
 from . import model as md
+from .stats import bh_qvalues
 from .data import fair_probs, settle
 from .odds import LIVE_DEVIG
 
@@ -43,6 +46,12 @@ GUARD = (0.0, 0.95, 0.05)
 # markets but the market in only 11, by under 0.004 in log loss, mostly on ~190
 # rows and by leaning away from the model.
 MIN_TEST = 500
+# And only when that gain is more than luck: per held-out match, the market's
+# log loss minus the blend's; the mean of those must be above zero with a
+# false-discovery rate of 10% across every market (as for grades). On 10,517
+# matches (9-15 Oct 2026) blends had switched on for up to 16 markets on gains
+# in the fourth decimal place, which a fresh day's data did not repeat.
+GAIN_FDR = 0.10
 
 
 def logit(p: float) -> float:
@@ -57,6 +66,11 @@ def sigmoid(z: float) -> float:
 def apply(coef: list[float], q: float, p: float) -> float:
     a, b1, b2 = coef
     return sigmoid(a + b1 * logit(q) + b2 * logit(p))
+
+
+def _ll(p: float, y: int) -> float:
+    p = min(max(p, EPS), 1 - EPS)
+    return -math.log(p if y else 1 - p)
 
 
 def log_loss(ps: list[float], ys: list[int]) -> float:
@@ -169,7 +183,13 @@ def evaluate(rows: list[dict], seed: int = 0) -> dict:
         if len(test) >= 50 and len(train) >= 50:
             coef = fit_logistic([(logit(r["q"]), logit(r["p"])) for r in train], [r["y"] for r in train])
             ys = [r["y"] for r in test]
+            # Per-match gain of the blend over the market price, and its z-score.
+            gains = [_ll(r["q"], r["y"]) - _ll(apply(coef, r["q"], r["p"]), r["y"]) for r in test]
+            mean = sum(gains) / len(gains)
+            sd = math.sqrt(sum((g - mean) ** 2 for g in gains) / max(1, len(gains) - 1))
+            z = mean / (sd / math.sqrt(len(gains))) if sd > 0 else 0.0
             entry["test"] = {
+                "gain": mean, "gain_z": z, "gain_p": 1 - NormalDist().cdf(z),
                 "n": len(test),
                 "market": log_loss([r["q"] for r in test], ys),
                 "model": log_loss([r["p"] for r in test], ys),
@@ -187,7 +207,7 @@ def evaluate(rows: list[dict], seed: int = 0) -> dict:
         elif t["n"] < MIN_TEST:
             entry["reason"] = f"the blend beat the market on {t['n']} held-out rows; it needs {MIN_TEST}"
         else:
-            entry["active"] = True
+            entry["active"] = True   # still subject to the false-discovery check below
             entry["reason"] = "the blend beat the market price and the results model on held-out matches"
         if len(rs) >= 100:
             xs = [(logit(r["q"]), logit(r["p"])) for r in rs]
@@ -201,6 +221,15 @@ def evaluate(rows: list[dict], seed: int = 0) -> dict:
         else:
             entry["active"] = False
         out[mk] = entry
+    # The gain must survive the false-discovery check across every tested market.
+    tested = [mk for mk, e in out.items() if e.get("test")]
+    for mk, q in zip(tested, bh_qvalues([out[mk]["test"]["gain_p"] for mk in tested])):
+        e = out[mk]
+        e["test"]["gain_q"] = q
+        if e["active"] and q > GAIN_FDR:
+            e["active"] = False
+            e["reason"] = (f"the blend beat the market price on held-out matches, but by no more than "
+                           f"luck explains (false-discovery q {q:.2f}, needs {GAIN_FDR:.2f})")
     return {"version": 1, "min_matches": MIN_MATCHES, "matches": matches,
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "markets": out}

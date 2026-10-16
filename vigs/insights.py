@@ -52,6 +52,34 @@ def _compare(rows: list[tuple[float, float, int]]) -> dict | None:
 CHANCE_BANDS = ((0.0, 0.55), (0.55, 0.85), (0.85, 1.0001))
 
 
+LEAN_SHRINK = 2000   # as web/lib/lean.ts: examples at which a market's record counts half
+
+
+def _held_out(seen: list[tuple[str, str, int, float, int]]) -> dict[str, tuple[bool, float]]:
+    """Per market: does the lean learned on the earlier half of the days improve the
+    log loss of the later half? Returns (improved, mean gain per selection)."""
+    if not seen:
+        return {}
+    cut = sorted(x[0] for x in seen)[len(seen) // 2]
+    learn: dict[tuple[str, int], list[float]] = defaultdict(lambda: [0, 0.0])   # n, landed - priced
+    for ko, k, j, p, y in seen:
+        if ko < cut:
+            c = learn[(k, j)]
+            c[0] += 1
+            c[1] += y - p
+    gain: dict[str, list[float]] = defaultdict(lambda: [0, 0.0])
+    for ko, k, j, p, y in seen:
+        if ko < cut:
+            continue
+        n, d = learn.get((k, j), (0, 0.0))
+        q = min(max(p + (d / n) * (n / (n + LEAN_SHRINK)) if n else p, 1e-6), 1 - 1e-6)
+        p = min(max(p, 1e-6), 1 - 1e-6)
+        g = gain[k]
+        g[0] += 1
+        g[1] += (-math.log(p if y else 1 - p)) - (-math.log(q if y else 1 - q))
+    return {k: (s > 0, s / n) for k, (n, s) in gain.items() if n}
+
+
 def export_insights(data_dir: str) -> dict:
     with open(os.path.join(data_dir, "results.csv"), newline="", encoding="utf-8") as fh:
         results = list(csv.DictReader(fh))
@@ -61,6 +89,7 @@ def export_insights(data_dir: str) -> dict:
     sp_ll: list[tuple[float, float, int]] = []   # (SportyBet prob, our market chance, landed)
     bands: dict[int, list[tuple[float, float, int]]] = defaultdict(list)   # (odds, market chance, won)
     lean: dict[tuple[str, int], list[float]] = defaultdict(lambda: [0, 0, 0.0, 0.0])  # n, landed, priced, variance
+    seen: list[tuple[str, str, int, float, int]] = []   # (kickoff, market, band, chance, landed) for the held-out check
     matches = 0
     for e, s in snaps.items():
         r = by_id.get(e)
@@ -86,8 +115,10 @@ def export_insights(data_dir: str) -> dict:
                 c[1] += int(y)
                 c[2] += fair[k]
                 c[3] += fair[k] * (1 - fair[k])
+                seen.append((s["kickoff"], k, CHANCE_BANDS.index(next(b for b in CHANCE_BANDS if b[0] <= fair[k] < b[1])), fair[k], int(y)))
                 if k in prob:
                     sp_ll.append((prob[k], fair[k], int(y)))
+    held = _held_out(seen)
     band_rows = []
     for i, (lo, hi) in enumerate(BANDS):
         xs = bands.get(i, [])
@@ -122,8 +153,11 @@ def export_insights(data_dir: str) -> dict:
         "sportybet_prob": _compare(sp_ll),
         # Each market at three chance levels: how often it landed against what its
         # (de-vigged) price said. Our picks leans toward selections whose market has
-        # landed above its price at that level, and away from those below it.
+        # landed above its price at that level, and away from those below it, but only
+        # for markets where that lean, learned on the earlier half of the days, made
+        # the later half more accurate (`held`, with the log-loss gain per selection).
         "lean": [{"market": k, "lo": CHANCE_BANDS[j][0], "hi": CHANCE_BANDS[j][1], "n": int(n), "landed": int(l),
-                  "priced": pr, "z": (l - pr) / var ** 0.5 if var > 0 else 0.0}
+                  "priced": pr, "z": (l - pr) / var ** 0.5 if var > 0 else 0.0,
+                  "held": held.get(k, (False, 0.0))[0], "held_gain": held.get(k, (False, 0.0))[1]}
                  for (k, j), (n, l, pr, var) in sorted(lean.items()) if n >= 100],
     }

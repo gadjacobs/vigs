@@ -82,6 +82,7 @@ class Switch(unittest.TestCase):
         e = out["markets"]["FH_O05"]
         self.assertTrue(e["active"], e["reason"])
         self.assertLess(e["test"]["blend"], e["test"]["market"])
+        self.assertLessEqual(e["test"]["gain_q"], bl.GAIN_FDR)   # a real gain clears the false-discovery check
         p, lo, hi, src = bl.estimate(out, "FH_O05", 0.8, 0.6, [0.58, 0.6, 0.62] * 7)
         self.assertEqual(src, "blend")
         self.assertTrue(lo <= p <= hi)
@@ -129,3 +130,19 @@ class PointInTime(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LeanHeldOut(unittest.TestCase):
+    def test_keeps_a_lean_only_when_it_holds_on_later_days(self):
+        from vigs.insights import _held_out
+        rng = random.Random(7)
+        seen = []
+        for i in range(40000):
+            ko = f"2026-10-{1 + i // 4000:02d}T00:00:{i % 60:02d}Z"
+            # "U35" really lands 4 points above its 0.90 price; "O15" lands as priced.
+            seen.append((ko, "U35", 2, 0.90, int(rng.random() < 0.94)))
+            seen.append((ko, "O15", 1, 0.70, int(rng.random() < 0.70)))
+        held = _held_out(seen)
+        self.assertTrue(held["U35"][0])
+        self.assertGreater(held["U35"][1], 0)
+        self.assertLess(abs(held["O15"][1]), 5e-4)

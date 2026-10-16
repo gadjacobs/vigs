@@ -10,7 +10,9 @@ export type Insights = {
   lean?: LeanRow[];
 };
 /** One market at one chance level: how often it landed against its de-vigged price. */
-export type LeanRow = { market: string; lo: number; hi: number; n: number; landed: number; priced: number; z: number };
+// held: the lean, learned on the earlier half of the days, made the later half more
+// accurate for this market (absent in older files: treated as held).
+export type LeanRow = { market: string; lo: number; hi: number; n: number; landed: number; priced: number; z: number; held?: boolean; held_gain?: number };
 
 export const INSIGHTS_URL =
   process.env.INSIGHTS_URL ?? "https://raw.githubusercontent.com/gadjacobs/vigs/data/insights.json";

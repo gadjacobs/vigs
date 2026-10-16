@@ -4,6 +4,14 @@
 # settle earlier ones, so every list the method produces is scored.
 # Results come from the watcher running alongside (every 4 minutes, 2 hours back),
 # and collect.sh fills the last 6 hours when a job starts.
+# Results history: extend the archive (archive/results-YYYY-MM.csv) back a year, in
+# the background at one request every 2 s, resuming from the oldest result held.
+# One at a time; the regular saves commit whatever it has written.
+if ! { [ -f /tmp/vigs-backfill.pid ] && kill -0 "$(cat /tmp/vigs-backfill.pid)" 2>/dev/null; }; then
+  nohup python -m vigs fetch backfill --data "$DATA" --days 365 --delay 2.0 >> /tmp/vigs-backfill.log 2>&1 &
+  echo $! > /tmp/vigs-backfill.pid
+fi
+tail -n 1 /tmp/vigs-backfill.log 2>/dev/null | sed 's/^/backfill: /' || true
 python -m vigs export-model --data "$DATA" --out "$DATA/model.json" || true
 # Past 40 MB the ledger file is sealed, unchanged, as ledger.NNN.jsonl and the
 # hash chain carries on in a fresh ledger.jsonl (git hosts refuse files over 100 MB).

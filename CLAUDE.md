@@ -28,7 +28,11 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 
 ## Data
 - Source: SportyBet's public factsCenter API for vFootball (`docs/feed-schema.md`).
-  Results back a year, no odds; odds only for upcoming rounds, captured live.
+  Results back a year, no odds; odds only for upcoming rounds, captured live. `results.csv`
+  holds results from 9 Sep 2026; `fetch backfill` (run in the background by `publish.sh`)
+  extends `archive/results-YYYY-MM.csv` back a year. Each snapshot also stores `extra`
+  prices (FH 1X2/DC/handicap, handicap, correct score, 1X2&GG, team goals, odd/even) from
+  16 Oct 2026; nothing prices picks from them yet.
 - `vigs/sportybet.py` fetches (1.2 s between requests, browser User-Agent) and
   `build` joins results to the last odds snapshot taken **before** kickoff.
 - The `data` branch is written only by `.github/workflows/collect.yml`. Never
@@ -41,7 +45,7 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   Python output. Change both together.
 - Blend (`vigs/blend.py`, `web/lib/blend.ts`): market price + model, per market,
   on only after 2,000 settled matches with odds and a held-out win (≥ 500 rows) over both the
-  model and the market price. Otherwise estimates use `guarded` (95/5 toward the market, range
+  model and the market price, by more than luck (per-match gain, BH 10% across markets). Otherwise estimates use `guarded` (95/5 toward the market, range
   spanning both). Never train on a match with a model that saw its day's results.
 - It reads `model.json`, `blend.json` and `record.json` from the `data` branch and odds live
   from SportyBet; it never places bets. Record maths stays in `vigs/record.py`. Booking codes are created with the `OperId: 2` header.
@@ -50,7 +54,7 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 - Cooked slips (`web/lib/slates.ts`, `kitchen.ts`): cooked and booked once per published
   round (by the tick or the first viewer), stored as `slates`; each code logged once as
   user "vig" (Top 50 templates too, as `template:top`/`template:trusted`). Steady and Tight
-  games pick markets from `lean` (`web/lib/lean.ts`), falling back to fixed under lists. Never show share-endpoint odds after kickoff (they are in-play prices).
+  games pick markets from `lean` (`web/lib/lean.ts`; only markets whose lean `held` on later days), falling back to fixed under lists. Never show share-endpoint odds after kickoff (they are in-play prices).
 - Google sign-in (`/api/auth/google`): `GOOGLE_ACCOUNTS` allowlist maps emails to accounts.
 - Our picks (`web/lib/ourpicks.ts`, `/picks`): templates top/trusted (Top 50, leaning on
   `insights.json` `lean`, per-market landed vs priced by chance level), sets safe/odds/bold/draws; `vigs ourpicks`

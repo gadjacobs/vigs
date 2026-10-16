@@ -28,6 +28,12 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 # 1 = 1X2, 18 = total goals, 68 = first-half total, 29 = both teams score
 MARKET_IDS = "1,18,68,29,10,19,20"  # + double chance, home and away team goals (from 11 Oct 2026)
+# Collected from 16 Oct 2026 into each snapshot's "extra" (not "odds", so nothing that
+# prices picks changes): first-half 1X2, double chance and handicap, handicap, correct
+# score, 1X2 & both teams score, exact team goals, odd/even.
+EXTRA_IDS = "60,63,65,14,45,35,23,24,26"
+EXTRA_PREFIX = {"60": "FH_", "63": "FH_DC_", "65": "FH_HC", "14": "HC", "45": "CS_", "35": "R_",
+                "23": "HG_", "24": "AG_", "26": "OE_"}
 PAGE = 100
 RESULT_COLS = ["event_id", "league", "kickoff", "home", "away", "hg", "ag", "ht_hg", "ht_ag"]
 
@@ -93,7 +99,7 @@ class Client:
         out: list[dict] = []
         page = 1
         while True:
-            data = self.get("pcUpcomingEvents", sportId=SPORT, marketId=MARKET_IDS,
+            data = self.get("pcUpcomingEvents", sportId=SPORT, marketId=f"{MARKET_IDS},{EXTRA_IDS}",
                             pageSize=PAGE, pageNum=page, option=1)
             events = [e for t in data.get("tournaments") or [] for e in t.get("events", [])]
             out += events
@@ -164,6 +170,38 @@ def parse_odds(e: dict, field: str = "odds") -> dict[str, float]:
     return out
 
 
+def _short(desc: str) -> str:
+    """'Home (0:1)' -> '1', 'Draw & Yes' -> 'XY', 'Home or Draw' -> '1X', '3+' -> '3+'."""
+    d = desc.split(" (")[0]
+    for a, b in (("Home", "1"), ("Draw", "X"), ("Away", "2"), (" or ", ""), (" & ", ""), ("Yes", "Y"), ("No", "N")):
+        d = d.replace(a, b)
+    return d.replace(" ", "")
+
+
+def parse_extra(e: dict) -> dict[str, float]:
+    """The extra markets (EXTRA_IDS), every active outcome priced above 1.0:
+    FH_1/FH_X/FH_2, FH_DC_1X.., HC01_1 (handicap 0:1, home), FH_HC01_X, CS_2:1,
+    R_1Y (home & both score), HG_0..HG_3+, AG_.., OE_Odd/OE_Even."""
+    out: dict[str, float] = {}
+    for m in e.get("markets") or []:
+        pre = EXTRA_PREFIX.get(str(m.get("id")))
+        if pre is None or str(m.get("status", 0)) != "0":
+            continue
+        spec = m.get("specifier") or ""
+        if pre.endswith("HC"):
+            if not spec.startswith("hcp="):
+                continue
+            pre = pre + spec[4:].replace(":", "") + "_"
+        for o in m.get("outcomes") or []:
+            try:
+                odds = float(o["odds"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if o.get("isActive") and odds > 1.0:
+                out[pre + (o["desc"] if pre in ("CS_", "OE_") else _short(o["desc"]))] = odds
+    return out
+
+
 def snapshot(e: dict, captured_ms: int) -> dict | None:
     odds = parse_odds(e)
     if not {"1", "X", "2"} <= odds.keys():
@@ -173,7 +211,8 @@ def snapshot(e: dict, captured_ms: int) -> dict | None:
             "league": e["sport"]["category"]["name"], "home": e["homeTeamName"],
             "away": e["awayTeamName"], "odds": odds,
             # SportyBet's own probabilities, captured from 10 Oct 2026 for evaluation.
-            "prob": parse_odds(e, "probability")}
+            "prob": parse_odds(e, "probability"),
+            "extra": parse_extra(e)}
 
 
 # ---------------------------------------------------------------- storage --
@@ -216,6 +255,49 @@ def fetch_results(client: Client, path: str, start_ms: int, end_ms: int,
     return added
 
 
+def archive_path(data_dir: str, kickoff_iso: str) -> str:
+    """Older results, one file per month, so no file outgrows git hosting."""
+    return os.path.join(data_dir, "archive", f"results-{kickoff_iso[:7]}.csv")
+
+
+def earliest_result(data_dir: str) -> str | None:
+    """Kickoff of the oldest result held, in results.csv or the archive."""
+    first = None
+    for path in [os.path.join(data_dir, "results.csv")] + glob.glob(os.path.join(data_dir, "archive", "results-*.csv")):
+        if not os.path.exists(path):
+            continue
+        with open(path, newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                if first is None or r["kickoff"] < first:
+                    first = r["kickoff"]
+    return first
+
+
+def backfill_results(client: Client, data_dir: str, days_back: float, window_ms: int = 6 * 3600 * 1000,
+                     log=print) -> int:
+    """Extend the archive backwards from the oldest result held until `days_back`
+    days ago, newest window first, writing after every window so it can stop and
+    resume. Results only: SportyBet keeps no past odds."""
+    first = earliest_result(data_dir)
+    end = int(datetime.fromisoformat(first.replace("Z", "+00:00")).timestamp() * 1000) if first else int(time.time() * 1000)
+    stop = int(time.time() * 1000 - days_back * 86400000)
+    added = 0
+    while end > stop:
+        start = max(stop, end - window_ms)
+        rows = [r for r in (parse_result(e) for e in client.results(start, end - 1)) if r]
+        by_month: dict[str, list[dict]] = {}
+        for r in rows:
+            by_month.setdefault(archive_path(data_dir, r["kickoff"]), []).append(r)
+        for path, rs in by_month.items():
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            append_results(path, rs)
+        added += len(rows)
+        if int(_iso(start)[11:13]) == 0:
+            log(f"  backfill {_iso(start)[:10]}: total {added} results, {client.requests} requests")
+        end = start
+    return added
+
+
 def odds_path(data_dir: str, ms: int) -> str:
     """Odds snapshots are kept in one file per UTC day."""
     return os.path.join(data_dir, "odds", _iso(ms)[:10] + ".jsonl")
@@ -228,8 +310,8 @@ def capture_odds(client: Client, data_dir: str, last: dict[str, dict] | None = N
     snaps = []
     for e in client.upcoming():
         s = snapshot(e, now)
-        if s and last.get(s["event_id"]) != s["odds"]:
-            last[s["event_id"]] = s["odds"]
+        if s and last.get(s["event_id"]) != (s["odds"], s["extra"]):
+            last[s["event_id"]] = (s["odds"], s["extra"])
             snaps.append(s)
     path = odds_path(data_dir, now)
     os.makedirs(os.path.dirname(path), exist_ok=True)

@@ -339,6 +339,10 @@ def cmd_fetch(a) -> None:
         added = sb.fetch_results(client, os.path.join(a.data, "results.csv"),
                                  now - int(a.days * 86400000), now)
         print(f"added {added} results in {client.requests} requests")
+    elif a.what == "backfill":
+        added = sb.backfill_results(client, a.data, a.days, log=lambda m: print(m, flush=True))
+        print(f"backfill: added {added} older results in {client.requests} requests; "
+              f"oldest now {sb.earliest_result(a.data)}", flush=True)
     elif a.what == "odds":
         n = sb.capture_odds(client, a.data)
         print(f"captured odds for {n} upcoming matches")
@@ -652,7 +656,7 @@ def main(argv: list[str] | None = None) -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("fetch", help="pull SportyBet vFootball results or odds")
-    p.add_argument("what", choices=("results", "odds", "watch"))
+    p.add_argument("what", choices=("results", "odds", "watch", "backfill"))
     p.add_argument("--data", default="data")
     p.add_argument("--days", type=float, default=7, help="results: how far back")
     p.add_argument("--minutes", type=float, default=60, help="watch: how long")
