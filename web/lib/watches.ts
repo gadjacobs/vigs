@@ -1,4 +1,5 @@
 import { loadBlend } from "./blend";
+import { applyFh } from "./fhusual";
 import { atLeast } from "./flex";
 import { loadInsights } from "./insights";
 import { MARKET_LABELS } from "./markets";
@@ -68,7 +69,8 @@ async function context(now: number): Promise<Ctx> {
   const [model, fixtures, blend, insights] = await Promise.all([loadModel(), upcoming(), loadBlend(), loadInsights()]);
   return {
     lean: insights,
-    cands: async (hours, q) => candidates(model, fixtures, { ...(q ?? { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS) }), hours, now }, blend).candidates,
+    cands: async (hours, q) => applyFh(candidates(model, fixtures, { ...(q ?? { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS) }), hours, now }, blend).candidates,
+      fixtures, insights?.fh_usual, Boolean(q?.fhLikelier)),
   };
 }
 

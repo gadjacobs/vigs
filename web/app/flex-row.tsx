@@ -1,4 +1,4 @@
-import { atLeast } from "../lib/flex";
+import { atLeast, flexQuote } from "../lib/flex";
 
 // SportyBet's Flex still pays (a reduced amount) when a leg or two miss. This
 // shows the chance of each Flex level next to "all legs land".
@@ -8,9 +8,14 @@ const fmt = (p: number) => (p >= 1 ? "✓" : p <= 0 ? "✗" : p >= 0.995 ? ">99%
 /** Misses Flex can cover for a slip of n legs: up to 2, or 3 from 10 legs. */
 export const flexLevels = (n: number) => [0, 1, 2, 3].filter((m) => (m < 3 || n >= 10) && n - m >= 2);
 
-export function FlexRow({ ps, note }: { ps: number[]; note?: string }) {
+const odds = (x: number) => (x < 100 ? x.toFixed(2) : Math.round(x).toLocaleString("en-NG"));
+
+/** `market`: each leg's market chance, to show what SportyBet's Flex pays at each
+ * level (its odds are its set payback over the chance; see lib/flex.ts). */
+export function FlexRow({ ps, note, market }: { ps: number[]; note?: string; market?: number[] }) {
   const n = ps.length;
   if (n < 3) return null;
+  const priced = market && market.length === n && market.every((p) => p > 0 && p < 1);
   return (
     <div className="flexrow">
       <span className="flexlabel">With Flex</span>
@@ -19,6 +24,10 @@ export function FlexRow({ ps, note }: { ps: number[]; note?: string }) {
           <li key={m} className={m === 0 ? "all" : ""}>
             <span>{m === 0 ? `All ${n}` : `${n - m} of ${n}`}</span>
             <b className="num">{fmt(atLeast(ps, n - m))}</b>
+            {m > 0 && priced && (() => {
+              const q = flexQuote(market!, n - m);
+              return q ? <small className="num flexpays" title="Flex odds as SportyBet works them out: about 0.65 over the chance">pays ≈ {odds(q.odds)}</small> : null;
+            })()}
           </li>
         ))}
       </ul>

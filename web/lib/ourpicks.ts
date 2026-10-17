@@ -1,5 +1,6 @@
 import type { LeanRow } from "./insights";
 import { leanOf } from "./lean";
+import { flexQuote } from "./flex";
 export { leanOf } from "./lean";
 import type { Pick } from "./picks";
 import { confidence } from "./plain";
@@ -23,10 +24,11 @@ import { toTarget } from "./slip";
 // - trusted: the same, only where the bookmaker's price and the model agree
 //   closely (High confidence) and the market's record at that level is at or
 //   above its price, and a chance of 60% or more.
-export type SetId = "top" | "trusted" | "best" | "safe" | "odds" | "bold" | "draws";
+export type SetId = "top" | "trusted" | "flex" | "best" | "safe" | "odds" | "bold" | "draws";
 export const SETS: { id: SetId; label: string }[] = [
   { id: "top", label: "Most likely" },
   { id: "trusted", label: "Most confident" },
+  { id: "flex", label: "Flex big odds" },
   { id: "best", label: "Best per match" },
   { id: "safe", label: "Safe ~90%" },
   { id: "odds", label: "Target odds" },
@@ -41,6 +43,9 @@ export const BEST_COUNTS = [5, 10, 20, 30, 50] as const;
 export const TOP_COUNTS = [10, 20, 30, 40, 50] as const;
 export const FLOORS = [1.05, 1.1, 1.2, 1.3] as const; // lowest price a leg may have
 export const FLOOR_DEFAULT = 1.1;
+export const FLEX_TARGETS = [50, 100, 500, 1000] as const; // Flex odds to reach
+export const FLEX_MISSES = [1, 2, 3] as const;
+export const FLEX_FLOORS = [1.1, 1.2, 1.3, 1.5, 1.8] as const;
 const TRUSTED_MIN = 0.6; // "most confident" legs are likely ones too; the slip takes as many as qualify
 
 /** One leg per match, the likeliest after the lean, best first. */
@@ -79,7 +84,21 @@ function onePerMatch(ps: Pick[], key: (p: Pick) => number): Pick[] {
 
 export type Built = { pool: Pick[]; slip: Pick[]; flex: boolean };
 
-export function buildSet(id: SetId, cands: Pick[], o: { bar: number; target: number; n: number; maxSlip: number; floor?: number; lean?: LeanRow[] }): Built {
+export function buildSet(id: SetId, cands: Pick[], o: { bar: number; target: number; n: number; maxSlip: number; floor?: number; lean?: LeanRow[]; misses?: number }): Built {
+  if (id === "flex") {
+    // The likeliest leg per match at the price floor, most likely first, added
+    // until the Flex odds with `misses` allowed reach the target. Flex returns
+    // about the same per ₦1 whichever legs reach it (lib/flex.ts), so the floor
+    // only sets how many legs that takes.
+    const ranked = topPicks(cands, o.lean, o.floor ?? FLOOR_DEFAULT, false);
+    const misses = o.misses ?? 1;
+    let slip = ranked.slice(0, Math.min(ranked.length, o.maxSlip));
+    for (let k = misses + 2; k <= Math.min(ranked.length, o.maxSlip); k++) {
+      const q = flexQuote(ranked.slice(0, k).map((p) => p.marketChance), k - misses);
+      if (q && q.odds >= o.target) { slip = ranked.slice(0, k); break; }
+    }
+    return { pool: ranked, slip, flex: true };
+  }
   if (id === "top" || id === "trusted") {
     const legs = topPicks(cands, o.lean, o.floor ?? FLOOR_DEFAULT, id === "trusted");
     // Each match's six likeliest selections stay available, so legs can be switched or added.

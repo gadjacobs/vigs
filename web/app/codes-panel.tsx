@@ -561,7 +561,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 const note = lostN === 0 ? undefined
                   : decided ? `${wonN} of ${legs.length} landed: played with Flex at ${wonN} of ${legs.length} or lower, this slip pays a reduced amount.`
                   : `${lostN} leg${lostN > 1 ? "s" : ""} lost. Played with Flex, this slip can still pay.`;
-                return <FlexRow ps={ps} note={note} />;
+                // Prematch prices stand in for SportyBet's chances (its cut is about 4%).
+                return <FlexRow ps={ps} note={note} market={t.legs.map((l) => (l.odds ? 1 / (l.odds * 1.04) : 0))} />;
               })()}
               </>)}
               <div className="codeactions">

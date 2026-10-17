@@ -5,6 +5,7 @@ import { ScrollOnBuild } from "./scroll-on-build";
 import { lagos } from "./pick-row";
 import { SlipBuilder } from "./slip-builder";
 import { loadBlend } from "@/lib/blend";
+import { applyFh } from "@/lib/fhusual";
 import { loadInsights } from "@/lib/insights";
 import { DEFAULT_STAKE, myProfile, needsTour } from "@/lib/profile";
 import { viewOf } from "@/lib/view";
@@ -46,6 +47,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
   }
   const [blend, insights] = await Promise.all([loadBlend(), loadInsights()]);
   const r = model ? candidates(model, fixtures, { ...q, now }, blend) : null;
+  if (r) r.candidates = applyFh(r.candidates, fixtures, insights?.fh_usual, q.fhLikelier);
   const blended = q.markets.filter((m) => blend?.markets[m]?.active).map((m) => MARKET_LABELS[m]);
 
   return (

@@ -49,3 +49,46 @@ describe("flex-friendly trim", async () => {
     expect(flexFriendly([0.1, 0.1, 0.1, 0.1, 0.1, 0.1]).length).toBe(4);
   });
 });
+
+import { flexQuote, FLEX_PAYBACK } from "../lib/flex";
+import { buildSet } from "../lib/ourpicks";
+import { applyFh, fhLikelier, fhShifts } from "../lib/fhusual";
+
+describe("SportyBet Flex odds", () => {
+  it("are the set payback over the chance that enough legs land", () => {
+    // 4 legs at about 2.1 (20 odds) with one miss allowed: 3 of 4 land ~25%, pays ~2.6.
+    const q = flexQuote([0.457, 0.457, 0.457, 0.457], 3)!;
+    expect(q.chance).toBeCloseTo(atLeast([0.457, 0.457, 0.457, 0.457], 3), 12);
+    expect(q.odds).toBeCloseTo(FLEX_PAYBACK / q.chance, 12);
+    expect(q.odds).toBeGreaterThan(2.4);
+    expect(q.odds).toBeLessThan(2.8);
+    expect(flexQuote([0.5, 0.5], 3)).toBeNull();
+  });
+
+  it("the Flex set adds likeliest legs until the target is reached", () => {
+    const cands = Array.from({ length: 50 }, (_, i) => ({
+      id: `e${i}|U35`, eventId: `e${i}`, market: "U35", odds: 1.35, marketChance: 0.71, estimate: 0.71, lo: 0.68, hi: 0.74,
+      kickoff: i, grade: "Rough", league: "England", home: "A", away: "B",
+    })) as never[];
+    const b = buildSet("flex", cands, { bar: 0, target: 100, n: 0, maxSlip: 50, floor: 1.3, misses: 1 });
+    const k = b.slip.length;
+    expect(flexQuote(Array(k).fill(0.71), k - 1)!.odds).toBeGreaterThanOrEqual(100);
+    expect(flexQuote(Array(k - 1).fill(0.71), k - 2)!.odds).toBeLessThan(100);
+  });
+});
+
+describe("first half against its usual", () => {
+  const fx = (id: string, o: number, u: number) => ({ eventId: id, league: "England", home: id, away: "X", kickoff: 0, odds: { FH_O05: o, FH_U05: u } });
+  const usual = { "England|a|X": 0.7, "England|b|X": 0.7 };
+  const fixtures = [fx("a", 1.2, 4.5), fx("b", 1.6, 2.3)] as never[];   // a: FH goal ~77%, b: ~57%
+  const pick = (id: string, market: string) => ({ eventId: id, market }) as never;
+  it("keeps first-half overs when goals are likelier than usual and unders when less likely", () => {
+    const s = fhShifts(fixtures, usual);
+    expect(fhLikelier(pick("a", "FH_O05"), s)).toBe(true);
+    expect(fhLikelier(pick("b", "FH_O05"), s)).toBe(false);
+    expect(fhLikelier(pick("b", "FH_U15"), s)).toBe(true);
+    expect(fhLikelier(pick("b", "O15"), s)).toBe(true);           // full-time legs pass
+    const kept = applyFh([{ eventId: "a", market: "FH_O05" }, { eventId: "b", market: "FH_O05" }] as never[], fixtures, usual, true);
+    expect(kept.map((p: { eventId: string }) => p.eventId)).toEqual(["a"]);
+  });
+});

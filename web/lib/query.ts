@@ -16,12 +16,13 @@ export type Query = {
   minGrade: "Rough" | "Lean";
   minConf: "Low" | "Medium" | "High"; // Low = any
   minChance: number; // per leg, 0 = any
+  fhLikelier: boolean; // first-half legs only when likelier than the fixture's usual
 };
 
 export const DEFAULT_QUERY: Query = {
   markets: ["FH_O05", "O15"], hours: 2, minOdds: 1.01, maxOdds: 100, mode: "target", target: 5, tol: 0.1,
   maxLegs: 0, count: 10, sort: "likely", minGrade: "Rough",
-  minConf: "Low", minChance: 0,
+  minConf: "Low", minChance: 0, fhLikelier: false,
 };
 
 type Params = Record<string, string | string[] | undefined>;
@@ -49,6 +50,7 @@ export function parseQuery(sp: Params): Query {
     minGrade: one(sp.grade) === "lean" ? "Lean" : "Rough",
     minConf: one(sp.conf) === "high" ? "High" : one(sp.conf) === "medium" ? "Medium" : "Low",
     minChance: num(one(sp.chance), 0, 0, 95) / 100,
+    fhLikelier: one(sp.fh) === "likelier",
   };
 }
 
@@ -70,5 +72,6 @@ export function queryString(q: Query): string {
   if (q.minGrade === "Lean") p.set("grade", "lean");
   if (q.minConf !== "Low") p.set("conf", q.minConf.toLowerCase());
   if (q.minChance > 0) p.set("chance", String(Math.round(q.minChance * 100)));
+  if (q.fhLikelier) p.set("fh", "likelier");
   return p.toString();
 }

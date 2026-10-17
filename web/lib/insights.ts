@@ -8,6 +8,7 @@ export type Insights = {
   sportybet_prob?: { n: number; sportybet: number; market: number } | null;
   leagues: { league: string; n: number; goals: number; home: number; draw: number; away: number; nil_nil: number; btts: number; first_half_share: number }[];
   lean?: LeanRow[];
+  fh_usual?: Record<string, number>; // "league|home|away" → usual first-half goal chance
 };
 /** One market at one chance level: how often it landed against its de-vigged price. */
 // held: the lean, learned on the earlier half of the days, made the later half more

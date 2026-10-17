@@ -26,6 +26,7 @@ export type Pick = {
   grade: Grade;
   why: string;
   source: "guarded" | "blend";
+  fh?: { now: number; usual: number }; // first half: goal chance now vs the fixture's usual (lib/fhusual.ts)
 };
 
 /** Without odds history there is no walk-forward test, so nothing can be Solid. */

@@ -35,6 +35,17 @@ function LeanMark({ p, lean }: { p: Pick; lean?: LeanRow[] }) {
 }
 
 /** A plain warning when a leg's market has landed well below its price in our data. */
+/** First-half legs: tonight's first-half goal chance against the fixture's usual. */
+function FhMark({ p }: { p: Pick }) {
+  if (!p.fh) return null;
+  const d = Math.round((p.fh.now - p.fh.usual) * 100);
+  if (Math.abs(d) < 2) return <span className="fhmark">1st half as usual</span>;
+  const goals = d > 0;
+  const good = p.market.startsWith("FH_O") === goals;
+  const said = `First-half goal ${Math.round(p.fh.now * 100)}% tonight against ${Math.round(p.fh.usual * 100)}% usually for this fixture`;
+  return <span className={`fhmark ${good ? "up" : "down"}`} title={said}>{goals ? "▲" : "▼"} 1st-half goals {goals ? "likelier" : "less likely"} than usual ({d > 0 ? "+" : ""}{d})<span className="sr-only"> {said}</span></span>;
+}
+
 function LeanWarn({ p, lean }: { p: Pick; lean?: LeanRow[] }) {
   const { z, row } = leanOf(lean, p.market, p.marketChance);
   if (z === null || !row || z > -2) return null;
@@ -58,7 +69,7 @@ export function PickRow({ p, actions, now, view = "detailed", lean }: { p: Pick;
         <p className="plain">
           <strong className="num chance">{chance(p.estimate)}</strong>
           <span>chance it lands, {oneIn(p.estimate)}.</span>
-          <LeanMark p={p} lean={lean} />
+          <LeanMark p={p} lean={lean} /> <FhMark p={p} />
         </p>
         <LeanWarn p={p} lean={lean} />
         {p.odds >= 5 && <p className="why longshot">Long shot: prices this big have paid back far less than they cost.</p>}
@@ -83,7 +94,7 @@ export function PickRow({ p, actions, now, view = "detailed", lean }: { p: Pick;
         <div><dt>Edge per ₦1,000</dt><dd>{naira(p.edge)}</dd></div>
       </dl>
       <Bar p={p} />
-      <p className="why">{p.grade}: {p.why}. <LeanMark p={p} lean={lean} /></p>
+      <p className="why">{p.grade}: {p.why}. <LeanMark p={p} lean={lean} /> <FhMark p={p} /></p>
       <LeanWarn p={p} lean={lean} />
       {p.odds >= 5 && <p className="why longshot">Long shot: in Vig&apos;s data, prices over 5 have returned far less than they cost (see Record).</p>}
       {actions && <div className="row leg-actions">{actions}</div>}

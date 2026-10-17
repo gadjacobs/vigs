@@ -143,6 +143,12 @@ export function Filters({ initial, saved: savedInitial = null }: { initial: Quer
             {[50, 60, 70, 75, 80, 85].map((c) => <option key={c} value={c}>{c}% or more</option>)}
           </select>
         </label>
+        <label className="field">First half
+          <select value={q.fhLikelier ? "likelier" : "any"} onChange={(e) => set("fhLikelier", e.target.value === "likelier")}>
+            <option value="any">Any</option>
+            <option value="likelier">Only when likelier than usual</option>
+          </select>
+        </label>
       </div>
 
       <div className="markets-picker">

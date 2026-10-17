@@ -66,7 +66,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   (1/0 once the score decides it); legs to play use the upcoming list, else the match's own prematch
   feed (the list drops a round ~9 min before kickoff). The tick saves each round's prematch prices
   (`lib/prematch.ts`, `pre:{kickoff}`, 2 days) so codes first opened after kickoff still get prematch odds.
-  Codes cards: Full or Compact (per device), legs in kickoff order. Hedge only does arithmetic and books a code; never bets.
+  Codes cards: Full or Compact (per device), legs in kickoff order. Flex odds follow SportyBet's own rule
+  (`lib/flex.ts` `flexQuote`: payback 0.65 for virtual games ÷ chance at least k land); Our picks
+  "Flex big odds" grows a slip to a Flex odds target. First half vs usual (`lib/fhusual.ts`,
+  insights `fh_usual`): marker on FH legs and the Tonight filter `fh=likelier`. Hedge only does arithmetic and books a code; never bets.
   The tick watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
   One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no
   result is sent > 45 min after a code's last kickoff. Collector cron is every 30 min (runs chain).

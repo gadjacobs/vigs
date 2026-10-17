@@ -1012,3 +1012,7 @@ ol.legs .lasttag { display: inline-block; margin-right: 6px; padding: 0 6px; bor
   font-size: 11px; font-weight: 600; line-height: 18px; text-transform: uppercase; letter-spacing: .02em; }
 .codecard.compact .codeid { font-size: 22px; }
 .watchwarn { display: block; color: var(--house); }
+.fhmark { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--ink-muted); background: var(--paper-sunk); }
+.fhmark.up { color: var(--fair); background: color-mix(in srgb, var(--fair) 12%, transparent); }
+.fhmark.down { color: var(--house); background: var(--house-wash); }
+.flexrow .flexpays { display: block; font-size: 11px; color: var(--ink-muted); white-space: nowrap; }

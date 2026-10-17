@@ -8,7 +8,9 @@ import { SlipBuilder } from "../slip-builder";
 import { loadBlend } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
-import { BEST_COUNTS, buildSet, COUNTS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
+import { BEST_COUNTS, buildSet, COUNTS, FLEX_FLOORS, FLEX_MISSES, FLEX_TARGETS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
+import { applyFh } from "@/lib/fhusual";
+import { FLEX_PAYBACK, flexQuote } from "@/lib/flex";
 import { loadInsights } from "@/lib/insights";
 import { candidates } from "@/lib/picks";
 import { chance, oneIn } from "@/lib/plain";
@@ -21,10 +23,11 @@ import { SlateCard } from "./slate-card";
 export const dynamic = "force-dynamic";
 
 const MAX_ON_SLIP = MAX_LEGS;
-type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string; floor?: string };
+type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string; floor?: string; miss?: string };
 
 const ABOUT: Record<SetId, string> = {
   top: "The likeliest selection in each match, at the price floor or above, best first. Ties lean toward markets that have landed above their price at that chance level in our data (unders, lately) and away from those below it. Edit freely; Flex shows the chance with a miss or two.",
+  flex: "A long slip played with Flex, built to reach the Flex odds you pick: the likeliest leg per match at your lowest price, added until the odds with your misses allowed reach the target. SportyBet sets Flex odds so they return about ₦0.65 per ₦1 on vFootball whichever legs you pick (a straight slip returns about ₦0.96 per leg: ₦0.66 at 10 legs, ₦0.44 at 20), so Flex only beats a straight slip on long slips, and a higher lowest price just means fewer legs.",
   trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely and whose market has landed at or above its price at that chance level in our data. 20 legs to start; up to 50 if that many qualify.",
   best: "One leg per match: its likeliest selection at odds of 1.2 or more, by the bookmaker's own chance, with no market filling more than 40% of the slip, so you get a spread of markets.",
   safe: "For every published match, the best-paying selection with a chance at or above the bar.",
@@ -58,16 +61,18 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   }
   const set: SetId = SETS.find((x) => x.id === sp.set)?.id ?? "top";
   const top = set === "top" || set === "trusted";
-  const floor = FLOORS.find((f) => String(f) === sp.floor) ?? FLOOR_DEFAULT;
+  const flexSet = set === "flex";
+  const floor = flexSet ? FLEX_FLOORS.find((f) => String(f) === sp.floor) ?? 1.3 : FLOORS.find((f) => String(f) === sp.floor) ?? FLOOR_DEFAULT;
+  const miss = FLEX_MISSES.find((m) => String(m) === sp.miss) ?? 1;
   const tab = sp.tab === "build" || (sp.set && sp.tab !== "cooked") ? "build" : "cooked";
   const bar = OUR_BARS.find((b) => String(Math.round(b * 100)) === sp.bar) ?? OUR_DEFAULT;
-  const target = TARGETS.find((t) => String(t) === sp.odds) ?? 10;
+  const target = flexSet ? FLEX_TARGETS.find((t) => String(t) === sp.odds) ?? 100 : TARGETS.find((t) => String(t) === sp.odds) ?? 10;
   const n = top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? (set === "trusted" ? 20 : 50)
     : set === "best"
     ? BEST_COUNTS.find((c) => String(c) === sp.n) ?? 10
     : COUNTS.find((c) => String(c) === sp.n) ?? (set === "draws" ? 4 : 3);
   const link = (o: Partial<Record<keyof SP, string | number>>) =>
-    `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), odds: target, n, floor, ...o }).map(([k, v]) => [k, String(v)]))}`;
+    `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), odds: target, n, floor, miss, ...o }).map(([k, v]) => [k, String(v)]))}`;
 
   const { profile } = await myProfile();
   const view = viewOf(profile, (await cookies()).get("vig_view")?.value);
@@ -83,9 +88,12 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   }
   const blend = await loadBlend();
   const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 24, mode: "count", count: MAX_ON_SLIP, sort: "likely" };
-  const cands = model ? candidates(model, fixtures, { ...q, now }, blend).candidates : [];
-  const lean = (await loadInsights())?.lean;
-  const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP, floor, lean });
+  const insights = await loadInsights();
+  const cands = model ? applyFh(candidates(model, fixtures, { ...q, now }, blend).candidates, fixtures, insights?.fh_usual, false) : [];
+  const lean = insights?.lean;
+  const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP, floor, lean, misses: miss });
+  const fq = flexSet && built.slip.length > miss + 1 ? flexQuote(built.slip.map((p) => p.marketChance), built.slip.length - miss) : null;
+  const straightBack = built.slip.reduce((a, p) => a * p.odds * p.marketChance, 1);
   const all = built.slip.reduce((a, p) => a * p.estimate, 1);
   const odds = built.slip.reduce((a, p) => a * p.odds, 1);
   const last = built.slip.length ? Math.max(...built.slip.map((p) => p.kickoff)) : now;
@@ -131,6 +139,9 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       {set === "odds" && <Chips name="Total odds" value={target} options={TARGETS} label={(t) => String(t)} href={(t) => link({ odds: t })} />}
       {(set === "bold" || set === "draws") && <Chips name="Legs" value={n} options={COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
       {set === "best" && <Chips name="Legs" value={n} options={BEST_COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
+      {flexSet && <Chips name="Flex odds" value={target} options={FLEX_TARGETS} label={(t) => t.toLocaleString("en-NG")} href={(t) => link({ odds: t })} />}
+      {flexSet && <Chips name="Misses allowed" value={miss} options={FLEX_MISSES} label={(m) => String(m)} href={(m) => link({ miss: m })} />}
+      {flexSet && <Chips name="Lowest price" value={floor} options={FLEX_FLOORS} label={(f) => `${f.toFixed(2)}+`} href={(f) => link({ floor: f })} />}
       {top && <Chips name="Legs" value={n} options={TOP_COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
       {top && <Chips name="Lowest price" value={floor} options={FLOORS} label={(f) => `${f.toFixed(2)}+`} href={(f) => link({ floor: f })} />}
       {top && <p className="hint"><Link href={`/alerts?watch=template:${set}&legs=${n}#slips`}>Notify me</Link> when {n} legs qualify for this set.</p>}
@@ -142,7 +153,14 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
           {set === "safe" && built.pool.length > MAX_ON_SLIP ? ` The slip starts with the ${MAX_ON_SLIP} soonest; add the rest below.` : ""}
         </p>
       )}
-      {built.slip.length > 1 && (
+      {fq && (
+        <p className="note">
+          {built.slip.length} legs, Flex with {miss} miss{miss > 1 ? "es" : ""} allowed: pays about <strong className="num">{Math.round(fq.odds).toLocaleString("en-NG")}</strong> odds when {built.slip.length - miss} or more land, {chance(fq.chance)} of the time ({oneIn(fq.chance)}).
+          {fq.odds < target ? ` Even ${built.slip.length} legs don't reach ${target.toLocaleString("en-NG")}: raise the lowest price or allow fewer misses.` : ""}
+          {" "}In the long run Flex returns about ₦{FLEX_PAYBACK.toFixed(2)} per ₦1; the same legs straight would return about ₦{straightBack.toFixed(2)}.
+        </p>
+      )}
+      {built.slip.length > 1 && !flexSet && (
         <p className="note">
           {built.slip.length} legs at {odds.toFixed(2)}: all land {chance(all)} of the time ({oneIn(all)}).
           {set === "safe" ? " Each pick is likely, but every extra leg multiplies the risk; short slips or singles keep more of each pick's chance." : ""}

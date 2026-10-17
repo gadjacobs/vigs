@@ -32,7 +32,7 @@ export function SlateCard({ s }: { s: Slate }) {
         ))}
       </ol>
       </details>
-      <FlexRow ps={s.legs.map((p) => p.estimate)} />
+      <FlexRow ps={s.legs.map((p) => p.estimate)} market={s.legs.map((p) => p.marketChance)} />
       <div className="row slateactions">
         {s.code ? (
           <SlateActions code={s.code} legs={s.legs.length} odds={s.odds} last={s.last} style={s.style} />

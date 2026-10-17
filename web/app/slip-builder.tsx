@@ -137,7 +137,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
           <p className="returns">₦{stake.toLocaleString("en-NG")} returns <strong className="num">₦{Math.round(stake * s.odds).toLocaleString("en-NG")}</strong> if every leg lands.
             {view === "detailed" && <>{" "}On average about <strong className="num">₦{Math.round(stake * s.odds * s.market).toLocaleString("en-NG")}</strong> comes back, by the bookmaker&apos;s own chances; each leg costs its cut.</>}</p>
         )}
-        <FlexRow ps={legs.map((p) => p.estimate)} note="Flex pays a reduced amount when legs miss; set it in SportyBet before you place the slip." />
+        <FlexRow ps={legs.map((p) => p.estimate)} market={legs.map((p) => p.marketChance)} note="Flex pays a reduced amount when legs miss: SportyBet sets its odds so it returns about ₦0.65 per ₦1 on vFootball, whatever the legs. Set it in SportyBet before you place the slip." />
         {legs.length >= 5 && (() => {
           // Drop the least likely legs until "all but two" lands at least half the time.
           const keep = flexFriendly(legs.map((p) => p.estimate));

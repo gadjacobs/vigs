@@ -146,3 +146,16 @@ class LeanHeldOut(unittest.TestCase):
         self.assertTrue(held["U35"][0])
         self.assertGreater(held["U35"][1], 0)
         self.assertLess(abs(held["O15"][1]), 5e-4)
+
+
+class FirstHalfUsual(unittest.TestCase):
+    def test_usual_needs_three_recent_replays(self):
+        from vigs.insights import _fh_usual
+        snap = lambda e, ko, o: {"kickoff": ko, "league": "England", "home": e, "away": "X",
+                                 "odds": {"FH_O05": o, "FH_U05": 4.0}}
+        snaps = {f"a{i}": snap("A", f"2026-10-1{i}T10:00:00Z", 1.3) for i in range(3)}
+        snaps.update({f"b{i}": snap("B", f"2026-10-1{i}T10:00:00Z", 1.3) for i in range(2)})
+        out = _fh_usual(snaps)
+        self.assertIn("England|A|X", out)
+        self.assertNotIn("England|B|X", out)
+        self.assertTrue(0.7 < out["England|A|X"] < 0.8)

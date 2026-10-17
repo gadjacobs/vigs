@@ -3,6 +3,7 @@ import { SHORT_LABELS } from "./markets";
 import { loadModel } from "./model";
 import { MARKET_LABELS as LABELS } from "./markets";
 import { atLeast } from "./flex";
+import { applyFh } from "./fhusual";
 import { loadInsights } from "./insights";
 import { buildSet, FLOOR_DEFAULT, SETS, type SetId } from "./ourpicks";
 import { candidates } from "./picks";
@@ -19,8 +20,9 @@ const lagos = (ms: number) =>
 export async function buildTip(qs: string, now: number): Promise<Payload> {
   const q = parseQuery(Object.fromEntries(new URLSearchParams(qs)));
   const url = `/?${queryString(q)}`;
-  const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
+  const [model, fixtures, blend, insights] = await Promise.all([loadModel(), upcoming(), loadBlend(), loadInsights()]);
   const r = candidates(model, fixtures, { ...q, now }, blend);
+  r.candidates = applyFh(r.candidates, fixtures, insights?.fh_usual, q.fhLikelier);
   const legs = q.mode === "target" ? toTarget(r.candidates, q.target, q.tol, q.maxLegs || MAX_LEGS) : topN(r.candidates, q.count, q.sort);
   const markets = q.markets.map((m) => SHORT_LABELS[m] ?? m).join(", ");
   if (!legs.length)

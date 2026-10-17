@@ -11,7 +11,7 @@ import math
 import os
 import statistics as st
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .blend import snapshots
 from .data import market_groups, settle
@@ -78,6 +78,20 @@ def _held_out(seen: list[tuple[str, str, int, float, int]]) -> dict[str, tuple[b
         g[0] += 1
         g[1] += (-math.log(p if y else 1 - p)) - (-math.log(q if y else 1 - q))
     return {k: (s > 0, s / n) for k, (n, s) in gain.items() if n}
+
+
+def _fh_usual(snaps: dict[str, dict], days: int = 30) -> dict[str, float]:
+    if not snaps:
+        return {}
+    newest = max(s["kickoff"] for s in snaps.values())
+    since = (datetime.fromisoformat(newest.replace("Z", "+00:00")) - timedelta(days=days)).isoformat()[:19]
+    seen: dict[str, list[float]] = defaultdict(list)
+    for s in snaps.values():
+        o = s["odds"]
+        if s["kickoff"][:19] < since or "FH_O05" not in o or "FH_U05" not in o:
+            continue
+        seen[f'{s["league"]}|{s["home"]}|{s["away"]}'].append(devig([o["FH_O05"], o["FH_U05"]], LIVE_DEVIG)[0])
+    return {k: round(sum(v) / len(v), 4) for k, v in sorted(seen.items()) if len(v) >= 3}
 
 
 def export_insights(data_dir: str) -> dict:
@@ -151,6 +165,11 @@ def export_insights(data_dir: str) -> dict:
                           key=lambda x: x["margin"]),
         "bands": band_rows, "leagues": league_rows,
         "sportybet_prob": _compare(sp_ll),
+        # Each fixture's usual first-half goal chance (FH over 0.5, de-vigged), from its
+        # replays in the last 30 days. The engine moves goals between the halves on
+        # every replay and the first-half price follows; full-time prices stay put.
+        # Key "league|home|away"; at least 3 replays.
+        "fh_usual": _fh_usual(snaps),
         # Each market at three chance levels: how often it landed against what its
         # (de-vigged) price said. Our picks leans toward selections whose market has
         # landed above its price at that level, and away from those below it, but only
