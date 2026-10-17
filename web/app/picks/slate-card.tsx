@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { lagos } from "../pick-row";
 import { FlexRow } from "../flex-row";
+import { multiBonus } from "@/lib/bonus";
 import { SlateActions } from "./slate-actions";
 import { MARKET_LABELS } from "@/lib/markets";
 import { chance, oneIn } from "@/lib/plain";
@@ -15,7 +16,7 @@ export function SlateCard({ s }: { s: Slate }) {
         <span className="muted slatewin">{lagos(s.first)}{s.last !== s.first ? `–${lagos(s.last)}` : ""}</span>
       </div>
       <p className="slatestats">
-        <strong className="num">{s.odds.toFixed(2)}</strong> odds · {s.legs.length} legs ·{" "}
+        <strong className="num">{s.odds.toFixed(2)}</strong> odds{(() => { const b = multiBonus(s.legs.map((p) => ({ odds: p.odds, p: p.marketChance }))); return b.ratio > 0 ? <span className="muted"> +{Math.round(b.ratio * 100)}% bonus</span> : null; })()} · {s.legs.length} legs ·{" "}
         <strong>{chance(s.chance)}</strong> chance all land <span className="muted">({oneIn(s.chance)})</span>
       </p>
       <p className="why">{s.blurb}</p>

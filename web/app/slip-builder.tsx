@@ -13,6 +13,7 @@ import type { Pick } from "@/lib/picks";
 import type { LeanRow } from "@/lib/insights";
 import { FlexRow } from "./flex-row";
 import { atLeast, flexFriendly } from "@/lib/flex";
+import { multiBonus } from "@/lib/bonus";
 import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
 import type { Query } from "@/lib/query";
 import { slipStats, smartSwitch, toTarget, topN, MAX_LEGS } from "@/lib/slip";
@@ -134,10 +135,18 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
         </dl>
         )}
         {stake > 0 && legs.length > 0 && (
-          <p className="returns">₦{stake.toLocaleString("en-NG")} returns <strong className="num">₦{Math.round(stake * s.odds).toLocaleString("en-NG")}</strong> if every leg lands.
-            {view === "detailed" && <>{" "}On average about <strong className="num">₦{Math.round(stake * s.odds * s.market).toLocaleString("en-NG")}</strong> comes back, by the bookmaker&apos;s own chances; each leg costs its cut.</>}</p>
+          (() => {
+            const b = multiBonus(legs.map((p) => ({ odds: p.odds, p: p.marketChance })));
+            const naira0 = (x: number) => `₦${Math.round(x).toLocaleString("en-NG")}`;
+            return (
+              <p className="returns">{naira0(stake)} returns <strong className="num">{naira0(stake * b.totalOdds)}</strong> if every leg lands
+                {b.ratio > 0 ? <>, with SportyBet&apos;s multi-bet bonus of about <strong className="num">+{Math.round(b.ratio * 100)}%</strong> ({naira0(stake * b.extra)} on {b.qualifying} legs at 1.20 or more)</> : null}.
+                {b.qualifying < legs.length && legs.length >= 2 ? <> {legs.length - b.qualifying} leg{legs.length - b.qualifying > 1 ? "s" : ""} under 1.20 earn{legs.length - b.qualifying > 1 ? "" : "s"} no bonus.</> : null}
+                {view === "detailed" && <>{" "}On average about <strong className="num">{naira0(stake * b.payback)}</strong> comes back, by the bookmaker&apos;s own chances, bonus included.</>}</p>
+            );
+          })()
         )}
-        <FlexRow ps={legs.map((p) => p.estimate)} market={legs.map((p) => p.marketChance)} note="Flex pays a reduced amount when legs miss: SportyBet sets its odds so it returns about ₦0.65 per ₦1 on vFootball, whatever the legs. Set it in SportyBet before you place the slip." />
+        <FlexRow ps={legs.map((p) => p.estimate)} market={legs.map((p) => p.marketChance)} note={`Flex pays a reduced amount when legs miss: SportyBet sets its odds so it returns about ₦0.65 per ₦1 on vFootball, whatever the legs, and pays no multi-bet bonus; this slip straight returns about ₦${multiBonus(legs.map((p) => ({ odds: p.odds, p: p.marketChance }))).payback.toFixed(2)} per ₦1 with the bonus. Set Flex in SportyBet before you place the slip.`} />
         {legs.length >= 5 && (() => {
           // Drop the least likely legs until "all but two" lands at least half the time.
           const keep = flexFriendly(legs.map((p) => p.estimate));

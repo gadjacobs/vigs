@@ -42,7 +42,8 @@ export const COUNTS = [2, 3, 4, 5, 6] as const;
 export const BEST_COUNTS = [5, 10, 20, 30, 50] as const;
 export const TOP_COUNTS = [10, 20, 30, 40, 50] as const;
 export const FLOORS = [1.05, 1.1, 1.2, 1.3] as const; // lowest price a leg may have
-export const FLOOR_DEFAULT = 1.1;
+// 1.20: SportyBet's multi-bet bonus counts only legs priced 1.20 or more (lib/bonus.ts).
+export const FLOOR_DEFAULT = 1.2;
 export const FLEX_TARGETS = [50, 100, 500, 1000] as const; // Flex odds to reach
 export const FLEX_MISSES = [1, 2, 3] as const;
 export const FLEX_FLOORS = [1.1, 1.2, 1.3, 1.5, 1.8] as const;

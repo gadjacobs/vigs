@@ -13,6 +13,7 @@ import type { SavedCode as Saved } from "@/lib/profile";
 import { shareUrl } from "@/lib/share";
 import { isFinal, readAll, readCodes, readFinal, readHidden, readOpen, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
 import { flexLevels, FlexRow } from "./flex-row";
+import { multiBonus } from "@/lib/bonus";
 
 export type { Saved };
 export { CODES_KEY, readCodes } from "./code-store";
@@ -535,7 +536,11 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 {chanceEl}
               </div>
               <p className="codemeta">
-                {odds ? <><strong className="num">{odds.toFixed(2)}</strong> odds · </> : null}
+                {odds ? <><strong className="num">{odds.toFixed(2)}</strong> odds{(() => {
+                  // SportyBet's multi-bet bonus, from the prematch prices (its cut is about 4%).
+                  const b = t && t.legs.every((l) => l.odds) ? multiBonus(t.legs.map((l) => ({ odds: l.odds!, p: 1 / (l.odds! * 1.04) }))) : null;
+                  return b && b.ratio > 0 ? <span className="muted"> +{Math.round(b.ratio * 100)}% bonus</span> : null;
+                })()} · </> : null}
                 {legs.length || c.legs} legs
                 {lastKo && !settled ? <> · last game <b className="num lastko">{lagos(lastKo)}</b>{lastIn ? <span className="muted"> ({lastIn})</span> : null}</> : null}
                 {" "}· booked {lagos(c.at)}

@@ -92,3 +92,23 @@ describe("first half against its usual", () => {
     expect(kept.map((p: { eventId: string }) => p.eventId)).toEqual(["a"]);
   });
 });
+
+import { multiBonus } from "../lib/bonus";
+
+describe("SportyBet multi-bet bonus", () => {
+  const legs = (n: number, o: number) => Array.from({ length: n }, () => ({ odds: o, p: 0.96 / o }));
+  it("tops a multiple up toward single value, within the range for its qualifying legs", () => {
+    const ten = multiBonus(legs(10, 1.35));
+    expect(ten.qualifying).toBe(10);
+    expect(ten.ratio).toBeCloseTo(0.33, 9);                 // wants +45%, capped at 33% for 10 legs
+    expect(ten.extra).toBeCloseTo(1.35 ** 10 * 0.33, 6);
+    const two = multiBonus(legs(2, 1.8));
+    expect(two.ratio).toBeCloseTo(0.03, 9);                 // wants +4%, capped at 3%
+  });
+  it("counts only legs at 1.20 or more", () => {
+    const b = multiBonus([...legs(3, 1.5), ...legs(5, 1.15)]);
+    expect(b.qualifying).toBe(3);
+    expect(b.extra).toBeCloseTo(1.5 ** 3 * b.ratio, 9);
+    expect(multiBonus(legs(20, 1.16)).ratio).toBe(0);
+  });
+});

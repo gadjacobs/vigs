@@ -11,6 +11,7 @@ import { loadModel, type ModelFile } from "@/lib/model";
 import { BEST_COUNTS, buildSet, COUNTS, FLEX_FLOORS, FLEX_MISSES, FLEX_TARGETS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
 import { applyFh } from "@/lib/fhusual";
 import { FLEX_PAYBACK, flexQuote } from "@/lib/flex";
+import { multiBonus } from "@/lib/bonus";
 import { loadInsights } from "@/lib/insights";
 import { candidates } from "@/lib/picks";
 import { chance, oneIn } from "@/lib/plain";
@@ -93,7 +94,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const lean = insights?.lean;
   const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP, floor, lean, misses: miss });
   const fq = flexSet && built.slip.length > miss + 1 ? flexQuote(built.slip.map((p) => p.marketChance), built.slip.length - miss) : null;
-  const straightBack = built.slip.reduce((a, p) => a * p.odds * p.marketChance, 1);
+  const straightBack = multiBonus(built.slip.map((p) => ({ odds: p.odds, p: p.marketChance }))).payback;
   const all = built.slip.reduce((a, p) => a * p.estimate, 1);
   const odds = built.slip.reduce((a, p) => a * p.odds, 1);
   const last = built.slip.length ? Math.max(...built.slip.map((p) => p.kickoff)) : now;
@@ -157,7 +158,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
         <p className="note">
           {built.slip.length} legs, Flex with {miss} miss{miss > 1 ? "es" : ""} allowed: pays about <strong className="num">{Math.round(fq.odds).toLocaleString("en-NG")}</strong> odds when {built.slip.length - miss} or more land, {chance(fq.chance)} of the time ({oneIn(fq.chance)}).
           {fq.odds < target ? ` Even ${built.slip.length} legs don't reach ${target.toLocaleString("en-NG")}: raise the lowest price or allow fewer misses.` : ""}
-          {" "}In the long run Flex returns about ₦{FLEX_PAYBACK.toFixed(2)} per ₦1; the same legs straight would return about ₦{straightBack.toFixed(2)}.
+          {" "}In the long run Flex returns about ₦{FLEX_PAYBACK.toFixed(2)} per ₦1; the same legs straight, with SportyBet&apos;s multi-bet bonus, would return about ₦{straightBack.toFixed(2)}.
         </p>
       )}
       {built.slip.length > 1 && !flexSet && (

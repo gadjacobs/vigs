@@ -137,7 +137,8 @@ on average.
 
 **Most likely and Most confident templates** (Build your own) start a 10- to 50-leg slip, one leg per
 match, that can be edited, booked and played with Flex. *Most likely* takes each
-match's likeliest selection at or above a price floor (1.05 to 1.30). *Most
+match's likeliest selection at or above a price floor (1.05 to 1.30; 1.20 by
+default, since SportyBet's multi-bet bonus counts only legs priced 1.20 or more). *Most
 confident* takes only selections at 60% or more where the bookmaker's price and
 the model agree closely and whose market has landed at or above its price at
 that chance level. Both lean on `lean` in insights.json, published hourly: for
