@@ -135,8 +135,8 @@ Without a record they fall back to under lines, and to home under 1.5, first
 half under 1.5 and under 2.5. Both still pay back a little less than the stake
 on average.
 
-**Top 50 templates** (Build your own) start a 10- to 50-leg slip, one leg per
-match, that can be edited, booked and played with Flex. *Likeliest* takes each
+**Most likely and Most confident templates** (Build your own) start a 10- to 50-leg slip, one leg per
+match, that can be edited, booked and played with Flex. *Most likely* takes each
 match's likeliest selection at or above a price floor (1.05 to 1.30). *Most
 confident* takes only selections at 60% or more where the bookmaker's price and
 the model agree closely and whose market has landed at or above its price at

@@ -10,7 +10,7 @@ import { ProfitChart } from "./profit-chart";
 export const dynamic = "force-dynamic";
 
 const GRADES = ["Solid", "Lean", "Rough"];
-const STYLE_NAME: Record<string, string> = { "template:top": "Top 50 likeliest", "template:trusted": "Most confident (20)" };
+const STYLE_NAME: Record<string, string> = { "template:top": "Most likely (50)", "template:trusted": "Most confident (20)" };
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 const signedPct = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(1)}%`;
 const naira = (x: number) => `${x < 0 ? "−" : x > 0 ? "+" : ""}₦${Math.abs(Math.round(x)).toLocaleString("en-NG")}`;
@@ -126,7 +126,7 @@ function Body({ rec, user, tab, n, stake }: { rec: RecordFile; user: string | nu
               </table>
             </div>
           )}
-          <p className="status">Every slip Vig cooked and booked, logged once per code before kickoff and scored like your own. The Top 50 templates are booked each round too, at their default lengths; with that many legs a whole slip rarely lands, so their legs (landed against what the prices expected) are the measure to watch.</p>
+          <p className="status">Every slip Vig cooked and booked, logged once per code before kickoff and scored like your own. The Most likely and Most confident templates are booked each round too, at their default lengths; with that many legs a whole slip rarely lands, so their legs (landed against what the prices expected) are the measure to watch.</p>
         </section>
       )}
 

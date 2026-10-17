@@ -32,6 +32,7 @@ export type Watch = {
   scores?: Record<string, string>; // last live score per match
   chance?: number; // last chance the code lands
   told?: string[]; // one-off notifications already sent ("last")
+  decided?: string[]; // legs ("eventId|market") the score had already decided, so their matches go quiet
 };
 export type Payload = { title: string; body: string; url: string; tag?: string };
 
@@ -109,26 +110,32 @@ const SWING = 0.15; // a goal that moves a code's chance by 15 points or more is
 
 /** What a watched code's live state says to tell its subscribers, if anything. */
 export function liveNews(w: Watch, live: Record<string, LiveLeg>): {
-  payload: Payload | null; goal: Payload | null; chance: number | null; scores: Record<string, string>; last: boolean;
+  payload: Payload | null; goal: Payload | null; goalKey?: string; chance: number | null; scores: Record<string, string>;
+  last: boolean; decided: string[];
 } {
   const legs = w.legs ?? [];
   const settled = w.settled ?? {};
   const scores: Record<string, string> = { ...w.scores };
   const goals: { leg: WatchLeg; x: LiveLeg }[] = [];
+  // A match whose leg the score had already decided goes quiet: its later goals
+  // change nothing for this code. The goal that decides it is still news.
+  const quiet = new Set(w.decided ?? []);
   const chances = legs.map((l) => {
     if (legKey(l) in settled) return settled[legKey(l)] ? 1 : 0;
     const x = live[legKey(l)];
     if (x?.state === "playing" && x.score) {
-      if (w.scores?.[l.eventId] !== undefined && w.scores[l.eventId] !== x.score) goals.push({ leg: l, x });
+      if (w.scores?.[l.eventId] !== undefined && w.scores[l.eventId] !== x.score && !quiet.has(legKey(l))) goals.push({ leg: l, x });
       scores[l.eventId] = x.score;
     }
     return x?.chance ?? null;
   });
   const chance = slipChance(chances);
+  const decided = legs.filter((l, i) => chances[i] === 0 || chances[i] === 1).map(legKey);
   const openLegs = legs.filter((l, i) => chances[i] !== 1);
   const last = openLegs.length === 1 && chances.every((c) => c !== 0) && !(w.told ?? []).includes("last");
   // Every goal, for anyone following this code goal by goal.
   const g0 = goals[0];
+  const goalKey = g0 ? `${g0.leg.eventId}|${g0.x.score}` : undefined;
   const goal: Payload | null = g0 ? {
     title: `⚽ ${g0.leg.home} ${g0.x.score!.replace(":", "–")} ${g0.leg.away}${g0.x.minute !== null ? ` (${g0.x.minute}')` : ""}`,
     body: chance === null ? `${w.code}: ${g0.leg.label.toLowerCase()}.`
@@ -140,7 +147,7 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): {
     const g = goals[0];
     const [h, a] = g.x.score!.split(":");
     return {
-      chance, scores, last, goal,
+      chance, scores, last, goal, goalKey, decided,
       payload: {
         title: `${chance > w.chance ? "▲" : "▼"} ${g.leg.home} ${h}–${a} ${g.leg.away}${g.x.minute !== null ? ` (${g.x.minute}')` : ""}`,
         body: chance === 0 ? `${w.code} is beaten: ${g.leg.label.toLowerCase()} can't land now.`
@@ -152,7 +159,7 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): {
   if (last && chance !== null && chance > 0) {
     const l = openLegs[0];
     return {
-      chance, scores, last: true, goal,
+      chance, scores, last: true, goal, goalKey, decided,
       payload: {
         title: `${w.code}: one leg left`,
         body: `${legs.length - 1} of ${legs.length} landed. Last: ${l.home} v ${l.away}, ${l.label.toLowerCase()}, ${pct(chance)} to land. Open Codes to ride it or hedge.`,
@@ -160,7 +167,7 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): {
       },
     };
   }
-  return { payload: null, goal, chance, scores, last: false };
+  return { payload: null, goal, goalKey, chance, scores, last: false, decided };
 }
 
 // Per-code choice, per device: "goals" = every goal plus results; "off" = nothing
@@ -344,7 +351,8 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
 
   // kind "goals" goes only to devices following the code goal by goal; a
   // device that turned a code off hears nothing about it.
-  const tell = async (w: Watch, p: Payload, kind: "results" | "swings" | "goals") => {
+  // dedupe: a goal reaches each device once, however many of its codes share the match.
+  const tell = async (w: Watch, p: Payload, kind: "results" | "swings" | "goals", dedupe?: string) => {
     if (out.catchUp) return;
     if (kind === "results" && !freshResult(w.lastKickoff, now)) return;
     const modes = await codeAlerts(w.code);
@@ -353,7 +361,9 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
       const mode = modes[id] ?? (s?.codeDefault === "goals" || s?.codeDefault === "off" ? s.codeDefault : undefined);
       if (!s || mode === "off") continue;
       const wants = mode === "goals" ? true : kind === "results" ? s.results : kind === "swings" ? s.swings !== false : false;
-      if (wants && (await send(s, p))) out.sent++;
+      if (!wants) continue;
+      if (dedupe && !(await claim(`goalsent:${id}:${dedupe}`, 3 * 3600).catch(() => true))) continue;
+      if (await send(s, p)) out.sent++;
     }
   };
   const drop = async (code: string) => {
@@ -410,9 +420,9 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
         out.swings++;
         await tell(w, news.payload, "swings");
       }
-      if (news.goal && !/^[▲▼]/.test(news.payload?.title ?? "")) await tell(w, news.goal, "goals");
+      if (news.goal && !/^[▲▼]/.test(news.payload?.title ?? "")) await tell(w, news.goal, "goals", news.goalKey);
       await setJson(`watch:${code}`, {
-        ...w, scores: news.scores, chance: news.chance ?? w.chance,
+        ...w, scores: news.scores, chance: news.chance ?? w.chance, decided: news.decided,
         told: news.last ? [...(w.told ?? []), "last"] : w.told,
       });
     } catch (e) {

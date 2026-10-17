@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { judge, mayTell, signature, type SlipWatch } from "../lib/watches";
+import { impossible, judge, mayTell, signature, type SlipWatch } from "../lib/watches";
 
 const leg = (id: string, p: number, odds: number) => ({ id, eventId: id, market: "U35", estimate: p, marketChance: p, odds, kickoff: 0 }) as never;
 const legs = [leg("a", 0.9, 1.1), leg("b", 0.8, 1.2), leg("c", 0.7, 1.4), leg("d", 0.6, 1.6)];
@@ -16,6 +16,15 @@ describe("slip alerts", () => {
     expect(judge(w({ source: "filter:Evening", minLegs: 4 }), legs)!.legs.length).toBe(4);
     expect(judge(w({ source: "filter:Evening", minLegs: 2, minChance: 0.5 }), legs)).toBeNull();
     expect(judge(w({ source: "filter:Evening", minLegs: 2, minOdds: 3 }), legs)).toBeNull();
+  });
+  it("each-leg bar leaves weaker legs out before counting", () => {
+    expect(judge(w({ minLegs: 2, minLeg: 0.75 }), legs)!.legs.map((l) => l.id)).toEqual(["a", "b"]);
+    expect(judge(w({ minLegs: 3, minLeg: 0.75 }), legs)).toBeNull();
+  });
+  it("flags a whole-slip chance that the odds rule out", () => {
+    expect(impossible({ minChance: 0.75, minOdds: 50 })).toMatch(/at most about 2%/);
+    expect(impossible({ minChance: 0.3, minOdds: 3 })).toBeNull();
+    expect(impossible({ minChance: 0.75 })).toBeNull();
   });
   it("sends a changed slip at most every 2 hours, never at night in Lagos", () => {
     const noon = Date.UTC(2026, 9, 15, 11); // 12:00 Lagos

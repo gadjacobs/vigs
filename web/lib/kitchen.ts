@@ -45,7 +45,7 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
       } catch { /* leave this slip without a code; it can still be booked from the editor */ }
     }
   }
-  // The Top 50 templates are booked and logged too (not shown here), so Record
+  // The Most likely and Most confident templates are booked and logged too (not shown here), so Record
   // can score them like the cooked slips: each at its default length.
   if (bookCodes) {
     for (const [set, n] of [["top", 50], ["trusted", 20]] as const) {

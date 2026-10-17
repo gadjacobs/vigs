@@ -110,6 +110,18 @@ describe("live notifications", () => {
     expect(liveNews(w, { "a|O15": lv("0:0", 0.9), "b|1": lv("0:0", 0.6) }).payload).toBeNull();
   });
 
+  it("goes quiet on a match once its leg is decided, but tells the deciding goal", () => {
+    // Over 1.5 lands at 2-0: that goal is news and marks the leg decided.
+    const d = liveNews({ ...w, scores: { a: "1:0", b: "0:0" } }, { "a|O15": lv("2:0", 1), "b|1": lv("0:0", 0.6) });
+    expect(d.goal?.title).toBe("⚽ ARS 2–0 EVE (30')");
+    expect(d.decided).toEqual(["a|O15"]);
+    expect(d.goalKey).toBe("a|2:0");
+    // A later goal in that match tells nothing for this code.
+    const later = liveNews({ ...w, scores: { a: "2:0", b: "0:0" }, decided: d.decided, told: ["last"] }, { "a|O15": lv("3:0", 1), "b|1": lv("0:0", 0.6) });
+    expect([later.goal, later.payload]).toEqual([null, null]);
+    expect(later.scores.a).toBe("3:0");
+  });
+
   it("says once when one leg is left", () => {
     const n = liveNews({ ...w, settled: { "a|O15": true } }, { "b|1": lv("0:0", 0.4) });
     expect(n.last).toBe(true);

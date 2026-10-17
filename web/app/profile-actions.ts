@@ -1,6 +1,6 @@
 "use server";
 import { currentUser, loadProfile, mergeCodes, updateProfile, type Prefs, type SavedCode, type SavedFilter } from "@/lib/profile";
-import type { SlipWatch } from "@/lib/watches";
+import { impossible, type SlipWatch } from "@/lib/watches";
 import { storeReady } from "@/lib/store";
 
 async function me() {
@@ -102,7 +102,10 @@ export async function saveWatch(w: SlipWatch): Promise<SlipWatch[] | { error: st
   const minLegs = Math.min(50, Math.max(1, Math.round(Number(w.minLegs) || 1)));
   const minChance = Number(w.minChance) > 0 ? Math.min(0.99, Number(w.minChance)) : undefined;
   const minOdds = Number(w.minOdds) > 1 ? Math.min(1_000_000, Number(w.minOdds)) : undefined;
-  const clean: SlipWatch = { id: /^[a-z0-9]{6,12}$/.test(String(w.id)) ? w.id : Math.random().toString(36).slice(2, 10), source, minLegs, minChance, minOdds };
+  const minLeg = Number(w.minLeg) > 0 ? Math.min(0.99, Math.max(0.05, Number(w.minLeg))) : undefined;
+  const why = impossible({ minChance, minOdds });
+  if (why) return { error: why };
+  const clean: SlipWatch = { id: /^[a-z0-9]{6,12}$/.test(String(w.id)) ? w.id : Math.random().toString(36).slice(2, 10), source, minLegs, minChance, minLeg, minOdds };
   const p = await updateProfile(user, (p) => ({ ...p, watches: [clean, ...(p.watches ?? []).filter((x) => x.id !== clean.id)].slice(0, 10) }));
   return p.watches ?? [];
 }

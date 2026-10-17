@@ -12,6 +12,9 @@ import { DEFAULT_QUERY, parseQuery, queryString } from "./query";
 import { slipStats, toTarget, topN, MAX_LEGS } from "./slip";
 import { upcoming } from "./sportybet";
 import { claim, getJson, members, setJson } from "./store";
+import { impossible } from "./watch-rules";
+
+export { impossible };
 
 // Slip alerts: an account asks to hear when a saved Tonight filter, or one of the
 // Our picks templates, comes up with a slip that meets its conditions. Checked
@@ -23,10 +26,11 @@ export type SlipWatch = {
   id: string;
   source: string;        // "filter:<saved filter name>" | "template:top" | "template:trusted"
   minLegs: number;       // at least this many legs (for a template: that many qualify)
-  minChance?: number;    // all legs land at least this often (0-1)
+  minChance?: number;    // the whole slip lands at least this often (0-1)
+  minLeg?: number;       // every leg lands at least this often (0-1); legs below it are left out
   minOdds?: number;      // total odds at least this
 };
-export const TEMPLATE_NAMES: Record<string, string> = { "template:top": "Top 50 likeliest", "template:trusted": "Most confident" };
+export const TEMPLATE_NAMES: Record<string, string> = { "template:top": "Most likely", "template:trusted": "Most confident" };
 export const watchName = (w: { source: string }) =>
   TEMPLATE_NAMES[w.source] ?? (w.source.startsWith("filter:") ? `“${w.source.slice(7)}”` : w.source);
 
@@ -38,7 +42,8 @@ const lagos = (ms: number) =>
   new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit" }).format(ms);
 
 /** The slip an alert would send now, or null when it doesn't meet the conditions. */
-export function judge(w: SlipWatch, legs: Pick[]): { legs: Pick[]; odds: number; chance: number } | null {
+export function judge(w: SlipWatch, all: Pick[]): { legs: Pick[]; odds: number; chance: number } | null {
+  const legs = w.minLeg ? all.filter((l) => l.estimate >= w.minLeg!) : all;
   const slip = w.source.startsWith("template:") ? legs.slice(0, w.minLegs) : legs;
   if (slip.length < Math.max(1, w.minLegs)) return null;
   const s = slipStats(slip);
@@ -120,6 +125,7 @@ export async function runWatches(now = Date.now()): Promise<{ checked: number; s
     if (!(await claim(`scan:watch:${user}`, SCAN_SECONDS).catch(() => false))) continue;
     ctx ??= await context(now);
     for (const w of p.watches) {
+      if (impossible(w)) continue;
       out.checked++;
       try {
         const r = await evaluate(w, p, ctx, now);

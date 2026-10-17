@@ -2,7 +2,9 @@ import { loadBlend } from "./blend";
 import { SHORT_LABELS } from "./markets";
 import { loadModel } from "./model";
 import { MARKET_LABELS as LABELS } from "./markets";
-import { buildSet, SETS, type SetId } from "./ourpicks";
+import { atLeast } from "./flex";
+import { loadInsights } from "./insights";
+import { buildSet, FLOOR_DEFAULT, SETS, type SetId } from "./ourpicks";
 import { candidates } from "./picks";
 import { chance, oneIn, slipConfidence } from "./plain";
 import type { Payload } from "./push";
@@ -45,16 +47,22 @@ export async function buildOurs(setId: string, now: number): Promise<Payload> {
     return { title: `Vig: ${c.slates.length} slips cooked`, body: `${list}. From ${lagos(first)}. Codes ready; tap to open.`, url: "/picks", tag: "ours" };
   }
   const set = (SETS.find((x) => x.id === setId) ?? SETS[0]);
-  const url = `/picks?set=${set.id}`;
-  const [model, fixtures, blend] = await Promise.all([loadModel(), upcoming(), loadBlend()]);
-  const q = { ...parseQuery({}), markets: Object.keys(LABELS), hours: 4, now };
+  const template = set.id === "top" || set.id === "trusted";
+  // The templates as the Our picks page builds them: 24 hours ahead, their usual
+  // length (Most confident 20, Most likely 50), the price floor and the record's lean.
+  const n = template ? (set.id === "trusted" ? 20 : 50) : set.id === "draws" ? 4 : 3;
+  const url = `/picks?tab=build&set=${set.id}${template ? `&n=${n}` : ""}`;
+  const [model, fixtures, blend, insights] = await Promise.all([loadModel(), upcoming(), loadBlend(), template ? loadInsights() : null]);
+  const q = { ...parseQuery({}), markets: Object.keys(LABELS), hours: template ? 24 : 4, now };
   const cands = candidates(model, fixtures, q, blend).candidates;
-  const b = buildSet(set.id as SetId, cands, { bar: 0.88, target: 10, n: set.id === "draws" ? 4 : 3, maxSlip: 30 });
+  const b = buildSet(set.id as SetId, cands, { bar: 0.88, target: 10, n, maxSlip: template ? MAX_LEGS : 30, floor: FLOOR_DEFAULT, lean: insights?.lean });
   if (!b.slip.length) return { title: `Vig: ${set.label}`, body: "Nothing published right now fits this set.", url, tag: "ours" };
   const s = slipStats(b.slip);
   const first = Math.min(...b.slip.map((l) => l.kickoff));
+  const k = b.slip.length;
+  const flex = template && k >= 4 ? ` With Flex, ${k - 2} of ${k} land ${chance(atLeast(b.slip.map((l) => l.estimate), k - 2))} of the time.` : "";
   const lead = set.id === "safe"
     ? `${b.pool.length} picks at 88%+; the 5 soonest together: ${chance(slipStats(b.slip.slice(0, 5)).model)} chance.`
-    : `${b.slip.length} legs at ${s.odds.toFixed(2)}, ${chance(s.model)} chance all land (${oneIn(s.model)}).`;
+    : `${k} legs at ${s.odds.toFixed(2)}, ${chance(s.model)} chance all land (${oneIn(s.model)}).${flex}`;
   return { title: `Vig: ${set.label}`, body: `${lead} First kickoff ${lagos(first)}. Tap to review and book.`, url, tag: "ours" };
 }

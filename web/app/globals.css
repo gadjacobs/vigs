@@ -1011,3 +1011,4 @@ ol.legs li.legsep span { font-weight: 400; }
 ol.legs .lasttag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; background: var(--ink); color: var(--paper);
   font-size: 11px; font-weight: 600; line-height: 18px; text-transform: uppercase; letter-spacing: .02em; }
 .codecard.compact .codeid { font-size: 22px; }
+.watchwarn { display: block; color: var(--house); }

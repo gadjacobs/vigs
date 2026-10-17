@@ -25,7 +25,7 @@ import { toTarget } from "./slip";
 //   above its price, and a chance of 60% or more.
 export type SetId = "top" | "trusted" | "best" | "safe" | "odds" | "bold" | "draws";
 export const SETS: { id: SetId; label: string }[] = [
-  { id: "top", label: "Top 50 likeliest" },
+  { id: "top", label: "Most likely" },
   { id: "trusted", label: "Most confident" },
   { id: "best", label: "Best per match" },
   { id: "safe", label: "Safe ~90%" },
