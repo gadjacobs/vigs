@@ -21,5 +21,13 @@ export function leanOf(lean: LeanRow[] | undefined, market: string, chance: numb
  * from at least `minN` settled examples; null without a record to go on. */
 export function marketsAtOrAbove(lean: LeanRow[] | undefined, lo: number, hi: number, minN = 1000): Set<string> | null {
   if (!lean?.length) return null;
-  return new Set(lean.filter((r) => r.lo >= lo && r.hi <= hi + 1e-9 && r.n >= minN && r.z >= 0 && r.held !== false).map((r) => r.market));
+  // The chance levels whose middle falls in [lo, hi), combined per market.
+  const by = new Map<string, { n: number; landed: number; priced: number; held: boolean }>();
+  for (const r of lean) {
+    const mid = (r.lo + Math.min(r.hi, 1)) / 2;
+    if (mid < lo || mid >= hi) continue;
+    const a = by.get(r.market) ?? { n: 0, landed: 0, priced: 0, held: true };
+    by.set(r.market, { n: a.n + r.n, landed: a.landed + r.landed, priced: a.priced + r.priced, held: a.held && r.held !== false });
+  }
+  return new Set([...by].filter(([, a]) => a.n >= minN && a.landed >= a.priced && a.held).map(([m]) => m));
 }
