@@ -964,7 +964,7 @@ html { scroll-behavior: smooth; }
 .flexrow li b { font-size: 18px; line-height: 22px; }
 .flexrow li.all { background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
 .flexrow small { font-size: 12px; line-height: 17px; color: var(--ink-muted); }
-.leanmark { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.leanmark { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 800; white-space: normal; max-width: 100%; }
 .leanmark.up { color: var(--fair); background: color-mix(in srgb, var(--fair) 12%, transparent); }
 .leanmark.down { color: var(--house); background: var(--house-wash); }
 .flexfit { width: 100%; justify-content: center; margin: 0 0 12px; border-style: dashed; font-size: 14px; }
@@ -1012,7 +1012,11 @@ ol.legs .lasttag { display: inline-block; margin-right: 6px; padding: 0 6px; bor
   font-size: 11px; font-weight: 600; line-height: 18px; text-transform: uppercase; letter-spacing: .02em; }
 .codecard.compact .codeid { font-size: 22px; }
 .watchwarn { display: block; color: var(--house); }
-.fhmark { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--ink-muted); background: var(--paper-sunk); }
+.fhmark { display: inline-flex; align-items: center; margin: 4px 6px 0 0; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: normal; max-width: 100%; color: var(--ink-muted); background: var(--paper-sunk); }
 .fhmark.up { color: var(--fair); background: color-mix(in srgb, var(--fair) 12%, transparent); }
 .fhmark.down { color: var(--house); background: var(--house-wash); }
 .flexrow .flexpays { display: block; font-size: 11px; color: var(--ink-muted); white-space: nowrap; }
+
+/* Never let a stray chip push the page sideways. */
+html, body { overflow-x: clip; }
+.pick, .pick p { min-width: 0; overflow-wrap: anywhere; }

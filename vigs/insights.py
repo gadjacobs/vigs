@@ -108,6 +108,7 @@ def export_insights(data_dir: str) -> dict:
     bands: dict[int, list[tuple[float, float, int]]] = defaultdict(list)   # (odds, market chance, won)
     lean: dict[tuple[str, int], list[float]] = defaultdict(lambda: [0, 0, 0.0, 0.0])  # n, landed, priced, variance
     seen: list[tuple[str, str, int, float, int]] = []   # (kickoff, market, band, chance, landed) for the held-out check
+    bonus_legs = [0, 0, 0.0, 0.0]   # n, landed, priced, variance: the Bonus slip's legs (see below)
     matches = 0
     for e, s in snaps.items():
         r = by_id.get(e)
@@ -117,6 +118,23 @@ def export_insights(data_dir: str) -> dict:
         odds = s["odds"]
         hth = int(r["ht_hg"]) if r.get("ht_hg") not in ("", None) else None
         hta = int(r["ht_ag"]) if r.get("ht_ag") not in ("", None) else None
+        # Bonus slip legs: per match, the likeliest selection priced 1.20-1.30, double
+        # chance left out (as web/lib/ourpicks.ts builds them).
+        best = None
+        for g in market_groups(odds):
+            if g[0].startswith("DC"):
+                continue
+            fair_g = dict(zip(g, devig([odds[k] for k in g], LIVE_DEVIG)))
+            for k in g:
+                if 1.2 <= odds[k] < 1.3 and (best is None or fair_g[k] > best[1]):
+                    best = (k, fair_g[k])
+        if best:
+            y = settle(best[0], int(r["hg"]), int(r["ag"]), hth, hta)
+            if y is not None:
+                bonus_legs[0] += 1
+                bonus_legs[1] += int(y)
+                bonus_legs[2] += best[1]
+                bonus_legs[3] += best[1] * (1 - best[1])
         for g in market_groups(odds):
             total = sum(1 / odds[k] for k in g)
             margins[family(g[0])].append(total - 1)
@@ -174,6 +192,14 @@ def export_insights(data_dir: str) -> dict:
         # every replay and the first-half price follows; full-time prices stay put.
         # Key "league|home|away"; at least 3 replays.
         "fh_usual": _fh_usual(snaps),
+        # How often the Bonus slip's legs landed against their price (k = landed / priced,
+        # with a 90% range). SportyBet's bonus is worked out from its own prices, so k
+        # compounds over the slip's legs.
+        "bonus_legs": ({"n": bonus_legs[0], "landed": bonus_legs[1], "priced": bonus_legs[2],
+                        "k": bonus_legs[1] / bonus_legs[2],
+                        "k_lo": (bonus_legs[1] - 1.645 * bonus_legs[3] ** 0.5) / bonus_legs[2],
+                        "k_hi": (bonus_legs[1] + 1.645 * bonus_legs[3] ** 0.5) / bonus_legs[2]}
+                       if bonus_legs[2] > 0 else None),
         # Each market at three chance levels: how often it landed against what its
         # (de-vigged) price said. Our picks leans toward selections whose market has
         # landed above its price at that level, and away from those below it, but only

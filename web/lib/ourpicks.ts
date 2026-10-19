@@ -24,8 +24,9 @@ import { toTarget } from "./slip";
 // - trusted: the same, only where the bookmaker's price and the model agree
 //   closely (High confidence) and the market's record at that level is at or
 //   above its price, and a chance of 60% or more.
-export type SetId = "top" | "trusted" | "flex" | "best" | "safe" | "odds" | "bold" | "draws";
+export type SetId = "bonus" | "top" | "trusted" | "flex" | "best" | "safe" | "odds" | "bold" | "draws";
 export const SETS: { id: SetId; label: string }[] = [
+  { id: "bonus", label: "Bonus slip" },
   { id: "top", label: "Most likely" },
   { id: "trusted", label: "Most confident" },
   { id: "flex", label: "Flex big odds" },
@@ -44,6 +45,13 @@ export const TOP_COUNTS = [10, 20, 30, 40, 50] as const;
 export const FLOORS = [1.05, 1.1, 1.2, 1.3] as const; // lowest price a leg may have
 // 1.20: SportyBet's multi-bet bonus counts only legs priced 1.20 or more (lib/bonus.ts).
 export const FLOOR_DEFAULT = 1.2;
+// Bonus slips: legs priced just over SportyBet's 1.20 bonus line, one per match.
+// Such legs land a little more often than priced (insights `bonus_legs`: 13,370 legs,
+// landed / priced 1.008, 90% range 1.0005-1.015, Oct 2026), and SportyBet's bonus,
+// worked out from its own prices, grows faster with legs than its cut compounds
+// (lib/bonus.ts), most of all from 30 legs.
+export const BONUS_COUNTS = [10, 20, 30, 33, 35] as const;
+export const BONUS_BAND: [number, number] = [1.2, 1.3];
 export const FLEX_TARGETS = [50, 100, 500, 1000] as const; // Flex odds to reach
 export const FLEX_MISSES = [1, 2, 3] as const;
 export const FLEX_FLOORS = [1.1, 1.2, 1.3, 1.5, 1.8] as const;
@@ -86,6 +94,14 @@ function onePerMatch(ps: Pick[], key: (p: Pick) => number): Pick[] {
 export type Built = { pool: Pick[]; slip: Pick[]; flex: boolean };
 
 export function buildSet(id: SetId, cands: Pick[], o: { bar: number; target: number; n: number; maxSlip: number; floor?: number; lean?: LeanRow[]; misses?: number }): Built {
+  if (id === "bonus") {
+    // Likeliest leg per match inside the band (widening to 1.35 if the band runs short).
+    // Double chance is left out: SportyBet prices it with a smaller cut, so its bonus formula tops it up less.
+    const pick = (hi: number) => onePerMatch(cands.filter((p) => p.odds >= BONUS_BAND[0] && p.odds < hi && p.grade !== "Avoid" && !p.market.startsWith("DC")), (p) => p.marketChance + leanOf(o.lean, p.market, p.marketChance).adj);
+    let pool = pick(BONUS_BAND[1]);
+    if (pool.length < o.n) pool = pick(1.35);
+    return { pool, slip: pool.slice(0, o.n), flex: false };
+  }
   if (id === "flex") {
     // The likeliest leg per match at the price floor, most likely first, added
     // until the Flex odds with `misses` allowed reach the target. Flex returns

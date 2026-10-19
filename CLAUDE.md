@@ -70,7 +70,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   (`lib/flex.ts` `flexQuote`: payback 0.65 for virtual games ÷ chance at least k land); Our picks
   "Flex big odds" grows a slip to a Flex odds target. SportyBet's multi-bet bonus (`lib/bonus.ts`
   `multiBonus`: legs ≥ 1.20 qualify, ratio = weighted leg payback ÷ slip payback − 1 within a range per
-  leg count, straight slips only) shows on slips, cooked slips and codes; template floor 1.20. First half vs usual (`lib/fhusual.ts`,
+  leg count, straight slips only) shows on slips, cooked slips and codes; template floor 1.20. Our picks "Bonus slip": likeliest
+  leg per match at 1.20-1.30 (no double chance), 10-35 legs; its return uses insights `bonus_legs` (landed/priced). First half vs usual (`lib/fhusual.ts`,
   insights `fh_usual`): marker on FH legs and the Tonight filter `fh=likelier`. Hedge only does arithmetic and books a code; never bets.
   The tick watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
   One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no

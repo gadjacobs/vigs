@@ -43,7 +43,7 @@ function FhMark({ p }: { p: Pick }) {
   const goals = d > 0;
   const good = p.market.startsWith("FH_O") === goals;
   const said = `First-half goal ${Math.round(p.fh.now * 100)}% tonight against ${Math.round(p.fh.usual * 100)}% usually for this fixture`;
-  return <span className={`fhmark ${good ? "up" : "down"}`} title={said}>{goals ? "▲" : "▼"} 1st-half goals {goals ? "likelier" : "less likely"} than usual ({d > 0 ? "+" : ""}{d})<span className="sr-only"> {said}</span></span>;
+  return <span className={`fhmark ${good ? "up" : "down"}`} title={said}>{goals ? "▲" : "▼"} 1st half {d > 0 ? "+" : ""}{d} vs usual<span className="sr-only"> {said}</span></span>;
 }
 
 function LeanWarn({ p, lean }: { p: Pick; lean?: LeanRow[] }) {

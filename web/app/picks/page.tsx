@@ -8,7 +8,7 @@ import { SlipBuilder } from "../slip-builder";
 import { loadBlend } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
-import { BEST_COUNTS, buildSet, COUNTS, FLEX_FLOORS, FLEX_MISSES, FLEX_TARGETS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
+import { BONUS_COUNTS, BEST_COUNTS, buildSet, COUNTS, FLEX_FLOORS, FLEX_MISSES, FLEX_TARGETS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
 import { applyFh } from "@/lib/fhusual";
 import { FLEX_PAYBACK, flexQuote } from "@/lib/flex";
 import { multiBonus } from "@/lib/bonus";
@@ -28,6 +28,7 @@ type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string;
 
 const ABOUT: Record<SetId, string> = {
   top: "The likeliest selection in each match, at the price floor or above, best first. Ties lean toward markets that have landed above their price at that chance level in our data (unders, lately) and away from those below it. Edit freely; Flex shows the chance with a miss or two.",
+  bonus: "A straight slip built for SportyBet's multi-bet bonus: the likeliest leg in each match priced 1.20 to 1.30, just over the bonus line (double chance left out, as it earns less bonus). Legs like these have landed slightly more often than their price, and the bonus grows faster with legs than the bookmaker's cut compounds, most of all from 30 legs, so these are the slips where the record puts the long-run return closest to, or above, the stake. Each slip still usually loses: 10 legs land about 1 in 10, 33 legs about 1 in 2,000. Check that SportyBet shows the bonus on your slip before you place it.",
   flex: "A long slip played with Flex, built to reach the Flex odds you pick: the likeliest leg per match at your lowest price, added until the odds with your misses allowed reach the target. SportyBet sets Flex odds so they return about ₦0.65 per ₦1 on vFootball whichever legs you pick (a straight slip returns about ₦0.96 per leg: ₦0.66 at 10 legs, ₦0.44 at 20), so Flex only beats a straight slip on long slips, and a higher lowest price just means fewer legs.",
   trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely and whose market has landed at or above its price at that chance level in our data. 20 legs to start; up to 50 if that many qualify.",
   best: "One leg per match: its likeliest selection at odds of 1.2 or more, by the bookmaker's own chance, with no market filling more than 40% of the slip, so you get a spread of markets.",
@@ -68,7 +69,8 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const tab = sp.tab === "build" || (sp.set && sp.tab !== "cooked") ? "build" : "cooked";
   const bar = OUR_BARS.find((b) => String(Math.round(b * 100)) === sp.bar) ?? OUR_DEFAULT;
   const target = flexSet ? FLEX_TARGETS.find((t) => String(t) === sp.odds) ?? 100 : TARGETS.find((t) => String(t) === sp.odds) ?? 10;
-  const n = top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? (set === "trusted" ? 20 : 50)
+  const n = set === "bonus" ? BONUS_COUNTS.find((c) => String(c) === sp.n) ?? 10
+    : top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? (set === "trusted" ? 20 : 50)
     : set === "best"
     ? BEST_COUNTS.find((c) => String(c) === sp.n) ?? 10
     : COUNTS.find((c) => String(c) === sp.n) ?? (set === "draws" ? 4 : 3);
@@ -140,6 +142,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       {set === "odds" && <Chips name="Total odds" value={target} options={TARGETS} label={(t) => String(t)} href={(t) => link({ odds: t })} />}
       {(set === "bold" || set === "draws") && <Chips name="Legs" value={n} options={COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
       {set === "best" && <Chips name="Legs" value={n} options={BEST_COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
+      {set === "bonus" && <Chips name="Legs" value={n} options={BONUS_COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
       {flexSet && <Chips name="Flex odds" value={target} options={FLEX_TARGETS} label={(t) => t.toLocaleString("en-NG")} href={(t) => link({ odds: t })} />}
       {flexSet && <Chips name="Misses allowed" value={miss} options={FLEX_MISSES} label={(m) => String(m)} href={(m) => link({ miss: m })} />}
       {flexSet && <Chips name="Lowest price" value={floor} options={FLEX_FLOORS} label={(f) => `${f.toFixed(2)}+`} href={(f) => link({ floor: f })} />}
@@ -154,6 +157,21 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
           {set === "safe" && built.pool.length > MAX_ON_SLIP ? ` The slip starts with the ${MAX_ON_SLIP} soonest; add the rest below.` : ""}
         </p>
       )}
+      {set === "bonus" && built.slip.length > 1 && (() => {
+        const b = multiBonus(built.slip.map((p) => ({ odds: p.odds, p: p.marketChance })));
+        const hit = built.slip.reduce((a, p) => a * p.marketChance, 1);
+        const bl = insights?.bonus_legs;
+        // The bonus is fixed by SportyBet's prices; only the chance each leg lands moves with k.
+        const at = (k: number) => b.totalOdds * built.slip.reduce((a, p) => a * Math.min(0.999, p.marketChance * k), 1);
+        return (
+          <p className="note">
+            {built.slip.length} legs pay <strong className="num">{Math.round(b.totalOdds).toLocaleString("en-NG")}</strong> times the stake with SportyBet&apos;s bonus of +{Math.round(b.ratio * 100)}%,
+            and land {oneIn(hit)} by the market&apos;s chances, which put the long-run return at ₦{b.payback.toFixed(2)} per ₦1.
+            {bl && bl.n >= 1000 ? <> Legs like these have landed {((bl.k - 1) * 100).toFixed(1)}% more often than priced ({bl.n.toLocaleString("en-NG")} legs), which puts it at about <strong className="num">₦{at(bl.k).toFixed(2)}</strong> (90% range ₦{at(bl.k_lo).toFixed(2)} to ₦{at(bl.k_hi).toFixed(2)}).</> : null}
+            {built.slip.length < n ? ` Only ${built.slip.length} matches have a leg in range right now.` : ""}
+          </p>
+        );
+      })()}
       {fq && (
         <p className="note">
           {built.slip.length} legs, Flex with {miss} miss{miss > 1 ? "es" : ""} allowed: pays about <strong className="num">{Math.round(fq.odds).toLocaleString("en-NG")}</strong> odds when {built.slip.length - miss} or more land, {chance(fq.chance)} of the time ({oneIn(fq.chance)}).

@@ -112,3 +112,12 @@ describe("SportyBet multi-bet bonus", () => {
     expect(multiBonus(legs(20, 1.16)).ratio).toBe(0);
   });
 });
+
+describe("bonus slip", () => {
+  it("takes the likeliest leg per match priced 1.20-1.30", () => {
+    const mk = (e: string, market: string, odds: number, p: number) => ({ id: `${e}|${market}`, eventId: e, market, odds, marketChance: p, estimate: p, grade: "Rough" });
+    const cands = [mk("a", "U35", 1.25, 0.77), mk("a", "O15", 1.22, 0.79), mk("b", "U35", 1.4, 0.69), mk("c", "A_O05", 1.28, 0.75), mk("d", "O05", 1.05, 0.93)] as never[];
+    const b = buildSet("bonus", cands, { bar: 0, target: 0, n: 10, maxSlip: 50 });
+    expect(b.slip.map((p: { id: string }) => p.id)).toEqual(["a|O15", "c|A_O05"]);
+  });
+});
