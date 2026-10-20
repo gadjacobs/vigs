@@ -34,7 +34,7 @@ export type Watch = {
   told?: string[]; // one-off notifications already sent ("last")
   decided?: string[]; // legs ("eventId|market") the score had already decided, so their matches go quiet
 };
-export type Payload = { title: string; body: string; url: string; tag?: string };
+export type Payload = { title: string; body: string; url: string; tag?: string; cheer?: boolean };
 
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? "mailto:vig@example.com";
 type Vapid = { publicKey: string; privateKey: string };
@@ -377,7 +377,9 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
     await drop(w.code);
   };
   const final = (w: Watch, t: Tracked) =>
-    settle(w, { title: t.state === "won" ? `✓ ${w.code} landed` : `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}` });
+    settle(w, t.state === "won"
+      ? { title: `🎉 ${w.code} landed!`, body: summary(t), url: "/codes", tag: `code-${w.code}`, cheer: true }
+      : { title: `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}` });
 
   for (const code of await members("watches").catch((e) => (fail(e), [] as string[]))) {
     out.watches++;

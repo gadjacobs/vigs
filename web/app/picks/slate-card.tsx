@@ -6,6 +6,7 @@ import { SlateActions } from "./slate-actions";
 import { MARKET_LABELS } from "@/lib/markets";
 import { chance, oneIn } from "@/lib/plain";
 import type { Slate } from "@/lib/slates";
+import { Teams } from "../teams";
 
 export function SlateCard({ s }: { s: Slate }) {
   return (
@@ -26,7 +27,7 @@ export function SlateCard({ s }: { s: Slate }) {
         {s.legs.map((p) => (
           <li key={p.id}>
             <span className="num">{lagos(p.kickoff)}</span>
-            <span>{p.home} v {p.away}<small>{MARKET_LABELS[p.market] ?? p.market} · {p.league}</small></span>
+            <span><Teams league={p.league} home={p.home} away={p.away} /><small>{MARKET_LABELS[p.market] ?? p.market} · {p.league}</small></span>
             <span className="num">{p.odds.toFixed(2)}</span>
             <span className="muted">{chance(p.estimate)}</span>
           </li>

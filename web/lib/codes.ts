@@ -60,7 +60,7 @@ export async function trackCode(code: string, now = Date.now(), prematch: Record
 
 /** One line for a notification or a status chip. */
 export function summary(t: Tracked): string {
-  if (t.state === "won") return `Booking ${t.code} landed: all ${t.legs.length} legs won${t.odds ? ` at ${t.odds.toFixed(2)}` : ""}.`;
+  if (t.state === "won") return `Every leg won: all ${t.legs.length}${t.odds ? ` at ${t.odds.toFixed(2)} odds` : ""}. Open SportyBet to see your payout.`;
   if (t.state === "lost") {
     const miss = t.legs.find((l) => l.status === "lost")!;
     return `Booking ${t.code} lost: ${miss.home} v ${miss.away}, ${miss.label.toLowerCase()}, ended ${miss.score}` +

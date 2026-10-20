@@ -137,3 +137,26 @@ describe("share text", () => {
     expect(plain(d)).not.toContain("*");
   });
 });
+
+import { cookSlates } from "../lib/slates";
+
+describe("cooked Double up keeps its legs close together", () => {
+  // High-confidence legs (lo/hi close), marketChance set directly.
+  const leg = (e: string, ko: number, odds: number, mc: number): Pick => ({
+    ...pick(e, "O15", odds, mc), kickoff: ko, marketChance: mc, lo: mc - 0.01, hi: mc + 0.01,
+  });
+  const MIN = 60_000;
+  it("stays in the first round when a later one is only a little likelier", () => {
+    const first = [leg("a", 0, 1.35, 0.71), leg("b", 0, 1.35, 0.71)];
+    const later = [leg("c", 120 * MIN, 1.35, 0.72), leg("d", 120 * MIN, 1.35, 0.72)];
+    const d = cookSlates([...first, ...later]).find((s) => s.style === "double")!;
+    expect(d.legs.map((p) => p.kickoff)).toEqual([0, 0]);
+  });
+  it("reaches a later round when it is clearly likelier", () => {
+    const first = [leg("a", 0, 1.35, 0.66), leg("b", 0, 1.35, 0.66)];
+    const later = [leg("c", 30 * MIN, 1.35, 0.72), leg("d", 30 * MIN, 1.35, 0.72)];
+    const d = cookSlates([...first, ...later]).find((s) => s.style === "double")!;
+    expect(d.chance).toBeGreaterThan(0.5);
+    expect(d.legs.every((p) => p.kickoff === 30 * MIN)).toBe(true);
+  });
+});

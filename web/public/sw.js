@@ -2,7 +2,7 @@
 // v2: monochrome status-bar badge (Android draws the badge as a white silhouette,
 // so a full-colour icon there shows as a blank square or the browser's logo).
 const OFFLINE = "/offline.html";
-const CACHE = "vig-v3";
+const CACHE = "vig-v4";
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.add(OFFLINE)).then(() => self.skipWaiting()));
@@ -29,6 +29,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(p.title, {
       body: p.body, tag: p.tag, icon: "/icon-192.png", badge: "/badge-96.png", data: { url: p.url },
       renotify: Boolean(p.tag), timestamp: Date.now(),
+      // A landed code buzzes a short drum roll; everything else uses the phone's default.
+      ...(p.cheer ? { vibrate: [90, 50, 90, 50, 260], requireInteraction: true } : {}),
     }),
   );
 });

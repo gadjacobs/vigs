@@ -1339,3 +1339,29 @@ ol.legs li { grid-template-columns: 24px minmax(0, 1fr) auto auto; align-items: 
   .dock button { min-height: 44px; padding: 8px 22px; }
 }
 @media (prefers-reduced-motion: reduce) { .dock { transition: none; } }
+
+/* A code just landed: gold glow round the card and a burst from the ring, once. */
+.codecard.cheer { overflow: visible; z-index: 2; animation: cheer 1.6s ease-out 2; }
+@keyframes cheer { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--signal) 80%, transparent), var(--shadow-card); }
+  40% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--signal) 45%, transparent), 0 18px 40px -14px color-mix(in srgb, var(--signal) 70%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent, var(--shadow-card); } }
+.codecard.cheer .ring { animation: ringpop 700ms cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes ringpop { 0% { transform: scale(.6); } 60% { transform: scale(1.12); } 100% { transform: none; } }
+.confetti { position: absolute; top: 48px; right: 56px; width: 0; height: 0; pointer-events: none; z-index: 3; }
+.confetti i { position: absolute; left: 0; top: 0; height: 12px; border-radius: 2px; opacity: 0;
+  animation: burst 1.5s cubic-bezier(.15, .8, .3, 1) both; }
+@keyframes burst { 0% { opacity: 1; transform: translate(0, 0) rotate(0) scale(.6); }
+  70% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(1); } }
+.compactrow ~ .confetti, .codecard.compact .confetti { top: 30px; right: 40px; }
+@media (prefers-reduced-motion: reduce) { .codecard.cheer, .codecard.cheer .ring, .confetti i { animation: none; } .confetti { display: none; } }
+
+/* Team crests: a small disc split diagonally in the club's two colours. */
+.teams { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.team { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.teams .vs { color: var(--ink-muted); font-weight: 400; font-size: 0.85em; }
+.crest { flex: none; width: 15px; height: 15px; border-radius: 50%; display: inline-block;
+  background: linear-gradient(135deg, var(--c1) 0 50%, var(--c2) 50% 100%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18), 0 0 0 1.5px var(--paper); }
+.match .teams { gap: 6px 8px; }
+.match .crest { width: 17px; height: 17px; }
+.match small { display: block; }

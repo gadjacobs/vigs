@@ -3,6 +3,7 @@ import type { Pick } from "@/lib/picks";
 import type { LeanRow } from "@/lib/insights";
 import { leanOf } from "@/lib/lean";
 import { chance, confidence, CONFIDENCE_WHY, oneIn } from "@/lib/plain";
+import { Teams } from "./teams";
 
 export type View = "simple" | "detailed";
 
@@ -62,7 +63,7 @@ export function PickRow({ p, actions, now, view = "detailed", lean }: { p: Pick;
           <div className="when"><strong className="num">{lagos(p.kickoff)}</strong>{p.league}
             {mins !== null && <span className={mins <= 2 ? "loss" : ""}>{mins <= 2 ? "starting" : `in ${mins} min`}</span>}
           </div>
-          <div className="match">{p.home} v {p.away}<small>{MARKET_LABELS[p.market] ?? p.market}</small></div>
+          <div className="match"><Teams league={p.league} home={p.home} away={p.away} /><small>{MARKET_LABELS[p.market] ?? p.market}</small></div>
           <div className="odds num" aria-label={`odds ${p.odds.toFixed(2)}`}>{p.odds.toFixed(2)}</div>
         </div>
         <p className="plain">
@@ -84,7 +85,7 @@ export function PickRow({ p, actions, now, view = "detailed", lean }: { p: Pick;
         <div className="when"><strong className="num">{lagos(p.kickoff)}</strong>{p.league}
           {mins !== null && <span className={mins <= 2 ? "loss" : ""}>{mins <= 2 ? "starting" : `in ${mins} min`}</span>}
         </div>
-        <div className="match">{p.home} v {p.away}<small>{MARKET_LABELS[p.market] ?? p.market}</small></div>
+        <div className="match"><Teams league={p.league} home={p.home} away={p.away} /><small>{MARKET_LABELS[p.market] ?? p.market}</small></div>
         <div className="odds num" aria-label={`odds ${p.odds.toFixed(2)}`}>{p.odds.toFixed(2)}</div>
         <span className={`badge grade-${p.grade.toLowerCase()}`}>{p.grade}</span>
       </div>

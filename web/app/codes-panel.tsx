@@ -14,6 +14,7 @@ import { shareUrl } from "@/lib/share";
 import { isFinal, readAll, readCodes, readFinal, readHidden, readOpen, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
 import { flexLevels, FlexRow } from "./flex-row";
 import { multiBonus } from "@/lib/bonus";
+import { Teams } from "./teams";
 
 export type { Saved };
 export { CODES_KEY, readCodes } from "./code-store";
@@ -40,6 +41,7 @@ export function rememberCode(c: Saved) {
 // Slip chance over time, per code, for the swing line. Kept on the device.
 type Swing = Record<string, [number, number][]>;
 const SWING_KEY = "vig_swing";
+const CHEER_KEY = "vig_cheered";
 function readSwing(): Swing {
   try {
     return JSON.parse(localStorage.getItem(SWING_KEY) ?? "{}") as Swing;
@@ -225,6 +227,19 @@ const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
 );
 
+/** A burst of gold and blue bits from the ring: a code just landed. Shown once per code. */
+function Confetti() {
+  const bits = useRef(Array.from({ length: 26 }, (_, i) => {
+    const a = (i / 26) * Math.PI * 2 + Math.random() * 0.4, d = 70 + Math.random() * 90;
+    return { x: Math.cos(a) * d, y: Math.sin(a) * d * 0.8 + 40, r: Math.random() * 540 - 270, c: ["var(--signal)", "var(--fair)", "var(--signal)", "var(--ink)"][i % 4], w: i % 3 ? 7 : 10, t: Math.random() * 120 };
+  })).current;
+  return (
+    <span className="confetti" aria-hidden="true">
+      {bits.map((b, i) => <i key={i} style={{ "--x": `${b.x}px`, "--y": `${b.y}px`, "--r": `${b.r}deg`, background: b.c, width: b.w, animationDelay: `${b.t}ms` } as React.CSSProperties} />)}
+    </span>
+  );
+}
+
 /** The chance as a ring that fills to it; the number sits inside. */
 function Ring({ p, tone, children }: { p: number; tone: string; children: React.ReactNode }) {
   return <span className={`ring ${tone}`} style={{ "--p": Math.min(1, Math.max(0, p)) } as React.CSSProperties}><b className="num">{children}</b></span>;
@@ -272,6 +287,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const [modes, setModes] = useState<Record<string, "goals" | "off">>({});
   const [follows, setFollows] = useState<Set<string>>(new Set());
   const [goalFlash, setGoalFlash] = useState<Set<string>>(new Set());
+  const [cheer, setCheer] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [alertFor, setAlertFor] = useState<{ code: string; lastKickoff: number } | null>(null);
   const closeAlerts = useCallback(() => setAlertFor(null), []);
@@ -376,6 +392,18 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       if (st) { setModes(st.modes); setFollows(new Set(st.matches)); }
     })();
   }, [haveStatus]);
+
+  useEffect(() => {
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(CHEER_KEY) ?? "[]") as string[]; } catch { /* private mode */ }
+    const fresh = Object.values(status).filter((t): t is Tracked => "legs" in t && t.state === "won" && !seen.includes(t.code)
+      && Date.now() - t.lastKickoff < 6 * 3600_000).map((t) => t.code);
+    if (!fresh.length) return;
+    try { localStorage.setItem(CHEER_KEY, JSON.stringify([...fresh, ...seen].slice(0, 200))); } catch { /* private mode */ }
+    setCheer((c) => new Set([...c, ...fresh]));
+    navigator.vibrate?.([60, 40, 60, 40, 180]);
+    setTimeout(() => setCheer((c) => new Set([...c].filter((x) => !fresh.includes(x)))), 4200);
+  }, [status]);
 
   const chooseMode = (code: string, mode: "goals" | "off" | "default", lastKickoff: number) => {
     if (!endpoint) return;
@@ -589,7 +617,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
             ) : null;
           if (compact && !expanded.has(c.code)) {
             return (
-              <li key={c.code} className={`codecard compact ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""}`}>
+              <li key={c.code} className={`codecard compact ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${cheer.has(c.code) ? "cheer" : ""}`}>
+                {cheer.has(c.code) && <Confetti />}
                 <button type="button" className="compactrow" onClick={() => flipCard(c.code)} aria-expanded={false}
                   aria-label={`${c.code}: show the full card`}>
                   <span className="cr-head">
@@ -610,7 +639,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
             );
           }
           return (
-            <li key={c.code} className={`codecard ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""}`}>
+            <li key={c.code} className={`codecard ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""} ${cheer.has(c.code) ? "cheer" : ""}`}>
+              {cheer.has(c.code) && <Confetti />}
               <div className="codetop">
                 <div className="codehead">
                   <strong className="num codeid">{c.code}</strong>
@@ -701,7 +731,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                     return [...sep, (
                     <li key={l.eventId} className={`leg-${st} ${course ? `course-${course}` : ""}`}>
                       <LegMark st={st} />
-                      <span className="legmain">{l.home} v {l.away}
+                      <span className="legmain"><Teams league={l.league} home={l.home} away={l.away} />
                         <small>{!grouped && l.kickoff === lastKo && legs[0].kickoff !== lastKo && !settled ? <b className="lasttag">Last game</b> : null}{l.label}{view === "detailed" ? <> · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"}</> : l.odds ? <> · <span className="num">{l.odds.toFixed(2)}</span></> : null} · {lagos(l.kickoff)}</small>
                         {lc !== null && (st === "playing" || st === "waiting") && (
                           <span className="legmeter" aria-hidden="true"><span style={{ width: `${Math.round(lc * 100)}%` }} /></span>

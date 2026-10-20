@@ -86,19 +86,36 @@ export function bestPerMatch(pool: Pick[], k: number): Pick[] {
   return out;
 }
 
-/** About how many legs from this pool reach `target` total odds. */
-function legsFor(pool: Pick[], target: number): number {
-  const logs = pool.map((p) => Math.log(p.odds)).sort((a, b) => a - b);
-  const mid = logs[Math.floor(logs.length / 2)] ?? 0.3;
-  return Math.max(2, Math.ceil(Math.log(target) / Math.max(mid, 0.05)));
-}
+// Kick-off windows tried, nearest first (minutes after the first bookable kick-off).
+const WINDOWS = [0, 10, 30, 60, 120, 240];
+// A wider window is used only when it makes the slip at least this much likelier.
+const WIDER_GAIN = 1.05;
 
-/** The likeliest slip near `target` odds from varied best-per-match legs in an odds band. */
+/**
+ * The likeliest slip near `target` odds from legs in an odds band, as close
+ * together as the round allows. Any market of a match may be used (one leg per
+ * match). Replayed over 985 cooks (9-20 Oct), taking the next round's matches
+ * alone gave the Double up a 52.7% priced chance against 51.4% for the old
+ * rule (each match's single likeliest leg over four hours, 76 min between
+ * first and last kick-off); Tenner and the 20-odds slip priced the same, with
+ * every leg in one round instead of two hours apart. Later rounds join only
+ * when they lift the chance by 5% or more.
+ */
 function targetSlip(cands: Pick[], target: number, lo: number, hi: number, tol = 0.1): Pick[] {
   // A single leg can't make a slip, so no leg may reach the target on its own.
   const top = Math.min(hi, target * (1 - tol) - 0.01);
   const band = cands.filter((p) => p.odds >= lo && p.odds <= top);
-  return byConfidence(band, (pool) => toTarget(bestPerMatch(pool, legsFor(pool, target)), target, tol, MAX_LEGS, market));
+  if (!band.length) return [];
+  const first = Math.min(...band.map((p) => p.kickoff));
+  let best: Pick[] = [], bestP = 0;
+  for (const w of WINDOWS) {
+    const pool = band.filter((p) => p.kickoff <= first + w * 60_000);
+    const legs = byConfidence(pool, (ps) => toTarget(ps, target, tol, MAX_LEGS, market));
+    if (legs.length < 2) continue;
+    const p = legs.reduce((a, x) => a * market(x), 1);
+    if (!best.length || p >= bestP * WIDER_GAIN) { best = legs; bestP = p; }
+  }
+  return best;
 }
 
 const STACK = ["FH_O05", "O15", "BY"];

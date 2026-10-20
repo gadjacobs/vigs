@@ -17,15 +17,16 @@ const loadFonts = () => (fonts ??= Promise.all([
 }))));
 
 /** Ticks and crosses drawn as shapes, so they never depend on a font. */
-function Mark({ s }: { s: string }) {
-  if (s === "won") return <svg width="34" height="34" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke={C.won} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-  if (s === "lost") return <svg width="30" height="30" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke={C.lost} strokeWidth="3.2" strokeLinecap="round" /></svg>;
-  return <svg width="14" height="14" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill={C.muted} /></svg>;
+function Mark({ s, size = 34 }: { s: string; size?: number }) {
+  if (s === "won") return <svg width={size} height={size} viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke={C.won} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  return <svg width={size} height={size} viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke={C.lost} strokeWidth="3.2" strokeLinecap="round" /></svg>;
 }
 
 const time = (ms: number) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit" }).format(ms);
 
-// A share card for a booking code: square (posts, chats) or story (9:16).
+// A share card for a booking code, drawn as a ticket around the code: square
+// (posts, chats) or story (9:16). The legs show only as a strip of how each is
+// going; the code itself carries them.
 export async function GET(request: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   if (!/^[A-Z0-9]{4,12}$/.test(code)) return new Response("Not a code", { status: 400 });
@@ -33,40 +34,66 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
   const d = await shareData(code).catch(() => null);
   if (!d) return new Response("Code not found", { status: 404 });
   const W = 1080, H = story ? 1920 : 1080;
-  const max = story ? 14 : 5;
-  const shown = d.legs.slice(0, max);
-  const stateText = d.state === "won" ? "LANDED" : d.state === "lost" ? "MISSED" : "IN PLAY";
+  const stateText = d.state === "won" ? "LANDED" : d.state === "lost" ? "MISSED" : "LIVE CODE";
   const stateColor = d.state === "won" ? C.won : d.state === "lost" ? C.lost : C.signal;
+  const won = d.legs.filter((l) => l.status === "won").length;
+  const last = d.legs.reduce((a, l) => Math.max(a, l.kickoff), 0);
+  const codeSize = Math.min(story ? 220 : 190, Math.floor(1500 / Math.max(6, d.code.length)));
+  const notch = (side: "left" | "right") => (
+    <div style={{ position: "absolute", [side]: -34, top: -34, width: 68, height: 68, borderRadius: 34, background: C.ground, display: "flex" }} />
+  );
+  const stat = (big: React.ReactNode, small: string, color: string = C.ink) => (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexGrow: 1 }}>
+      <div style={{ display: "flex", fontFamily: "Num", fontSize: 76, fontWeight: 800, color, lineHeight: 1 }}>{big}</div>
+      <div style={{ display: "flex", fontSize: 26, color: C.muted, marginTop: 8, letterSpacing: 2 }}>{small}</div>
+    </div>
+  );
   return new ImageResponse(
     (
-      <div style={{ width: W, height: H, display: "flex", flexDirection: "column", background: C.ground, color: C.ink, padding: 72, fontFamily: "Text" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", fontSize: 72, fontFamily: "Num", fontWeight: 800, color: C.signal }}>Vig</div>
-          <div style={{ display: "flex", fontSize: 28, fontWeight: 700, color: C.ground, background: stateColor, padding: "8px 20px", borderRadius: 999 }}>{stateText}</div>
+      <div style={{ width: W, height: H, display: "flex", flexDirection: "column", justifyContent: "center", padding: story ? "96px 64px" : "48px 72px 40px",
+        fontFamily: "Text", color: C.ink, backgroundColor: C.ground,
+        backgroundImage: "radial-gradient(circle at 50% -10%, rgba(246,201,69,0.30), rgba(12,42,32,0) 60%)" }}>
+        <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, justifyContent: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: story ? 56 : 36 }}>
+          <div style={{ display: "flex", fontSize: 76, fontFamily: "Num", fontWeight: 800, color: C.signal, lineHeight: 1 }}>Vig</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 28, fontWeight: 700, color: C.ground, background: stateColor, padding: "10px 24px", borderRadius: 999, letterSpacing: 2 }}>{stateText}</div>
         </div>
-        <div style={{ display: "flex", flexShrink: 0, fontSize: 30, color: C.muted, marginTop: story ? "auto" : 28 }}>SportyBet booking code</div>
-        <div style={{ display: "flex", flexShrink: 0, fontFamily: "Num", fontSize: story ? 180 : 132, fontWeight: 800, letterSpacing: 8, lineHeight: 1 }}>{d.code}</div>
-        <div style={{ display: "flex", flexShrink: 0, gap: 40, marginTop: 8, fontSize: 40, alignItems: "baseline" }}>
-          {d.odds && <div style={{ display: "flex" }}><span style={{ fontFamily: "Num", fontSize: 56, fontWeight: 800, color: C.signal, marginRight: 12 }}>{d.odds.toFixed(2)}</span>odds</div>}
-          <div style={{ display: "flex" }}><span style={{ fontFamily: "Num", fontSize: 56, fontWeight: 800, marginRight: 12 }}>{d.legs.length}</span>legs</div>
-          {d.chance !== null && <div style={{ display: "flex" }}><span style={{ fontFamily: "Num", fontSize: 56, fontWeight: 800, marginRight: 12 }}>{Math.max(1, Math.round(d.chance * 100))}%</span>chance</div>}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", marginTop: story ? 64 : 28, background: C.paper, borderRadius: 24, padding: "8px 32px" }}>
-          {shown.map((l, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", padding: "12px 0", borderTop: i ? `2px solid ${C.rule}` : "0", fontSize: 30 }}>
-              <div style={{ display: "flex", width: 110, color: C.muted }}>{time(l.kickoff)}</div>
-              <div style={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-                <div style={{ display: "flex", fontWeight: 700 }}>{l.home} v {l.away}{l.score ? ` · ${l.score}` : ""}</div>
-                <div style={{ display: "flex", fontSize: 24, color: C.muted }}>{l.label}</div>
-              </div>
-              <div style={{ display: "flex", width: 110, justifyContent: "flex-end", fontFamily: "Num", fontSize: 38, fontWeight: 800 }}>{l.odds ? l.odds.toFixed(2) : ""}</div>
-              <div style={{ display: "flex", width: 64, justifyContent: "flex-end", alignItems: "center" }}><Mark s={l.status} /></div>
+        <div style={{ display: "flex", flexDirection: "column", background: C.paper, borderRadius: 44, boxShadow: "0 40px 80px rgba(0,0,0,0.45)" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: story ? "84px 48px 64px" : "56px 48px 44px" }}>
+            <div style={{ display: "flex", fontSize: 28, fontWeight: 700, color: C.muted, letterSpacing: 6 }}>SPORTYBET BOOKING CODE</div>
+            <div style={{ display: "flex", fontFamily: "Num", fontSize: codeSize, fontWeight: 800, letterSpacing: 14, lineHeight: 1, marginTop: 18, color: C.ink }}>{d.code}</div>
+          </div>
+          <div style={{ display: "flex", position: "relative", height: 0, borderTop: `4px dashed ${C.rule}`, margin: "0 40px" }}>
+            {notch("left")}{notch("right")}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", padding: story ? "56px 56px 64px" : "40px 56px 44px" }}>
+            <div style={{ display: "flex" }}>
+              {d.odds ? stat(d.odds.toFixed(2), "ODDS", C.signal) : null}
+              {stat(String(d.legs.length), "LEGS")}
+              {d.state === "won" ? stat(<Mark s="won" size={76} />, "ALL WON", C.won)
+                : d.state === "lost" ? stat(`${won}/${d.legs.length}`, "WON", C.lost)
+                : d.chance !== null ? stat(`${Math.max(1, Math.round(d.chance * 100))}%`, "CHANCE") : null}
             </div>
-          ))}
-          {d.legs.length > max && <div style={{ display: "flex", padding: "12px 0", fontSize: 26, color: C.muted, borderTop: `2px solid ${C.rule}` }}>+{d.legs.length - max} more legs</div>}
+            <div style={{ display: "flex", gap: d.legs.length > 24 ? 3 : 6, height: 16, marginTop: story ? 56 : 36 }}>
+              {d.legs.map((l, i) => (
+                <div key={i} style={{ display: "flex", flexGrow: 1, borderRadius: 8,
+                  background: l.status === "won" ? C.won : l.status === "lost" ? C.lost : l.status === "playing" ? C.signal : C.rule }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, fontSize: 26, color: C.muted }}>
+              <div style={{ display: "flex" }}>{won} of {d.legs.length} won</div>
+              {last ? <div style={{ display: "flex" }}>last kick-off {time(last)} Lagos</div> : null}
+            </div>
+          </div>
         </div>
-        <div style={{ display: "flex", marginTop: "auto", paddingTop: 32, fontSize: 24, color: C.muted }}>
-          18+ · Chances are Vig&apos;s estimates, not promises
+        {d.state === "won" && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 40, fontSize: 40, fontWeight: 700, color: C.won }}>
+            <Mark s="won" size={44} />Every leg landed
+          </div>
+        )}
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 32, fontSize: 26, color: C.muted }}>
+          Load it in SportyBet with the code · 18+
         </div>
       </div>
     ),
