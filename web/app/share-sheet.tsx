@@ -1,21 +1,34 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { getShare } from "./share-actions";
 import { instagram, plain, statusCaption, whatsapp, xPost, type ShareData } from "@/lib/sharetext";
 
+const SHORT: Record<string, string> = { won: "w", lost: "l", playing: "p", waiting: "x", unknown: "u" };
+
+/** What this device already knows about a code, for when SportyBet no longer returns it. */
+export function snapOf(d: ShareData): string {
+  const s = JSON.stringify({ s: d.state, o: d.odds, c: d.chance, l: d.legs.map((l) => [SHORT[l.status] ?? "x", Math.round(l.kickoff / 60000)]) });
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 /** A Share button that opens a bottom sheet: card preview, then one tap per app. */
-export function ShareButton({ code, className = "" }: { code: string; className?: string }) {
+export function ShareButton({ code, className = "", fallback }: { code: string; className?: string; fallback?: ShareData }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className={className} onClick={() => setOpen(true)}>Share</button>
-      {open && <ShareSheet code={code} onClose={() => setOpen(false)} />}
+      {/* In a portal: inside a card or a button row the sheet would inherit their layout. */}
+      {open && createPortal(<ShareSheet code={code} fallback={fallback} onClose={() => setOpen(false)} />, document.body)}
     </>
   );
 }
 
-async function imageFile(code: string, story: boolean) {
-  const res = await fetch(`/api/share/${code}${story ? "?f=story" : ""}`);
+const imageUrl = (code: string, story: boolean, snap?: string) =>
+  `/api/share/${code}?${new URLSearchParams({ ...(story ? { f: "story" } : {}), ...(snap ? { s: snap } : {}) })}`;
+
+async function imageFile(code: string, story: boolean, snap?: string) {
+  const res = await fetch(imageUrl(code, story, snap));
   if (!res.ok) throw new Error("image");
   return new File([await res.blob()], `vig-${code}${story ? "-story" : ""}.png`, { type: "image/png" });
 }
@@ -28,17 +41,21 @@ function download(f: File) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
-function ShareSheet({ code, onClose }: { code: string; onClose: () => void }) {
+export function ShareSheet({ code, onClose, fallback }: { code: string; onClose: () => void; fallback?: ShareData }) {
+  const first = useRef({ fallback, onClose });
   const [d, setD] = useState<ShareData | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    getShare(code).then(setD).catch(() => setMsg("Could not load this code."));
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Read once per open: the parent re-renders every few seconds while legs play.
+    const fb = first.current.fallback;
+    getShare(code).then((x) => setD(x ?? fb ?? null)).catch(() => fb ? setD(fb) : setMsg("Could not load this code."));
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && first.current.onClose();
     addEventListener("keydown", esc);
     document.body.style.overflow = "hidden";
     return () => { removeEventListener("keydown", esc); document.body.style.overflow = ""; };
-  }, [code, onClose]);
+  }, [code]);
+  const [snap] = useState(() => (fallback ? snapOf(fallback) : undefined));
 
   const copy = async (text: string, what: string) => {
     try { await navigator.clipboard.writeText(text); setMsg(`${what} copied.`); } catch { setMsg("Copy did not work on this browser."); }
@@ -47,7 +64,7 @@ function ShareSheet({ code, onClose }: { code: string; onClose: () => void }) {
   const shareImage = async (story: boolean, text: string, note: string) => {
     setBusy(true);
     try {
-      const f = await imageFile(code, story);
+      const f = await imageFile(code, story, snap);
       if (navigator.canShare?.({ files: [f] })) await navigator.share({ files: [f], text });
       else { download(f); await copy(text, "Caption"); }
       setMsg(note);
@@ -66,17 +83,26 @@ function ShareSheet({ code, onClose }: { code: string; onClose: () => void }) {
           <button type="button" className="x" onClick={onClose} aria-label="Close">×</button>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="sheet-preview" src={`/api/share/${code}`} alt={`Share card for code ${code}`} />
+        <img className="sheet-preview" src={imageUrl(code, false, snap)} alt={`Share card for code ${code}`} />
         {!d ? <p className="status">{msg || "Preparing…"}</p> : (
           <div className="sheet-grid">
-            <button type="button" disabled={busy} onClick={() => shareImage(false, plain(d), "Shared.")}>Share image…</button>
+            <button type="button" className="primary span2" disabled={busy} onClick={() => shareImage(false, plain(d), "Shared.")}>Share image…</button>
             <button type="button" onClick={() => open(`https://wa.me/?text=${encodeURIComponent(whatsapp(d))}`)}>WhatsApp message</button>
             <button type="button" disabled={busy} onClick={() => shareImage(true, statusCaption(d), "Pick WhatsApp, then My status.")}>WhatsApp status</button>
             <button type="button" onClick={() => open(`https://x.com/intent/post?text=${encodeURIComponent(xPost(d))}`)}>Post on X</button>
             <button type="button" onClick={async () => { await copy(plain(d), "Message"); open("https://x.com/messages"); }}>X message</button>
             <button type="button" disabled={busy} onClick={() => shareImage(true, instagram(d), "Pick Instagram; the caption is copied too.")}>Instagram</button>
+            <button type="button" disabled={busy} onClick={async () => {
+              // The clipboard takes a promise of the image, so the copy still counts as part of the tap.
+              setBusy(true);
+              try {
+                const blob = imageFile(code, false, snap).then((f) => f as Blob);
+                await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+                setMsg("Image copied. Paste it in any chat.");
+              } catch { setMsg("This browser can't copy images; use Save image."); } finally { setBusy(false); }
+            }}>Copy image</button>
             <button type="button" onClick={() => copy(plain(d), "Text")}>Copy text</button>
-            <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { download(await imageFile(code, false)); setMsg("Image saved."); } catch { setMsg("Could not save the image."); } finally { setBusy(false); } }}>Save image</button>
+            <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { download(await imageFile(code, false, snap)); setMsg("Image saved."); } catch { setMsg("Could not save the image."); } finally { setBusy(false); } }}>Save image</button>
           </div>
         )}
         <p className="status" role="status" aria-live="polite">{d ? msg : ""}</p>

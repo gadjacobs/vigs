@@ -12,15 +12,24 @@ const odds = (x: number) => (x < 100 ? x.toFixed(2) : Math.round(x).toLocaleStri
 
 /** `market`: each leg's market chance, to show what SportyBet's Flex pays at each
  * level (its odds are its set payback over the chance; see lib/flex.ts). */
-export function FlexRow({ ps, note, market }: { ps: number[]; note?: string; market?: number[] }) {
+/** `peek`: a short word for the folded line, e.g. that a slip with a lost leg can still pay. */
+export function FlexRow({ ps, note, market, peek }: { ps: number[]; note?: string; market?: number[]; peek?: string }) {
   const n = ps.length;
   if (n < 3) return null;
   const priced = market && market.length === n && market.every((p) => p > 0 && p < 1);
+  const levels = flexLevels(n);
+  const one = levels.find((m) => m === 1);
   return (
-    <div className="flexrow">
-      <span className="flexlabel">With Flex</span>
+    // Folded by default to one line: the chance with one miss allowed. Tap for every level.
+    <details className="flexrow flexfold">
+      <summary>
+        <span className="flexlabel">Flex</span>
+        {one !== undefined ? <span className="flexpeek">{n - 1} of {n}: <b className="num">{fmt(atLeast(ps, n - 1))}</b></span> : null}
+        {peek ? <span className="flexpeek muted">{peek}</span> : null}
+        <span className="chev" aria-hidden="true" />
+      </summary>
       <ul>
-        {flexLevels(n).map((m) => (
+        {levels.map((m) => (
           <li key={m} className={m === 0 ? "all" : ""}>
             <span>{m === 0 ? `All ${n}` : `${n - m} of ${n}`}</span>
             <b className="num">{fmt(atLeast(ps, n - m))}</b>
@@ -32,6 +41,6 @@ export function FlexRow({ ps, note, market }: { ps: number[]; note?: string; mar
         ))}
       </ul>
       {note && <small>{note}</small>}
-    </div>
+    </details>
   );
 }

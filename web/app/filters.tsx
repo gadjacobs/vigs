@@ -9,7 +9,9 @@ import type { SavedFilter } from "@/lib/profile";
 const ALL = Object.keys(MARKET_LABELS);
 const TOLERANCES = [0.05, 0.1, 0.2];
 
-export function Filters({ initial, saved: savedInitial = null }: { initial: Query; saved?: SavedFilter[] | null }) {
+/** `folded`: start as a one-line summary (a slip is already built below), so the slip shows first. */
+export function Filters({ initial, saved: savedInitial = null, folded = false }: { initial: Query; saved?: SavedFilter[] | null; folded?: boolean }) {
+  const [open, setOpen] = useState(!folded);
   const [saved, setSaved] = useState<SavedFilter[] | null>(savedInitial);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -50,6 +52,7 @@ export function Filters({ initial, saved: savedInitial = null }: { initial: Quer
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canBuild) return;
+    setOpen(false);
     const qs = queryString({ ...q, target: targetOk ? target : q.target });
     document.cookie = `vig_q=${encodeURIComponent(qs)}; path=/; max-age=2592000; samesite=lax`;
     start(async () => {
@@ -80,6 +83,16 @@ export function Filters({ initial, saved: savedInitial = null }: { initial: Quer
         )}
       </div>
     )}
+    {!open ? (
+      <button type="button" className="panel filtersum" onClick={() => setOpen(true)} aria-expanded={false}>
+        <span className="fs-main">
+          <strong>{q.mode === "target" ? <>To <span className="num">{q.target}</span> odds <span className="muted">±{Math.round(q.tol * 100)}%</span></> : <><span className="num">{q.count}</span> picks</>}</strong>
+          <span className="muted">{[q.minConf !== "Low" && `${q.minConf}+ confidence`, q.minChance > 0 && `${Math.round(q.minChance * 100)}%+ each`, `next ${q.hours} h`].filter(Boolean).join(" · ")}</span>
+          <span className="fs-markets">{summary}</span>
+        </span>
+        <span className="fs-edit">Edit</span>
+      </button>
+    ) : (
     <form className="panel filters" onSubmit={submit} aria-busy={pending}>
       <div className="filter-row">
         <div className="segmented wide" role="radiogroup" aria-label="Build">
@@ -209,6 +222,7 @@ export function Filters({ initial, saved: savedInitial = null }: { initial: Quer
         {q.mode === "target" && !targetOk && <span className="status" style={{ margin: 0 }}>Enter total odds of 1.1 or more.</span>}
       </div>
     </form>
+    )}
     </>
   );
 }

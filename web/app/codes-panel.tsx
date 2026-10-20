@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { hideCode, syncCodes } from "./profile-actions";
-import { ShareButton } from "./share-sheet";
+import { ShareButton, ShareSheet } from "./share-sheet";
+import { createPortal } from "react-dom";
 import { alertState, followMatch, setCodeAlertAction, trackCodes } from "./push-actions";
 import { liveCodes } from "./live-actions";
 import { HedgeSheet, type HedgeLeg } from "./hedge-sheet";
@@ -290,6 +291,12 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const [cheer, setCheer] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [alertFor, setAlertFor] = useState<{ code: string; lastKickoff: number } | null>(null);
+  // Opened from a landed notification's "Share the ticket" button.
+  const [shareFor, setShareFor] = useState<string | null>(null);
+  useEffect(() => {
+    const c = new URLSearchParams(location.search).get("share");
+    if (c && /^[A-Z0-9]{4,12}$/.test(c)) { setShareFor(c); window.history.replaceState(null, "", "/codes"); }
+  }, []);
   const closeAlerts = useCallback(() => setAlertFor(null), []);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const say = (m: string) => {
@@ -684,14 +691,17 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   : decided ? `${wonN} of ${legs.length} landed: played with Flex at ${wonN} of ${legs.length} or lower, this slip pays a reduced amount.`
                   : `${lostN} leg${lostN > 1 ? "s" : ""} lost. Played with Flex, this slip can still pay.`;
                 // Prematch prices stand in for SportyBet's chances (its cut is about 4%).
-                return <FlexRow ps={ps} note={note} market={t.legs.map((l) => (l.odds ? 1 / (l.odds * 1.04) : 0))} />;
+                return <FlexRow ps={ps} note={note} peek={lostN && !decided ? "can still pay" : undefined} market={t.legs.map((l) => (l.odds ? 1 / (l.odds * 1.04) : 0))} />;
               })()}
               </>)}
               <div className="codeactions">
                 <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>
                 <div className="codetools">
                   <CopyButton text={c.code} label="Copy" />
-                  {(t || !err) && !foreign && <ShareButton code={c.code} />}
+                  {(t || !err) && !foreign && <ShareButton code={c.code} fallback={t ? {
+                    code: c.code, odds: t.odds, chance: chance, state: shownState === "won" ? "won" : shownState === "lost" ? "lost" : "open",
+                    legs: legs.map((l) => ({ home: l.home, away: l.away, label: l.label, odds: l.odds, kickoff: l.kickoff, status: eff(l), score: l.score })),
+                  } : undefined} />}
                   {t && !settled && !foreign && endpoint && (
                     <button type="button" className={`alertbtn ${mode === "goals" ? "on" : mode === "off" ? "off" : "key"}`}
                       aria-haspopup="dialog" onClick={() => setAlertFor({ code: c.code, lastKickoff: t.lastKickoff })}
@@ -763,6 +773,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
         })}
       </ul>
       <p className={`savedtoast ${note ? "on" : ""}`} role="status" aria-live="polite">{note}</p>
+      {shareFor && createPortal(<ShareSheet code={shareFor} onClose={() => setShareFor(null)} />, document.body)}
       {alertFor && <AlertSheet code={alertFor.code} mode={modes[alertFor.code] ?? "default"} onClose={closeAlerts}
         onPick={(m) => { chooseMode(alertFor.code, m, alertFor.lastKickoff); closeAlerts(); }} />}
       {hedge && <HedgeSheet code={hedge.code} leg={hedge.leg} odds={hedge.odds} stake={stake} onClose={closeHedge} />}

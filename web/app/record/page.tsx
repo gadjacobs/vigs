@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TabPending } from "../tab-pending";
 import { loadBlend, type BlendFile } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadInsights, type Insights } from "@/lib/insights";
@@ -447,7 +448,7 @@ export default async function RecordPage({ searchParams }: { searchParams: Promi
       </p>
       <nav className="settabs recordtabs" aria-label="Record sections">
         {TABS.map(([t, label]) => (
-          <Link key={t} href={`/record?tab=${t}`} aria-current={t === tab ? "page" : undefined}>{label}</Link>
+          <Link key={t} href={`/record?tab=${t}`} aria-current={t === tab ? "page" : undefined}>{label}<TabPending /></Link>
         ))}
       </nav>
       {rec && <Body rec={rec} user={user} tab={tab} n={n} stake={stake} />}

@@ -2,6 +2,7 @@ import { viewOf } from "@/lib/view";
 import { MAX_LEGS } from "@/lib/slip";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { TabPending } from "../tab-pending";
 import { lagos } from "../pick-row";
 import { ScrollOnBuild } from "../scroll-on-build";
 import { SlipBuilder } from "../slip-builder";
@@ -46,7 +47,7 @@ function Chips<T extends string | number>({ name, value, options, label, href }:
       <span className="chiplabel">{name}</span>
       <nav className="segmented barpick" aria-label={name}>
         {options.map((v) => (
-          <Link key={String(v)} role="radio" aria-checked={v === value} href={href(v)} className="button" scroll={false}>{label(v)}</Link>
+          <Link key={String(v)} role="radio" aria-checked={v === value} href={href(v)} className="button" scroll={false}>{label(v)}<TabPending /></Link>
         ))}
       </nav>
     </div>
@@ -107,9 +108,9 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       <h1>Our picks</h1>
       <nav className="pagetabs" aria-label="Our picks">
         <Link href="/picks?tab=cooked" aria-current={tab === "cooked" ? "page" : undefined}>
-          Cooked slips {cooked?.slates.length ? <span className="count">{cooked.slates.length}</span> : null}
+          Cooked slips {cooked?.slates.length ? <span className="count">{cooked.slates.length}</span> : null}<TabPending />
         </Link>
-        <Link href={`/picks?tab=build&set=${set}`} aria-current={tab === "build" ? "page" : undefined}>Build your own</Link>
+        <Link href={`/picks?tab=build&set=${set}`} aria-current={tab === "build" ? "page" : undefined}>Build your own<TabPending /></Link>
       </nav>
       {tab === "cooked" && (<>
       <p className="lede">Slips cooked for the rounds published now, named by style and already booked. Open one in SportyBet, or edit it first.</p>
@@ -134,7 +135,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       {tab === "build" && (<>
       <nav className="settabs" aria-label="Pick sets">
         {SETS.map((x) => (
-          <Link key={x.id} href={`/picks?tab=build&set=${x.id}`} aria-current={x.id === set ? "page" : undefined}>{x.label}</Link>
+          <Link key={x.id} href={`/picks?tab=build&set=${x.id}`} aria-current={x.id === set ? "page" : undefined}>{x.label}<TabPending /></Link>
         ))}
       </nav>
       <p className="lede">{ABOUT[set]}</p>

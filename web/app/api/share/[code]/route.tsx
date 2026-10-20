@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { shareData } from "@/lib/shareinfo";
+import type { ShareData } from "@/lib/sharetext";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,19 @@ function Mark({ s, size = 34 }: { s: string; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke={C.lost} strokeWidth="3.2" strokeLinecap="round" /></svg>;
 }
 
+const ST: Record<string, string> = { w: "won", l: "lost", p: "playing", x: "waiting", u: "unknown" };
+function fromSnap(code: string, s: string | null): ShareData | null {
+  if (!s || s.length > 4000) return null;
+  try {
+    const j = JSON.parse(Buffer.from(s, "base64url").toString("utf8")) as { s: string; o: number | null; c: number | null; l: [string, number][] };
+    if (!["open", "won", "lost"].includes(j.s) || !Array.isArray(j.l) || j.l.length > 60) return null;
+    return {
+      code, state: j.s as ShareData["state"], odds: typeof j.o === "number" ? j.o : null, chance: typeof j.c === "number" ? j.c : null,
+      legs: j.l.map(([st, k]) => ({ home: "", away: "", label: "", odds: null, score: null, status: ST[String(st)] ?? "waiting", kickoff: Number(k) * 60000 })),
+    };
+  } catch { return null; }
+}
+
 const time = (ms: number) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit" }).format(ms);
 
 // A share card for a booking code, drawn as a ticket around the code: square
@@ -31,7 +45,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
   const { code } = await params;
   if (!/^[A-Z0-9]{4,12}$/.test(code)) return new Response("Not a code", { status: 400 });
   const story = new URL(request.url).searchParams.get("f") === "story";
-  const d = await shareData(code).catch(() => null);
+  // SportyBet stops returning a code some time after it settles; the app then
+  // sends what the device last saw of it (state, odds and each leg's result).
+  const d = await shareData(code).catch(() => null) ?? fromSnap(code, new URL(request.url).searchParams.get("s"));
   if (!d) return new Response("Code not found", { status: 404 });
   const W = 1080, H = story ? 1920 : 1080;
   const stateText = d.state === "won" ? "LANDED" : d.state === "lost" ? "MISSED" : "LIVE CODE";

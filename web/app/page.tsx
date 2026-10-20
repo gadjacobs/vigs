@@ -57,7 +57,7 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
         Upcoming vFootball selections ranked from past results. Nothing is graded above Lean until the record proves an edge.
       </p>
 
-      <Filters initial={q} saved={user && profile ? profile.filters ?? [] : null} />
+      <Filters initial={q} saved={user && profile ? profile.filters ?? [] : null} folded={Boolean(r?.candidates.length)} />
 
       <div id="results" tabIndex={-1} className="results" aria-label="Your slip and selections">
       <ScrollOnBuild key={now} target="results" />

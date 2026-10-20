@@ -34,7 +34,9 @@ export type Watch = {
   told?: string[]; // one-off notifications already sent ("last")
   decided?: string[]; // legs ("eventId|market") the score had already decided, so their matches go quiet
 };
-export type Payload = { title: string; body: string; url: string; tag?: string; cheer?: boolean };
+/** `kind` picks how the phone shows it (icon, buzz, picture, buttons; see public/sw.js). */
+export type NoteKind = "landed" | "lost" | "goal" | "swing" | "last" | "match";
+export type Payload = { title: string; body: string; url: string; tag?: string; cheer?: boolean; kind?: NoteKind; code?: string };
 
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? "mailto:vig@example.com";
 type Vapid = { publicKey: string; privateKey: string };
@@ -141,7 +143,7 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): {
     body: chance === null ? `${w.code}: ${g0.leg.label.toLowerCase()}.`
       : chance === 0 ? `${w.code} is beaten: ${g0.leg.label.toLowerCase()} can't land now.`
       : `${w.code} now ${pct(chance)} to land${w.chance !== undefined ? ` (was ${pct(w.chance)})` : ""}.`,
-    url: "/codes", tag: `code-${w.code}`,
+    url: "/codes", tag: `code-${w.code}`, kind: "goal", code: w.code,
   } : null;
   if (goals.length && chance !== null && w.chance !== undefined && Math.abs(chance - w.chance) >= SWING) {
     const g = goals[0];
@@ -152,7 +154,7 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): {
         title: `${chance > w.chance ? "▲" : "▼"} ${g.leg.home} ${h}–${a} ${g.leg.away}${g.x.minute !== null ? ` (${g.x.minute}')` : ""}`,
         body: chance === 0 ? `${w.code} is beaten: ${g.leg.label.toLowerCase()} can't land now.`
           : `${w.code} now ${pct(chance)} to land (was ${pct(w.chance)}).${last ? " One leg left." : ""}`,
-        url: "/codes", tag: `code-${w.code}`,
+        url: "/codes", tag: `code-${w.code}`, kind: "swing", code: w.code,
       },
     };
   }
@@ -163,7 +165,7 @@ export function liveNews(w: Watch, live: Record<string, LiveLeg>): {
       payload: {
         title: `${w.code}: one leg left`,
         body: `${legs.length - 1} of ${legs.length} landed. Last: ${l.home} v ${l.away}, ${l.label.toLowerCase()}, ${pct(chance)} to land. Open Codes to ride it or hedge.`,
-        url: "/codes", tag: `code-${w.code}`,
+        url: "/codes", tag: `code-${w.code}`, kind: "last", code: w.code,
       },
     };
   }
@@ -227,7 +229,7 @@ export function fixtureNews(f: FollowedFixture, ev: { phase: string; minute: num
   const told = [...(f.told ?? [])];
   const out: Payload[] = [];
   const name = (sc?: string) => sc ? `${f.home} ${sc.replace(":", "–")} ${f.away}` : `${f.home} v ${f.away}`;
-  const base = { url: "/codes", tag: `match-${f.eventId}` };
+  const base = { url: "/codes", tag: `match-${f.eventId}`, kind: "match" as const };
   if (!ev) return { payloads: out, score: f.score, told, done: false };
   const score = ev.score ? `${ev.score[0]}:${ev.score[1]}` : f.score;
   if (ev.phase === "End" || ev.phase === "Ended") {
@@ -239,7 +241,7 @@ export function fixtureNews(f: FollowedFixture, ev: { phase: string; minute: num
     if (!f.score || f.score === "0:0") out.push({ title: `Kick-off: ${f.home} v ${f.away}`, body: `${f.league}. You'll hear about every goal.`, ...base });
   }
   if (f.score !== undefined && score && score !== f.score)
-    out.push({ title: `⚽ ${name(score)}${ev.minute !== null ? ` (${ev.minute}')` : ""}`, body: `${f.league}.`, ...base });
+    out.push({ title: `⚽ ${name(score)}${ev.minute !== null ? ` (${ev.minute}')` : ""}`, body: `${f.league}.`, ...base, kind: "goal" });
   if (ev.phase === "HT" && !told.includes("ht")) {
     told.push("ht");
     out.push({ title: `Half time: ${name(score)}`, body: `${f.league}.`, ...base });
@@ -378,8 +380,8 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
   };
   const final = (w: Watch, t: Tracked) =>
     settle(w, t.state === "won"
-      ? { title: `🎉 ${w.code} landed!`, body: summary(t), url: "/codes", tag: `code-${w.code}`, cheer: true }
-      : { title: `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}` });
+      ? { title: `🎉 ${w.code} landed!`, body: summary(t), url: "/codes", tag: `code-${w.code}`, cheer: true, kind: "landed", code: w.code }
+      : { title: `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}`, kind: "lost", code: w.code });
 
   for (const code of await members("watches").catch((e) => (fail(e), [] as string[]))) {
     out.watches++;
@@ -415,7 +417,7 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
       if (beaten && news.chance === 0) {
         const l = open.find((x) => live[legKey(x)]?.chance === 0)!;
         const x = live[legKey(l)];
-        await settle(w, { title: `✗ ${code} lost`, body: `${l.home} v ${l.away}: ${l.label.toLowerCase()} is beaten at ${x.score}${x.minute !== null ? ` (${x.minute}')` : ""}.`, url: "/codes", tag: `code-${code}` });
+        await settle(w, { title: `✗ ${code} lost`, body: `${l.home} v ${l.away}: ${l.label.toLowerCase()} is beaten at ${x.score}${x.minute !== null ? ` (${x.minute}')` : ""}.`, url: "/codes", tag: `code-${code}`, kind: "lost", code });
         continue;
       }
       if (news.payload) {

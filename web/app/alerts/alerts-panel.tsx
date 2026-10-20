@@ -1,4 +1,5 @@
 "use client";
+import { NotifyStyle } from "./notify-style";
 import { useEffect, useState, useTransition } from "react";
 import { pushPrefs, subscribePush, testPush, unsubscribePush } from "../push-actions";
 import { SETS } from "@/lib/ourpicks";
@@ -131,6 +132,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
               <span className="hint">Change any one code from the bell on its card.</span>
             </label>
           </fieldset>
+          <NotifyStyle />
           <fieldset className="chipgroup">
             <legend>Send me a tip slip at (Lagos time)</legend>
             {[...new Set([...PRESETS, ...tips])].sort().map((t) => (
