@@ -162,6 +162,51 @@ function Ticker({ value }: { value: number }) {
   return <span className={`ticker ${dir}`}>{text}</span>;
 }
 
+/** Progress across the legs: a segment per leg while they fit, one stacked bar for big slips. */
+function LegBar({ legs, eff, flash, label, thin = false }: {
+  legs: Tracked["legs"]; eff: (l: Tracked["legs"][number]) => string; flash: Set<string>; label?: string; thin?: boolean;
+}) {
+  const cls = `legbar ${thin ? "thin" : ""}`;
+  const a11y = label ? { role: "img", "aria-label": label } : { "aria-hidden": true };
+  if (legs.length <= 16)
+    return <div className={cls} {...a11y}>{legs.map((l) => <span key={l.eventId} className={`seg seg-${eff(l)} ${flash.has(l.eventId) ? "flash" : ""}`} />)}</div>;
+  const n = (st: string) => legs.filter((l) => eff(l) === st).length;
+  return (
+    <div className={`${cls} stacked`} {...a11y}>
+      {(["won", "playing", "lost", "waiting"] as const).map((st) => n(st) > 0 &&
+        <span key={st} className={`seg seg-${st}`} style={{ flexGrow: n(st) }} />)}
+    </div>
+  );
+}
+
+/** Per-code alert choice, as a bottom sheet: it always fits the screen, whatever the card's position. */
+function AlertSheet({ code, mode, onPick, onClose }: { code: string; mode: string; onPick: (m: "goals" | "default" | "off") => void; onClose: () => void }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", esc);
+    return () => removeEventListener("keydown", esc);
+  }, [onClose]);
+  return (
+    <div className="sheet-backdrop" onClick={onClose} role="presentation">
+      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="alert-title" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grip" aria-hidden="true" />
+        <div className="sheet-head">
+          <h2 id="alert-title">Alerts for <span className="num">{code}</span></h2>
+          <button type="button" className="x" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="optlist" role="radiogroup" aria-label={`Alerts for ${code}`}>
+          {ALERT_MODES.map(([v, label, hint]) => (
+            <button key={v} type="button" role="radio" aria-checked={mode === v} onClick={() => onPick(v)}>
+              <span><strong>{label}</strong><small>{hint}</small></span>
+              <i aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const pctText = (p: number) => (p >= 0.995 && p < 1 ? ">99" : p > 0 && p < 0.005 ? "<1" : String(Math.round(p * 100)));
 
 /** This device's push subscription endpoint, if notifications are on. */
@@ -213,6 +258,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const [follows, setFollows] = useState<Set<string>>(new Set());
   const [goalFlash, setGoalFlash] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
+  const [alertFor, setAlertFor] = useState<{ code: string; lastKickoff: number } | null>(null);
+  const closeAlerts = useCallback(() => setAlertFor(null), []);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const say = (m: string) => {
     setNote(m);
@@ -447,13 +494,15 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
           ))}
         </div>
       )}
-      {loaded && list.length > 0 && (
-        <div className="density" role="radiogroup" aria-label="Card size">
-          <button type="button" role="radio" aria-checked={!compact} onClick={() => chooseDensity(false)}>Full</button>
-          <button type="button" role="radio" aria-checked={compact} onClick={() => chooseDensity(true)}>Compact</button>
-        </div>
-      )}
-      <p className="status codestatus">{tab === "open" ? "Scores update every 10 seconds while a leg is in play." : "Settled codes. Removing one hides it here; the record keeps its result."}</p>
+      <div className="codebar">
+        <p className="status">{tab === "open" ? "Scores update every 10 seconds while a leg plays." : "Removing a code hides it here; the record keeps its result."}</p>
+        {loaded && list.length > 0 && (
+          <div className="density" role="radiogroup" aria-label="Card size">
+            <button type="button" role="radio" aria-checked={!compact} onClick={() => chooseDensity(false)}>Full</button>
+            <button type="button" role="radio" aria-checked={compact} onClick={() => chooseDensity(true)}>Compact</button>
+          </div>
+        )}
+      </div>
       {undo && <p className="note undo" role="status">Removed {undo.code}. <button type="button" onClick={restore}>Undo</button></p>}
       {!loaded && <ul className="codecards" aria-busy="true" aria-label="Loading codes"><SkeletonCard /><SkeletonCard /></ul>}
       {loaded && tab === "open" && !openList.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
@@ -490,10 +539,17 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 <em>{delta !== 0 ? <b className={delta > 0 ? "up" : "down"}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</b> : null} to land</em>
               </div>
             ) : parts && parts.missing && !lostN ? (
-              <div className="chancebig low" aria-label={`at most ${pctText(parts.p)}% chance to land`}>
-                <span className="num"><small>≤</small>{pctText(parts.p)}<small>%</small></span>
-                <em>{parts.missing - parts.settling ? `${parts.missing - parts.settling} not priced yet` : `${parts.settling} settling`}</em>
-              </div>
+              parts.p >= 1 ? (
+                // Nothing priced yet: a dash rather than an empty upper bound.
+                <div className="chancebig low" aria-label="chance not priced yet">
+                  <span className="num">–</span><em>not priced yet</em>
+                </div>
+              ) : (
+                <div className="chancebig low" aria-label={`at most ${pctText(parts.p)}% chance to land`}>
+                  <span className="num"><small>≤</small>{pctText(parts.p)}<small>%</small></span>
+                  <em>to land, so far</em>
+                </div>
+              )
             ) : settled ? (
               <div className={`chancebig done-${t!.state}`}><span>{t!.state === "won" ? "✓" : "✗"}</span><em>{t!.state === "won" ? "landed" : "lost"}</em></div>
             ) : null;
@@ -515,11 +571,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   </span>
                   <span className="cr-chance">{chanceEl}</span>
                 </button>
-                {legs.length > 0 && !foreign && (
-                  <div className="legbar thin" aria-hidden="true">
-                    {legs.map((l) => <span key={l.eventId} className={`seg seg-${eff(l)} ${goalFlash.has(l.eventId) ? "flash" : ""}`} />)}
-                  </div>
-                )}
+                {legs.length > 0 && !foreign && <LegBar legs={legs} eff={eff} flash={goalFlash} thin />}
               </li>
             );
           }
@@ -545,14 +597,15 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 {lastKo && !settled ? <> · last game <b className="num lastko">{lagos(lastKo)}</b>{lastIn ? <span className="muted"> ({lastIn})</span> : null}</> : null}
                 {" "}· booked {lagos(c.at)}
               </p>
+              {parts && parts.missing > 0 && !lostN && !foreign && (
+                <p className="codewait">{parts.missing - parts.settling
+                  ? `${parts.missing - parts.settling} leg${parts.missing - parts.settling > 1 ? "s" : ""} not priced yet (SportyBet hasn't published the round), so the chance counts only the priced legs.`
+                  : `${parts.settling} leg${parts.settling > 1 ? "s" : ""} settling.`}</p>
+              )}
               {foreign ? (
                 <p className="codeline">Vig follows vFootball only, so this code&apos;s results aren&apos;t tracked here. Check it in SportyBet.</p>
               ) : (<>
-              {legs.length > 0 && (
-                <div className="legbar" role="img" aria-label={`${wonN} won, ${lostN} lost, ${left} to play`}>
-                  {legs.map((l) => <span key={l.eventId} className={`seg seg-${eff(l)} ${goalFlash.has(l.eventId) ? "flash" : ""}`} />)}
-                </div>
-              )}
+              {legs.length > 0 && <LegBar legs={legs} eff={eff} flash={goalFlash} label={`${wonN} won, ${lostN} lost, ${left} to play`} />}
               <p className="codeline">
                 {t ? <><b>{wonN}</b> won · <b>{lostN}</b> lost · <b>{left}</b> to play{next ? <span className="muted"> · next {lagos(next.kickoff)}</span> : null}</>
                   : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : <span className="skel skel-line" aria-label="Loading" />}
@@ -572,29 +625,22 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
               </>)}
               <div className="codeactions">
                 <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>
-                <CopyButton text={c.code} />
-                {(t || !err) && !foreign && <ShareButton code={c.code} />}
-                {last && !foreign && <button type="button" onClick={() => setHedge({ code: c.code, odds: t!.odds,
-                  leg: { eventId: last.eventId, market: last.market, kickoff: last.kickoff, home: last.home, away: last.away, label: last.label } })}>Hedge</button>}
-                {t && !settled && !foreign && endpoint && (
-                  <details className="alertmenu">
-                    <summary aria-label={`Alerts for ${c.code}: ${ALERT_MODES.find(([v]) => v === (mode ?? "default"))![1]}`}
-                      className={mode === "goals" ? "on" : mode === "off" ? "off" : "key"}>
+                <div className="codetools">
+                  <CopyButton text={c.code} label="Copy" />
+                  {(t || !err) && !foreign && <ShareButton code={c.code} />}
+                  {t && !settled && !foreign && endpoint && (
+                    <button type="button" className={`alertbtn ${mode === "goals" ? "on" : mode === "off" ? "off" : "key"}`}
+                      aria-haspopup="dialog" onClick={() => setAlertFor({ code: c.code, lastKickoff: t.lastKickoff })}
+                      aria-label={`Alerts for ${c.code}: ${ALERT_MODES.find(([v]) => v === (mode ?? "default"))![1]}`}>
                       <Icon d={mode === "off" ? BELL_OFF : BELL} />
-                      <span className="alertlabel" aria-hidden="true">{mode === "goals" ? "Goals" : mode === "off" ? "Off" : "Key"}</span>
-                    </summary>
-                    <div className="alertpop" role="radiogroup" aria-label={`Alerts for ${c.code}`}>
-                      {ALERT_MODES.map(([v, label, hint]) => (
-                        <button key={v} type="button" role="radio" aria-checked={(mode ?? "default") === v}
-                          onClick={(e) => { chooseMode(c.code, v, t.lastKickoff); (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; }}>
-                          <strong>{label}</strong><small>{hint}</small>
-                        </button>
-                      ))}
-                    </div>
-                  </details>
-                )}
-                {compact && <button type="button" className="ghost" onClick={() => flipCard(c.code)}>Compact</button>}
-                {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
+                      <span aria-hidden="true">{mode === "goals" ? "Goals" : mode === "off" ? "Off" : "Alerts"}</span>
+                    </button>
+                  )}
+                  {last && !foreign && <button type="button" onClick={() => setHedge({ code: c.code, odds: t!.odds,
+                    leg: { eventId: last.eventId, market: last.market, kickoff: last.kickoff, home: last.home, away: last.away, label: last.label } })}>Hedge</button>}
+                  {compact && <button type="button" onClick={() => flipCard(c.code)}>Collapse</button>}
+                  {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
+                </div>
               </div>
               {t && !settled && !foreign && endpoint === null && isOpen && (
                 <p className="hint"><a href="/alerts">Turn on notifications</a> to follow this code or its matches without opening the app.</p>
@@ -653,6 +699,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
         })}
       </ul>
       <p className={`savedtoast ${note ? "on" : ""}`} role="status" aria-live="polite">{note}</p>
+      {alertFor && <AlertSheet code={alertFor.code} mode={modes[alertFor.code] ?? "default"} onClose={closeAlerts}
+        onPick={(m) => { chooseMode(alertFor.code, m, alertFor.lastKickoff); closeAlerts(); }} />}
       {hedge && <HedgeSheet code={hedge.code} leg={hedge.leg} odds={hedge.odds} stake={stake} onClose={closeHedge} />}
       {more > 0 && <button type="button" className="moreb" onClick={() => setPages((p) => p + 1)}>Show {Math.min(more, PAGE)} more</button>}
     </section>

@@ -34,7 +34,6 @@ function LeanMark({ p, lean }: { p: Pick; lean?: LeanRow[] }) {
   return <span className={`leanmark ${up ? "up" : "down"}`} title={said}>{up ? "▲ above its price" : "▼ below its price"}<span className="sr-only"> {said}</span></span>;
 }
 
-/** A plain warning when a leg's market has landed well below its price in our data. */
 /** First-half legs: tonight's first-half goal chance against the fixture's usual. */
 function FhMark({ p }: { p: Pick }) {
   if (!p.fh) return null;
@@ -46,6 +45,7 @@ function FhMark({ p }: { p: Pick }) {
   return <span className={`fhmark ${good ? "up" : "down"}`} title={said}>{goals ? "▲" : "▼"} 1st half {d > 0 ? "+" : ""}{d} vs usual<span className="sr-only"> {said}</span></span>;
 }
 
+/** A plain warning when a leg's market has landed well below its price in our data. */
 function LeanWarn({ p, lean }: { p: Pick; lean?: LeanRow[] }) {
   const { z, row } = leanOf(lean, p.market, p.marketChance);
   if (z === null || !row || z > -2) return null;
@@ -64,13 +64,15 @@ export function PickRow({ p, actions, now, view = "detailed", lean }: { p: Pick;
           </div>
           <div className="match">{p.home} v {p.away}<small>{MARKET_LABELS[p.market] ?? p.market}</small></div>
           <div className="odds num" aria-label={`odds ${p.odds.toFixed(2)}`}>{p.odds.toFixed(2)}</div>
-          <span className={`badge conf-${conf.toLowerCase()}`}>{conf} confidence</span>
         </div>
         <p className="plain">
           <strong className="num chance">{chance(p.estimate)}</strong>
-          <span>chance it lands, {oneIn(p.estimate)}.</span>
-          <LeanMark p={p} lean={lean} /> <FhMark p={p} />
+          <span>chance it lands, {oneIn(p.estimate)}</span>
         </p>
+        <div className="tags">
+          <span className={`badge conf-${conf.toLowerCase()}`}>{conf} confidence</span>
+          <LeanMark p={p} lean={lean} /><FhMark p={p} />
+        </div>
         <LeanWarn p={p} lean={lean} />
         {p.odds >= 5 && <p className="why longshot">Long shot: prices this big have paid back far less than they cost.</p>}
         {actions && <div className="row leg-actions">{actions}</div>}
@@ -94,7 +96,8 @@ export function PickRow({ p, actions, now, view = "detailed", lean }: { p: Pick;
         <div><dt>Edge per ₦1,000</dt><dd>{naira(p.edge)}</dd></div>
       </dl>
       <Bar p={p} />
-      <p className="why">{p.grade}: {p.why}. <LeanMark p={p} lean={lean} /> <FhMark p={p} /></p>
+      <p className="why">{p.grade}: {p.why}.</p>
+      <div className="tags"><LeanMark p={p} lean={lean} /><FhMark p={p} /></div>
       <LeanWarn p={p} lean={lean} />
       {p.odds >= 5 && <p className="why longshot">Long shot: in Vig&apos;s data, prices over 5 have returned far less than they cost (see Record).</p>}
       {actions && <div className="row leg-actions">{actions}</div>}

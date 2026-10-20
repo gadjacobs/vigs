@@ -7,7 +7,6 @@ import { Nav } from "./nav";
 import { SamsungHint } from "./samsung-hint";
 import { UpdateToast } from "./update-toast";
 import { BUILD } from "@/lib/build";
-import { ThemeToggle } from "./theme-toggle";
 import { BetaLink } from "./beta-link";
 import { Resume } from "./resume";
 import "./globals.css";
@@ -53,7 +52,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <a className="wordmark" href="/">Vig</a>
           <Nav />
           <BetaLink />
-          <ThemeToggle initial={theme ?? "system"} />
           <AccountButton />
         </header>
         <SamsungHint />

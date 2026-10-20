@@ -34,12 +34,12 @@ export function SlateCard({ s }: { s: Slate }) {
       </ol>
       </details>
       <FlexRow ps={s.legs.map((p) => p.estimate)} market={s.legs.map((p) => p.marketChance)} />
-      <div className="row slateactions">
-        {s.code ? (
-          <SlateActions code={s.code} legs={s.legs.length} odds={s.odds} last={s.last} style={s.style} />
-        ) : null}
-        <Link className="button" href={`/picks/edit?slate=${encodeURIComponent(s.id)}`}>{s.code ? "Edit" : "Edit and book"}</Link>
-      </div>
+      {s.code ? (
+        <SlateActions code={s.code} legs={s.legs.length} odds={s.odds} last={s.last} style={s.style}
+          edit={<Link className="button" href={`/picks/edit?slate=${encodeURIComponent(s.id)}`}>Edit</Link>} />
+      ) : (
+        <Link className="button primary wide" href={`/picks/edit?slate=${encodeURIComponent(s.id)}`}>Edit and book</Link>
+      )}
     </li>
   );
 }
