@@ -132,8 +132,8 @@ describe("share text", () => {
     expect(xPost(d).length).toBeLessThanOrEqual(280);
     expect(xPost(d)).toContain("ABC123");
     expect(whatsapp(d)).toContain("*SportyBet code: ABC123*");
-    expect(whatsapp(d)).toContain("+2 more");
-    expect(plain(d)).toContain("₦1,000 returns ₦39,370 if all land.");
+    expect(whatsapp(d)).toContain("?shareCode=ABC123");
+    expect(plain(d)).not.toContain(d.legs[0].home);
     expect(plain(d)).not.toContain("*");
   });
 });

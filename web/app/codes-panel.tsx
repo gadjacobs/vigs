@@ -225,7 +225,21 @@ const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
 );
 
-const ICON: Record<string, string> = { won: "✓", lost: "✗", playing: "…", waiting: "", unknown: "?" };
+/** The chance as a ring that fills to it; the number sits inside. */
+function Ring({ p, tone, children }: { p: number; tone: string; children: React.ReactNode }) {
+  return <span className={`ring ${tone}`} style={{ "--p": Math.min(1, Math.max(0, p)) } as React.CSSProperties}><b className="num">{children}</b></span>;
+}
+
+/** A leg's state as a drawn mark: filled tick or cross once decided, a live dot while it plays, an empty ring before. */
+function LegMark({ st }: { st: string }) {
+  const path = st === "won" ? "M7 12.5l3.2 3.2L17 9" : st === "lost" ? "M8.5 8.5l7 7M15.5 8.5l-7 7" : st === "unknown" ? "M10 9.5a2 2 0 113 1.7c-.6.4-1 .8-1 1.6M12 16h.01" : "";
+  return (
+    <span className={`legicon st-${st}`} aria-hidden="true">
+      {path ? <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>
+        : st === "playing" ? <i /> : null}
+    </span>
+  );
+}
 const STATE: Record<Tracked["state"] | "upcoming", string> = { upcoming: "Upcoming", open: "In play", won: "Landed", lost: "Lost" };
 
 export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; view?: "simple" | "detailed" }) {
@@ -236,6 +250,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const [pending, start] = useTransition();
   const [tab, setTab] = useState<"open" | "history">("open");
   const [filter, setFilter] = useState<"all" | "won" | "lost">("all");
+  const [openFilter, setOpenFilter] = useState<"all" | "live" | "later">("all");
   const [open, setOpen] = useState<Set<string>>(new Set());
   // Card density, kept on this device: compact rows or the full card.
   const [compact, setCompact] = useState(false);
@@ -433,14 +448,20 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const now = Date.now();
   const tracked = codes.map((c) => {
     const st = status[c.code];
-    return { c, t: st && "legs" in st ? st : null, err: Boolean(st && "error" in st) };
+    const t = st && "legs" in st ? st : null;
+    // A code is lost the moment one leg is beaten, live, before SportyBet settles the rest.
+    const state = t ? (t.state === "open" && t.legs.some((l) => effective(l, live) === "lost") ? "lost" : t.state) : null;
+    const playing = Boolean(t && t.legs.some((l) => { const e = effective(l, live); return e === "playing" || (e === "waiting" && l.kickoff <= now); }));
+    return { c, t, state, playing, err: Boolean(st && "error" in st) };
   });
-  // Open: still in play, or not checked yet. History: settled, or no longer
-  // available from SportyBet a day after the last kickoff.
-  const isHistory = (x: (typeof tracked)[number]) => (x.t ? x.t.state !== "open" || x.t.foreign : x.err && x.c.last + DAY < now);
-  const openList = tracked.filter((x) => !isHistory(x));
+  // Open: still alive, or not checked yet. History: settled or beaten, or no
+  // longer available from SportyBet a day after the last kickoff.
+  const isHistory = (x: (typeof tracked)[number]) => (x.t ? x.state !== "open" || x.t.foreign : x.err && x.c.last + DAY < now);
+  const openAll = tracked.filter((x) => !isHistory(x));
+  const liveN = openAll.filter((x) => x.playing).length;
+  const openList = openAll.filter((x) => openFilter === "all" || (openFilter === "live") === x.playing);
   const history = tracked.filter(isHistory);
-  const shownHistory = history.filter((x) => filter === "all" || x.t?.state === filter);
+  const shownHistory = history.filter((x) => filter === "all" || x.state === filter);
   const list = tab === "open" ? openList.slice(0, pages * PAGE) : shownHistory.slice(0, pages * PAGE);
   const more = (tab === "open" ? openList.length : shownHistory.length) - list.length;
   const toggle = (code: string) => setOpen((o) => {
@@ -467,7 +488,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     setCodes(readCodes());
     setUndo(null);
   };
-  const count = (st: "won" | "lost") => history.filter((x) => x.t?.state === st).length;
+  const count = (st: "won" | "lost") => history.filter((x) => x.state === st).length;
 
   return (
     <section id="codes" className="codes-block" aria-labelledby="codes-title">
@@ -481,12 +502,21 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
 
       <div className="codetabs" role="tablist" aria-label="Codes">
         <button type="button" role="tab" aria-selected={tab === "open"} onClick={() => { setTab("open"); setPages(1); }}>
-          Open <span className="count">{openList.length}</span>
+          Open <span className="count">{openAll.length}</span>
         </button>
         <button type="button" role="tab" aria-selected={tab === "history"} onClick={() => { setTab("history"); setPages(1); }}>
           History <span className="count">{history.length}</span>
         </button>
       </div>
+      {tab === "open" && openAll.length > 1 && (
+        <div className="codefilters" role="radiogroup" aria-label="Show open codes">
+          {([["all", `All ${openAll.length}`], ["live", `In play ${liveN}`], ["later", `Starting later ${openAll.length - liveN}`]] as const).map(([v, label]) => (
+            <button key={v} type="button" role="radio" aria-checked={openFilter === v} onClick={() => { setOpenFilter(v); setPages(1); }}>
+              {v === "live" && <i className="livedot" aria-hidden="true" />}{label}
+            </button>
+          ))}
+        </div>
+      )}
       {tab === "history" && history.length > 0 && (
         <div className="codefilters" role="radiogroup" aria-label="Show settled codes">
           {([["all", `All ${history.length}`], ["won", `Landed ${count("won")}`], ["lost", `Lost ${count("lost")}`]] as const).map(([v, label]) => (
@@ -505,7 +535,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       </div>
       {undo && <p className="note undo" role="status">Removed {undo.code}. <button type="button" onClick={restore}>Undo</button></p>}
       {!loaded && <ul className="codecards" aria-busy="true" aria-label="Loading codes"><SkeletonCard /><SkeletonCard /></ul>}
-      {loaded && tab === "open" && !openList.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
+      {loaded && tab === "open" && !openAll.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
+      {loaded && tab === "open" && openAll.length > 0 && !openList.length && <p className="note">{openFilter === "live" ? "No code has a leg playing right now." : "Every open code has a leg playing."}</p>}
       {tab === "history" && !shownHistory.length && <p className="note">Nothing settled here yet.</p>}
       <ul className="codecards">
         {list.map(({ c, t, err }) => {
@@ -534,24 +565,27 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
           const settled = t && t.state !== "open";
           const foreign = Boolean(t?.foreign);
           const chanceEl = foreign ? null : chance !== null && !lostN ? (
-              <div className={`chancebig ${chance >= 0.5 ? "good" : "low"}`} aria-label={`${pctText(chance)}% chance to land`}>
-                <span className="num"><Ticker value={chance * 100} /><small>%</small></span>
+              <div className="chancebig" aria-label={`${pctText(chance)}% chance to land`}>
+                <Ring p={chance} tone={chance >= 0.5 ? "good" : chance >= 0.2 ? "mid" : "low"}><Ticker value={chance * 100} /><small>%</small></Ring>
                 <em>{delta !== 0 ? <b className={delta > 0 ? "up" : "down"}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</b> : null} to land</em>
               </div>
             ) : parts && parts.missing && !lostN ? (
               parts.p >= 1 ? (
                 // Nothing priced yet: a dash rather than an empty upper bound.
-                <div className="chancebig low" aria-label="chance not priced yet">
-                  <span className="num">–</span><em>not priced yet</em>
+                <div className="chancebig" aria-label="chance not priced yet">
+                  <Ring p={0} tone="low">–</Ring><em>not priced yet</em>
                 </div>
               ) : (
-                <div className="chancebig low" aria-label={`at most ${pctText(parts.p)}% chance to land`}>
-                  <span className="num"><small>≤</small>{pctText(parts.p)}<small>%</small></span>
+                <div className="chancebig" aria-label={`at most ${pctText(parts.p)}% chance to land`}>
+                  <Ring p={parts.p} tone={parts.p >= 0.5 ? "good" : parts.p >= 0.2 ? "mid" : "low"}><small>≤</small>{pctText(parts.p)}<small>%</small></Ring>
                   <em>to land, so far</em>
                 </div>
               )
-            ) : settled ? (
-              <div className={`chancebig done-${t!.state}`}><span>{t!.state === "won" ? "✓" : "✗"}</span><em>{t!.state === "won" ? "landed" : "lost"}</em></div>
+            ) : settled || lostN ? (
+              <div className="chancebig" aria-label={shownState === "won" ? "landed" : "lost"}>
+                <Ring p={1} tone={shownState === "won" ? "won" : "lost"}><LegMark st={shownState === "won" ? "won" : "lost"} /></Ring>
+                <em>{shownState === "won" ? "landed" : "lost"}</em>
+              </div>
             ) : null;
           if (compact && !expanded.has(c.code)) {
             return (
@@ -666,7 +700,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                       </li>] : [];
                     return [...sep, (
                     <li key={l.eventId} className={`leg-${st} ${course ? `course-${course}` : ""}`}>
-                      <span className="legicon" aria-hidden="true">{ICON[st]}</span>
+                      <LegMark st={st} />
                       <span className="legmain">{l.home} v {l.away}
                         <small>{!grouped && l.kickoff === lastKo && legs[0].kickoff !== lastKo && !settled ? <b className="lasttag">Last game</b> : null}{l.label}{view === "detailed" ? <> · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"}</> : l.odds ? <> · <span className="num">{l.odds.toFixed(2)}</span></> : null} · {lagos(l.kickoff)}</small>
                         {lc !== null && (st === "playing" || st === "waiting") && (

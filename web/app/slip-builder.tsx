@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { bookSlip, type BookResult } from "./actions";
 import { rememberCode } from "./codes-panel";
 import { shareUrl } from "@/lib/share";
@@ -64,6 +64,17 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
   const [msg, setMsg] = useState("");
   const [result, setResult] = useState<BookResult | null>(null);
   const [pending, start] = useTransition();
+  // The summary bar above the tab bar shows only while the slip's own Book button is off screen.
+  const bookRef = useRef<HTMLDivElement>(null);
+  const [bookSeen, setBookSeen] = useState(true);
+  const hasLegs = ids.length > 0, booked = Boolean(result?.ok);
+  useEffect(() => {
+    const el = bookRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setBookSeen(e.isIntersecting), { rootMargin: "0px 0px -72px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasLegs, booked]);
   const byId = useMemo(() => new Map(cands.map((p) => [p.id, p])), [cands]);
   const legs = ids.map((id) => byId.get(id)).filter((p): p is Pick => !!p);
   const s = slipStats(legs);
@@ -96,6 +107,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
     setResult(res);
     if (res.ok) {
       rememberCode({ code: res.code, at: Date.now(), legs: res.legs, odds: s.odds, last: res.lastKickoff });
+      navigator.vibrate?.(18);
       const endpoint = await pushEndpoint();
       setWatching(Boolean(endpoint && (await watchBooking(res.code, endpoint, res.lastKickoff))));
     }
@@ -163,45 +175,50 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
         {legs.length > 1 && s.model < LOW_CHANCE && (
           <p className="note warn">As one accumulator this lands {pct(s.model)} of the time on Vig's estimate. Most slips like this lose; singles keep each leg's own odds.</p>
         )}
-        <div className="row">
-          <button className={result?.ok ? "" : "primary"} type="button" disabled={!legs.length || pending} onClick={book}>
-            {pending ? "Booking…" : `Get booking code (${legs.length})`}
-          </button>
-          {result?.ok && (
-            <a className="button primary" href={shareUrl(result.code)}>Open in SportyBet</a>
+        <div ref={bookRef}>
+          {result?.ok ? (
+            <div className="booked" aria-live="polite">
+              <div className="booked-head">
+                <span className="booked-kicker">Booking code</span>
+                <strong className="num booked-code">{result.code}</strong>
+                <span className="booked-sub">{result.legs} legs · <span className="num">{s.odds.toFixed(2)}</span> odds</span>
+              </div>
+              <div className="codeactions">
+                <a className="button primary" href={shareUrl(result.code)}>Open in SportyBet</a>
+                <div className="codetools">
+                  <CopyButton text={result.code} label="Copy" />
+                  <ShareButton code={result.code} />
+                  <a className="button" href="/codes">Codes</a>
+                </div>
+              </div>
+              <p className="booked-note">
+                {result.verified === result.legs ? "Checked: the code loads exactly these legs." : `Only ${result.verified} of ${result.legs} loaded back; check the slip in SportyBet.`}
+                {result.started ? ` ${result.started} leg${result.started > 1 ? "s have" : " has"} already kicked off: the code includes ${result.started > 1 ? "them" : "it"}, but SportyBet may not take bets on ${result.started > 1 ? "them" : "it"} any more.` : ""}
+                {` Last match kicks off at ${lagos(result.lastKickoff)} Lagos. Vig never places the bet.`}
+                {watching ? " You'll get a notification when it lands or loses." : <> <a href="/alerts">Turn on notifications</a> to hear when it settles.</>}
+              </p>
+            </div>
+          ) : (
+            <div className="bookbar">
+              <button className="primary bookbtn" type="button" disabled={!legs.length || pending} onClick={book}>
+                {pending ? "Booking…" : <>Get booking code<small><span className="num">{legs.length}</span> legs · <span className="num">{s.odds.toFixed(2)}</span> odds</small></>}
+              </button>
+              <button type="button" className="linkish" onClick={() => edit(initial, "Slip reset.")} disabled={pending}>Reset slip</button>
+            </div>
           )}
-          <button type="button" onClick={() => edit(initial, "Slip reset.")} disabled={pending}>Reset</button>
         </div>
         <p className="status" role="status" aria-live="polite">{msg}</p>
       </div>
       )}
 
       {legs.length > 0 && !result?.ok && (
-        <div className="dock" role="region" aria-label="Slip summary">
+        <div className={`dock ${bookSeen ? "" : "on"}`} role="region" aria-label="Slip summary" inert={bookSeen}>
           <span><strong className="num">{s.odds.toFixed(2)}</strong> odds, {legs.length} legs, {view === "simple" ? `${chance(s.model)} chance` : pct(s.model)}</span>
           <button className="primary" type="button" disabled={pending} onClick={book} aria-label={`Get booking code for ${legs.length} legs`}>{pending ? "Booking…" : "Book"}</button>
         </div>
       )}
 
-      {result && (result.ok ? (
-        <section className="receipt" aria-live="polite" aria-labelledby="code-title">
-          <h2 id="code-title" style={{ margin: 0, fontSize: 18 }}>Booking code ready</h2>
-          <p className="code">{result.code}</p>
-          <p className="status">
-            {result.legs} selections. {result.verified === result.legs ? "Checked: the code loads exactly these legs." : `Only ${result.verified} of ${result.legs} loaded back; check the slip in SportyBet.`}
-            {result.started ? ` ${result.started} leg${result.started > 1 ? "s have" : " has"} already kicked off: the code includes ${result.started > 1 ? "them" : "it"}, but SportyBet may not take bets on ${result.started > 1 ? "them" : "it"} any more.` : ""}
-            {` Last match kicks off at ${lagos(result.lastKickoff)} Lagos; each match drops off once it starts.`}
-          </p>
-          <div className="row">
-            <CopyButton text={result.code} />
-            <ShareButton code={result.code} />
-          </div>
-          <p className="status" style={{ marginTop: 8 }}>Opens the SportyBet app if it is installed, otherwise the website. Vig never places the bet.</p>
-          <p className="status">
-            {watching ? <>You will get a notification when this code lands or loses. <a href="/codes">Follow it in Codes</a>.</> : <><a href="/codes">Follow it in Codes</a>. <a href="/alerts">Turn on notifications</a> to hear when it settles.</>}
-          </p>
-        </section>
-      ) : <p className="note warn" role="alert">{result.error}</p>)}
+      {result && !result.ok && <p className="note warn" role="alert">{result.error}</p>}
 
       <ol className="picks">
         {legs.map((p) => (

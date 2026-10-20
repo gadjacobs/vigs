@@ -64,7 +64,7 @@ export function saveOpen(ts: Tracked[]) {
 /** Codes on this device still to play or in play, for the tab bar's counter. */
 export function openCount(now = Date.now()): number {
   const done = readFinal(), seen = readOpen(now);
-  return readCodes().filter((c) => !done[c.code] && seen[c.code]?.state !== "lost" && c.last + 3 * 3600_000 > now).length;
+  return readCodes().filter((c) => !done[c.code] && seen[c.code]?.state !== "lost" && !seen[c.code]?.legs.some((l) => l.status === "lost") && c.last + 3 * 3600_000 > now).length;
 }
 
 export const HIDDEN_KEY = "vig_codes_hidden";
