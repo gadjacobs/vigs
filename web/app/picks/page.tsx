@@ -1,3 +1,4 @@
+import type { Pick } from "@/lib/picks";
 import { viewOf } from "@/lib/view";
 import { MAX_LEGS } from "@/lib/slip";
 import { cookies } from "next/headers";
@@ -52,6 +53,15 @@ function Chips<T extends string | number>({ name, value, options, label, href }:
       </nav>
     </div>
   );
+}
+
+/** What the builder needs: the slip's legs and each match's three likeliest
+ * selections (for swaps and additions), not every selection of every match. */
+function lighter(pool: Pick[], slip: Pick[]): Pick[] {
+  const on = new Set(slip.map((p) => p.id));
+  const by = new Map<string, Pick[]>();
+  for (const p of pool) (by.get(p.eventId) ?? by.set(p.eventId, []).get(p.eventId)!).push(p);
+  return [...by.values()].flatMap((ps) => ps.sort((a, b) => b.estimate - a.estimate).filter((p, i) => i < 3 || on.has(p.id)));
 }
 
 export default async function OurPicks({ searchParams }: { searchParams: Promise<SP> }) {
@@ -193,7 +203,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       <div id="results" tabIndex={-1} className="results">
         <ScrollOnBuild key={now} target="results" />
         {built.pool.length > 0 && (
-          <SlipBuilder key={`${now}-${set}-${bar}-${target}-${n}`} cands={built.pool} q={q} now={now} initialView={view}
+          <SlipBuilder key={`${now}-${set}-${bar}-${target}-${n}`} cands={lighter(built.pool, built.slip)} q={q} now={now} initialView={view}
             initialIds={built.slip.map((p) => p.id)} title={SETS.find((x) => x.id === set)!.label} flex={built.flex}
             stake={profile?.prefs?.stake ?? DEFAULT_STAKE} lean={lean} />
         )}

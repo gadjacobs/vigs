@@ -87,7 +87,7 @@ function Body({ rec, user, tab, n, stake }: { rec: RecordFile; user: string | nu
   const mine = (user && rec.mycodes?.by_user?.[user]) || (rec.mycodes?.by_user ? null : rec.mycodes) || null;
   const series = ["Lean", "Rough"]
     .filter((g) => rec.curve[g]?.length)
-    .map((g) => ({ key: g, points: rec.curve[g].map(([t, v]) => [Date.parse(t), v * 1000] as [number, number]) }));
+    .map((g) => ({ key: g, points: thin(rec.curve[g].map(([t, v]) => [Date.parse(t), v * 1000] as [number, number])) }));
   return (
     <>
 {tab === "summary" && (<>
@@ -424,6 +424,16 @@ function DataSays({ ins }: { ins: Insights }) {
 
 type Tab = "summary" | "yours" | "markets" | "picks" | "data";
 const TABS: [Tab, string][] = [["summary", "Summary"], ["yours", "Your codes"], ["markets", "Markets"], ["picks", "Picks"], ["data", "Data"]];
+
+/** The running total at most every few hours' worth of picks: a line of tens of
+ * thousands of points weighed most of the page and drew no differently. */
+function thin(points: [number, number][], max = 400): [number, number][] {
+  if (points.length <= max) return points;
+  const step = points.length / max;
+  const out: [number, number][] = [];
+  for (let i = 0; i < max; i++) out.push(points[Math.min(points.length - 1, Math.round((i + 1) * step) - 1)]);
+  return [points[0], ...out];
+}
 
 export default async function RecordPage({ searchParams }: { searchParams: Promise<{ tab?: string; n?: string }> }) {
   const sp = await searchParams;

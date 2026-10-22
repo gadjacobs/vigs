@@ -179,12 +179,19 @@ export function cookSlates(cands: Pick[], lean?: LeanRow[]): Slate[] {
   out.push(make("tight", "Tight games", "Matches the bookmaker expects to stay low: unders, and a home side kept to one goal or fewer.",
     byConfidence(tight, (pool) => bestPerMatch(pool, 4).slice(0, 4))));
 
-  // Bold: bigger prices only where market and model agree closely.
-  const bold = bestPerMatch(cands.filter((p) => p.odds >= 1.8 && market(p) >= 0.35 && conf(p) === "High"), 3);
-  if (bold.length >= 3) out.push(make("bold", `Bold ${word[3]}`, "Odds of 1.8 or more where the bookmaker and the model agree closely.", bold.slice(0, 3)));
+  // Bold: odds of 1.8 or more, only from markets whose record at that chance
+  // (20-55%) is at or above their price and held on later days. The old rule
+  // (market and model agreeing closely) landed 275 of 2,197 slips against 313
+  // priced, 9-22 Oct: agreement added nothing, and these prices carry the most
+  // cut. Without such a record there is no Bold slip.
+  const boldOk = marketsAtOrAbove(lean, 0.2, 0.55);
+  const bold = boldOk ? bestPerMatch(cands.filter((p) => p.odds >= 1.8 && market(p) >= 0.3 && boldOk.has(p.market)), 3) : [];
+  if (bold.length >= 3) out.push(make("bold", `Bold ${word[3]}`, "Odds of 1.8 or more, from markets that have landed at or above their price at these odds in our data (and kept doing so on later days).", bold.slice(0, 3)));
 
-  // Draws, with Flex chances.
-  const draws = cands.filter((p) => p.market === "X" && market(p) >= 0.27).sort((a, b) => market(b) - market(a));
+  // Draws, with Flex chances, only while draws at this chance hold their price
+  // in our data: cooked draw slips landed 9 of 1,953 against 15 priced (9-22 Oct).
+  const drawsOk = marketsAtOrAbove(lean, 0.2, 0.4)?.has("X") ?? false;
+  const draws = drawsOk ? cands.filter((p) => p.market === "X" && market(p) >= 0.27).sort((a, b) => market(b) - market(a)) : [];
   if (draws.length >= 3) {
     const n = Math.min(draws.length, 4);
     out.push(make("draws", `Draw ${["", "", "pair", "trio", "four"][n]}`,

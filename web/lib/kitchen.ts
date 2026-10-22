@@ -1,5 +1,5 @@
 import { loadBlend } from "./blend";
-import { rememberEstimates, rememberPrematch } from "./codes";
+import { rememberEstimates, rememberPrematch, SLATE_CODE_SECONDS } from "./codes";
 import { logBooking } from "./codelog";
 import { MARKET_LABELS } from "./markets";
 import { loadInsights } from "./insights";
@@ -37,8 +37,8 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
         const res = await book(s.legs.map((p) => selection(p.market, p.eventId)));
         if (res.verified !== s.legs.length) continue;
         s.code = res.code;
-        await rememberPrematch(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.odds])));
-        await rememberEstimates(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.estimate])));
+        await rememberPrematch(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.odds])), SLATE_CODE_SECONDS);
+        await rememberEstimates(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.estimate])), SLATE_CODE_SECONDS);
         // Same legs give the same code (only within a round: later rounds have other
         // matches), so a day-long claim logs each code to the record once.
         if (await claim(`slatecode:${res.code}`, 86400)) await logBooking(res.code, s.legs, `slate:${s.style}`, "vig");
@@ -55,7 +55,7 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
         const res = await book(legs.map((p) => selection(p.market, p.eventId)));
         if (res.verified !== legs.length) continue;
         templates.push({ set, code: res.code, legs: legs.length });
-        await rememberPrematch(res.code, Object.fromEntries(legs.map((p) => [p.eventId, p.odds])));
+        await rememberPrematch(res.code, Object.fromEntries(legs.map((p) => [p.eventId, p.odds])), SLATE_CODE_SECONDS);
         if (await claim(`slatecode:${res.code}`, 86400)) await logBooking(res.code, legs, `template:${set}`, "vig");
       } catch { /* try again next round */ }
     }

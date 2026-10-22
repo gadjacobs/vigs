@@ -110,6 +110,8 @@ export const push = (list: string, v: unknown) => cmd<number>("RPUSH", P + list,
 export const trim = (list: string, keep: number) => cmd("LTRIM", P + list, -keep, -1);
 export const listLength = (list: string) => cmd<number>("LLEN", P + list).then(Number);
 export const expire = (key: string, seconds: number) => cmd("EXPIRE", P + key, seconds);
+/** A command with no key prefix added (INFO and the like). */
+export const cmdRaw = (...args: (string | number)[]) => cmd<unknown>(...args);
 /** One page of keys matching a pattern (without the prefix), and the cursor for the next ("0" when done). */
 export async function scan(match: string, cursor = "0", count = 500): Promise<[string, string[]]> {
   const [next, keys] = await cmd<[string, string[]]>("SCAN", cursor, "MATCH", P + match, "COUNT", count);

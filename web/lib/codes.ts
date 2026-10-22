@@ -74,6 +74,8 @@ export function summary(t: Tracked): string {
 // in whenever a code is tracked before its legs kick off. Kept two weeks, like
 // the estimates below: Vig books hundreds of codes a day.
 export const CODE_KEEP_SECONDS = 14 * 86400;
+/** Vig's own cooked slips: kept while they play (the code log keeps their legs for the record). */
+export const SLATE_CODE_SECONDS = 36 * 3600;
 
 export async function trackWithPrematch(code: string, now = Date.now()): Promise<Tracked> {
   const key = `codeodds:${code}`;
@@ -98,17 +100,17 @@ export async function trackWithPrematch(code: string, now = Date.now()): Promise
 }
 
 /** Vig's estimate per leg when the code was made, for share cards and the record. */
-export async function rememberEstimates(code: string, est: Record<string, number>) {
+export async function rememberEstimates(code: string, est: Record<string, number>, seconds = CODE_KEEP_SECONDS) {
   if (!storeReady()) return;
   const pre = (await getJson<Record<string, number>>(`codeest:${code}`).catch(() => null)) ?? {};
-  await setJson(`codeest:${code}`, { ...est, ...pre }, CODE_KEEP_SECONDS);
+  await setJson(`codeest:${code}`, { ...est, ...pre }, seconds);
 }
 export const loadEstimates = async (code: string) =>
   (storeReady() ? await getJson<Record<string, number>>(`codeest:${code}`).catch(() => null) : null) ?? {};
 
-export async function rememberPrematch(code: string, odds: Record<string, number>) {
+export async function rememberPrematch(code: string, odds: Record<string, number>, seconds = CODE_KEEP_SECONDS) {
   if (!storeReady()) return;
   const key = `codeodds:${code}`;
   const pre = (await getJson<Record<string, number>>(key).catch(() => null)) ?? {};
-  await setJson(key, { ...odds, ...pre }, CODE_KEEP_SECONDS);
+  await setJson(key, { ...odds, ...pre }, seconds);
 }
