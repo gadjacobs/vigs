@@ -1415,3 +1415,26 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
 .pagetabs a:has(> .tabpending.on) { color: var(--ink); border-bottom-color: var(--signal); }
 .pagetabs:has(.tabpending.on) a[aria-current="page"]:not(:has(> .tabpending.on)) { color: var(--ink-muted); border-bottom-color: transparent; }
 .settabs a:has(> .tabpending.on), .barpick a:has(> .tabpending.on) { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* Record: landed against the price. */
+.vsprice { list-style: none; margin: 0 0 8px; padding: 0; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--r); box-shadow: var(--shadow-card); }
+.vsprice li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name verdict" "nums nums" "bar bar"; gap: 4px 12px;
+  padding: 12px 14px; border-top: 1px solid var(--rule); }
+.vsprice li:first-child { border-top: 0; }
+.vsprice li.vp-main { background: color-mix(in srgb, var(--paper-sunk) 55%, transparent); }
+.vp-name { grid-area: name; font-weight: 700; }
+.vp-name small { margin-left: 8px; font-weight: 400; font-size: 12px; color: var(--ink-muted); }
+.vp-nums { grid-area: nums; font-size: 14px; }
+.vp-nums b { font-family: var(--font-num); font-size: 20px; font-weight: 800; }
+.vp-verdict { grid-area: verdict; align-self: center; font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; background: var(--paper-sunk); color: var(--ink-muted); white-space: nowrap; }
+.vp-up .vp-verdict { background: var(--fair-wash); color: var(--fair); }
+.vp-down .vp-verdict { background: var(--house-wash); color: var(--house); }
+.vp-bar { grid-area: bar; position: relative; height: 8px; margin: 4px 0 2px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--house-wash), var(--paper-sunk) 45% 55%, var(--fair-wash)); }
+.vp-bar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--edge); }
+.vp-bar i { position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--paper); }
+.vp-up .vp-bar i { background: var(--fair); }
+.vp-down .vp-bar i { background: var(--house); }
+.vp-more { margin: 10px 0 8px; }
+.vp-more > summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; gap: 6px; }
+.vp-more > summary .muted { font-weight: 400; }

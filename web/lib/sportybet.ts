@@ -80,13 +80,33 @@ export function parseOdds(e: Partial<ApiEvent>, field: "odds" | "probability" = 
 }
 
 let upcomingCache: { at: number; data: Fixture[] } | null = null;
+let inflight: Promise<Fixture[]> | null = null;
+const LOCAL_SECONDS = 30;
+const SHARED_SECONDS = 90;
 
-/** Published fixtures with odds. Odds don't move before kickoff, so 30 s of caching is safe. */
+/**
+ * Published fixtures with odds. Odds don't move before kickoff, so 30 s of
+ * caching is safe. Kept in this server instance for 30 s and in the store for 90 s, so
+ * a fresh instance (most first loads on Vercel) reads one key instead of paging
+ * through SportyBet's list; the collector's tick refreshes it every few minutes.
+ */
 export async function upcoming(): Promise<Fixture[]> {
-  if (upcomingCache && Date.now() - upcomingCache.at < 30_000) return upcomingCache.data;
-  const data = await fetchUpcoming();
-  upcomingCache = { at: Date.now(), data };
-  return data;
+  if (upcomingCache && Date.now() - upcomingCache.at < LOCAL_SECONDS * 1000) return upcomingCache.data;
+  inflight ??= (async () => {
+    const { getJson, setJson, storeReady } = await import("./store");
+    const shared = storeReady() ? await getJson<{ at: number; data: Fixture[] }>("upcoming").catch(() => null) : null;
+    // A shared copy up to 90 s old: a round published since then shows on the next load.
+    if (shared && Date.now() - shared.at < SHARED_SECONDS * 1000) {
+      // Held here until the shared copy itself is 90 s old.
+      upcomingCache = { at: shared.at + (SHARED_SECONDS - LOCAL_SECONDS) * 1000, data: shared.data };
+      return shared.data.filter((f) => f.kickoff > Date.now());
+    }
+    const data = await fetchUpcoming();
+    upcomingCache = { at: Date.now(), data };
+    if (storeReady()) await setJson("upcoming", upcomingCache, SHARED_SECONDS + 30).catch(() => undefined);
+    return data;
+  })().finally(() => { inflight = null; });
+  return inflight;
 }
 
 async function fetchUpcoming(): Promise<Fixture[]> {

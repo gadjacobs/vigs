@@ -11,7 +11,11 @@ import { ProfitChart } from "./profit-chart";
 export const dynamic = "force-dynamic";
 
 const GRADES = ["Solid", "Lean", "Rough"];
-const STYLE_NAME: Record<string, string> = { "template:top": "Most likely (50)", "template:trusted": "Most confident (20)" };
+const STYLE_NAME: Record<string, string> = {
+  "template:top": "Most likely (50)", "template:trusted": "Most confident (20)",
+  steady: "Steady", double: "Double up", fiver: "Fiver", tenner: "Tenner", long: "Long shot (20)", hundred: "Hundred",
+  thousand: "Thousand", stack: "Goal stack", goals: "Goal rush", tight: "Tight games", bold: "Bold", draws: "Draws",
+};
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 const signedPct = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(1)}%`;
 const naira = (x: number) => `${x < 0 ? "−" : x > 0 ? "+" : ""}₦${Math.abs(Math.round(x)).toLocaleString("en-NG")}`;
@@ -83,6 +87,58 @@ function Accuracy({ blend }: { blend: BlendFile | null }) {
   );
 }
 
+type VsRow = { settled: number; landed: number; exp: number };
+/** Above or below the price only once the gap is twice what luck would explain. */
+function verdictOf(r: VsRow) {
+  const z = (r.landed - r.exp) / Math.sqrt(Math.max(r.exp * (1 - r.exp / r.settled), 1e-9));
+  return r.exp < 5 ? "too few to judge" : z >= 2 ? "above its price" : z <= -2 ? "below its price" : "as priced";
+}
+
+/** The fair test first: did codes land as often as their prices said they would?
+ * Each row is landed against priced, with a plain verdict once the gap is beyond luck. */
+function VsPrice({ rec, mine }: { rec: RecordFile; mine: CodeGroup | null }) {
+  const rows: { key: string; label: string; settled: number; landed: number; exp: number }[] = [];
+  if (mine?.settled) rows.push({ key: "mine", label: "Your codes", settled: mine.settled, landed: mine.landed, exp: mine.expected_market });
+  if (rec.slates?.settled) {
+    rows.push({ key: "cooked", label: "All cooked slips", settled: rec.slates.settled, landed: rec.slates.landed, exp: rec.slates.expected_market });
+    for (const [k, g] of Object.entries(rec.slates.by_style ?? {}).filter(([k, g]) => g.settled >= 100 && !k.startsWith("template:") && !/^x\d+$/.test(k))
+      .sort((a, b) => b[1].settled - a[1].settled))
+      rows.push({ key: k, label: STYLE_NAME[k] ?? k, settled: g.settled, landed: g.landed, exp: g.expected_market });
+  }
+  if (!rows.length) return <p className="note">No settled codes yet. Codes you book or open in Vig appear here once they finish.</p>;
+  const row = (r: (typeof rows)[number]) => {
+    const ratio = r.exp > 0 ? r.landed / r.exp : 1;
+    const verdict = verdictOf(r);
+    // The bar: 0.5x to 1.5x of the price, the price in the middle.
+    const pos = Math.min(1, Math.max(0, (ratio - 0.5)));
+    return (
+      <li key={r.key} className={`vp-${verdict === "above its price" ? "up" : verdict === "below its price" ? "down" : "even"} ${r.key === "mine" || r.key === "cooked" ? "vp-main" : ""}`}>
+        <span className="vp-name">{r.label}<small>{r.settled.toLocaleString()} settled</small></span>
+        <span className="vp-nums"><b className="num">{r.landed.toLocaleString()}</b> landed <span className="muted">· priced {r.exp.toFixed(r.exp < 100 ? 1 : 0)}</span></span>
+        <span className="vp-bar" aria-hidden="true"><i style={{ left: `${pos * 100}%` }} /></span>
+        <span className="vp-verdict">{verdict}</span>
+      </li>
+    );
+  };
+  const main = rows.filter((r) => r.key === "mine" || r.key === "cooked"), styles = rows.filter((r) => !main.includes(r));
+  return (
+    <section className="block" aria-labelledby="vsprice">
+      <h2 id="vsprice">Landed against the price</h2>
+      <p className="status">Every code&apos;s price says how often it should land. This is how often each kind actually did, so a slip that lands as often as priced is doing its job even when it loses.</p>
+      <ul className="vsprice">
+        {main.map(row)}
+      </ul>
+      {styles.length > 0 && (
+        <details className="vp-more">
+          <summary>By slip style <span className="muted">· {styles.filter((r) => verdictOf(r) !== "as priced" && verdictOf(r) !== "too few to judge").length} off their price</span></summary>
+          <ul className="vsprice">{styles.map(row)}</ul>
+        </details>
+      )}
+      <p className="status">&ldquo;Above&rdquo; or &ldquo;below&rdquo; only once the gap is twice what luck would explain. The bar runs from half to one and a half times the price; the line is the price.</p>
+    </section>
+  );
+}
+
 function Body({ rec, user, tab, n, stake }: { rec: RecordFile; user: string | null; tab: Tab; n: number; stake: number }) {
   const mine = (user && rec.mycodes?.by_user?.[user]) || (rec.mycodes?.by_user ? null : rec.mycodes) || null;
   const series = ["Lean", "Rough"]
@@ -90,10 +146,7 @@ function Body({ rec, user, tab, n, stake }: { rec: RecordFile; user: string | nu
     .map((g) => ({ key: g, points: thin(rec.curve[g].map(([t, v]) => [Date.parse(t), v * 1000] as [number, number])) }));
   return (
     <>
-{tab === "summary" && (<>
-      <div className="tiles">{GRADES.map((g) => <Tile key={g} grade={g} s={rec.grades[g]} />)}</div>
-
-</>)}
+{tab === "summary" && <VsPrice rec={rec} mine={mine} />}
 
 {tab === "yours" && (<>
       {mine && mine.codes > 0 && (
@@ -153,6 +206,11 @@ function Body({ rec, user, tab, n, stake }: { rec: RecordFile; user: string | nu
           </div>
         </section>
       )}
+
+      <section className="block" aria-labelledby="grades">
+        <h2 id="grades">Picks by grade</h2>
+        <div className="tiles">{GRADES.map((g) => <Tile key={g} grade={g} s={rec.grades[g]} />)}</div>
+      </section>
 
       <section className="block" aria-labelledby="curve">
         <h2 id="curve">Profit over time</h2>
