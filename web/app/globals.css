@@ -1438,3 +1438,15 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
 .vp-more { margin: 10px 0 8px; }
 .vp-more > summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; gap: 6px; }
 .vp-more > summary .muted { font-weight: 400; }
+
+/* What a slip keeps per ₦1,000 over many plays. */
+.keep { display: grid; gap: 6px; margin: 12px 0 4px; padding: 12px 14px; border-radius: var(--r-sm); background: var(--paper-sunk); }
+.keep-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.keep-head b { font-family: var(--font-num); font-size: 20px; font-weight: 800; }
+.keep-tag { flex: none; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+.keep-bar { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 10%, transparent); overflow: hidden; }
+.keep-bar i { display: block; height: 100%; border-radius: 3px; transition: width 400ms ease-out; }
+.keep small { font-size: 12px; line-height: 17px; color: var(--ink-muted); }
+.keep-good .keep-tag { background: var(--fair-wash); color: var(--fair); } .keep-good .keep-bar i { background: var(--fair); }
+.keep-mid .keep-tag { background: var(--signal-wash); color: var(--ink); } .keep-mid .keep-bar i { background: var(--signal); }
+.keep-low .keep-tag { background: var(--house-wash); color: var(--house); } .keep-low .keep-bar i { background: var(--house); }

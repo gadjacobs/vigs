@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { lagos } from "../pick-row";
 import { FlexRow } from "../flex-row";
+import { KeepMeter } from "../keep-meter";
 import { multiBonus } from "@/lib/bonus";
 import { SlateActions } from "./slate-actions";
 import { MARKET_LABELS } from "@/lib/markets";
@@ -34,6 +35,7 @@ export function SlateCard({ s }: { s: Slate }) {
         ))}
       </ol>
       </details>
+      <KeepMeter legs={s.legs} />
       <FlexRow ps={s.legs.map((p) => p.estimate)} market={s.legs.map((p) => p.marketChance)} />
       {s.code ? (
         <SlateActions code={s.code} legs={s.legs.length} odds={s.odds} last={s.last} style={s.style}

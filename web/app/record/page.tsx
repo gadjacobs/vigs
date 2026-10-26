@@ -97,13 +97,13 @@ function verdictOf(r: VsRow) {
 /** The fair test first: did codes land as often as their prices said they would?
  * Each row is landed against priced, with a plain verdict once the gap is beyond luck. */
 function VsPrice({ rec, mine }: { rec: RecordFile; mine: CodeGroup | null }) {
-  const rows: { key: string; label: string; settled: number; landed: number; exp: number }[] = [];
-  if (mine?.settled) rows.push({ key: "mine", label: "Your codes", settled: mine.settled, landed: mine.landed, exp: mine.expected_market });
+  const rows: { key: string; label: string; settled: number; landed: number; exp: number; roi: number }[] = [];
+  if (mine?.settled) rows.push({ key: "mine", label: "Your codes", settled: mine.settled, landed: mine.landed, exp: mine.expected_market, roi: mine.roi });
   if (rec.slates?.settled) {
-    rows.push({ key: "cooked", label: "All cooked slips", settled: rec.slates.settled, landed: rec.slates.landed, exp: rec.slates.expected_market });
+    rows.push({ key: "cooked", label: "All cooked slips", settled: rec.slates.settled, landed: rec.slates.landed, exp: rec.slates.expected_market, roi: rec.slates.roi });
     for (const [k, g] of Object.entries(rec.slates.by_style ?? {}).filter(([k, g]) => g.settled >= 100 && !k.startsWith("template:") && !/^x\d+$/.test(k))
       .sort((a, b) => b[1].settled - a[1].settled))
-      rows.push({ key: k, label: STYLE_NAME[k] ?? k, settled: g.settled, landed: g.landed, exp: g.expected_market });
+      rows.push({ key: k, label: STYLE_NAME[k] ?? k, settled: g.settled, landed: g.landed, exp: g.expected_market, roi: g.roi });
   }
   if (!rows.length) return <p className="note">No settled codes yet. Codes you book or open in Vig appear here once they finish.</p>;
   const row = (r: (typeof rows)[number]) => {
@@ -114,7 +114,7 @@ function VsPrice({ rec, mine }: { rec: RecordFile; mine: CodeGroup | null }) {
     return (
       <li key={r.key} className={`vp-${verdict === "above its price" ? "up" : verdict === "below its price" ? "down" : "even"} ${r.key === "mine" || r.key === "cooked" ? "vp-main" : ""}`}>
         <span className="vp-name">{r.label}<small>{r.settled.toLocaleString()} settled</small></span>
-        <span className="vp-nums"><b className="num">{r.landed.toLocaleString()}</b> landed <span className="muted">· priced {r.exp.toFixed(r.exp < 100 ? 1 : 0)}</span></span>
+        <span className="vp-nums"><b className="num">{r.landed.toLocaleString()}</b> landed <span className="muted">· priced {r.exp.toFixed(r.exp < 100 ? 1 : 0)} · kept ₦{Math.round(Math.max(0, r.roi + 1) * 1000).toLocaleString("en-NG")} per ₦1,000</span></span>
         <span className="vp-bar" aria-hidden="true"><i style={{ left: `${pos * 100}%` }} /></span>
         <span className="vp-verdict">{verdict}</span>
       </li>

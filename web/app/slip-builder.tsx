@@ -12,6 +12,7 @@ import { MARKET_LABELS } from "@/lib/markets";
 import type { Pick } from "@/lib/picks";
 import type { LeanRow } from "@/lib/insights";
 import { FlexRow } from "./flex-row";
+import { KeepMeter } from "./keep-meter";
 import { atLeast, flexFriendly } from "@/lib/flex";
 import { multiBonus } from "@/lib/bonus";
 import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
@@ -68,6 +69,13 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
   const bookRef = useRef<HTMLDivElement>(null);
   const [bookSeen, setBookSeen] = useState(true);
   const hasLegs = ids.length > 0, booked = Boolean(result?.ok);
+  // A new code: bring it into view (booking from the bar at the bottom leaves it off screen).
+  const bookedCode = result?.ok ? result.code : null;
+  useEffect(() => {
+    if (!bookedCode) return;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => bookRef.current?.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "center" }));
+  }, [bookedCode]);
   useEffect(() => {
     const el = bookRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
@@ -158,6 +166,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
             );
           })()
         )}
+        <KeepMeter legs={legs} />
         <FlexRow ps={legs.map((p) => p.estimate)} market={legs.map((p) => p.marketChance)} note={`Flex pays a reduced amount when legs miss: SportyBet sets its odds so it returns about ₦0.65 per ₦1 on vFootball, whatever the legs, and pays no multi-bet bonus; this slip straight returns about ₦${multiBonus(legs.map((p) => ({ odds: p.odds, p: p.marketChance }))).payback.toFixed(2)} per ₦1 with the bonus. Set Flex in SportyBet before you place the slip.`} />
         {legs.length >= 5 && (() => {
           // Drop the least likely legs until "all but two" lands at least half the time.
