@@ -17,9 +17,11 @@ import { atLeast, flexFriendly } from "@/lib/flex";
 import { multiBonus } from "@/lib/bonus";
 import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
 import type { Query } from "@/lib/query";
-import { slipStats, smartSwitch, toTarget, topN, MAX_LEGS } from "@/lib/slip";
+import { cheaperSwap, slipStats, smartSwitch, toTarget, topN, MAX_LEGS } from "@/lib/slip";
 
 const LOW_CHANCE = 0.2;
+
+
 
 type Props = { cands: Pick[]; q: Query; now: number; initialView: View; initialIds?: string[]; title?: string; flex?: boolean; stake?: number; lean?: LeanRow[] };
 
@@ -86,6 +88,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
   const byId = useMemo(() => new Map(cands.map((p) => [p.id, p])), [cands]);
   const legs = ids.map((id) => byId.get(id)).filter((p): p is Pick => !!p);
   const s = slipStats(legs);
+  const costliest = legs.length ? legs.reduce((a, p) => (p.odds * p.marketChance < a.odds * a.marketChance ? p : a)).id : null;
   const conf = slipConfidence(legs);
   const onSlip = new Set(legs.map((p) => p.eventId));
   const rest = [...cands]
@@ -167,6 +170,16 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
           })()
         )}
         <KeepMeter legs={legs} />
+        {legs.length >= 2 && (() => {
+          const sw = cheaperSwap(legs, cands);
+          return sw ? (
+            <button type="button" className="cheaper" onClick={() => edit(ids.map((i) => (i === sw.out.id ? sw.inn.id : i)),
+              `Swapped ${sw.out.home} v ${sw.out.away}, ${MARKET_LABELS[sw.out.market]} (${sw.out.odds.toFixed(2)}) for ${sw.inn.home} v ${sw.inn.away}, ${MARKET_LABELS[sw.inn.market]} (${sw.inn.odds.toFixed(2)}): the slip now keeps about ₦${Math.round(sw.keep * 1000)} of every ₦1,000.`)}>
+              <span><strong>Make it cheaper</strong><small>Swap {sw.out.home} v {sw.out.away} ({MARKET_LABELS[sw.out.market] ?? sw.out.market}) for {sw.inn.home} v {sw.inn.away} ({MARKET_LABELS[sw.inn.market] ?? sw.inn.market}), about the same odds</small></span>
+              <b className="num">+₦{Math.round((sw.keep - sw.before) * 1000)}</b>
+            </button>
+          ) : <p className="cheapest">Already the cheapest slip at these odds from the selections here.</p>;
+        })()}
         <FlexRow ps={legs.map((p) => p.estimate)} market={legs.map((p) => p.marketChance)} note={`Flex pays a reduced amount when legs miss: SportyBet sets its odds so it returns about ₦0.65 per ₦1 on vFootball, whatever the legs, and pays no multi-bet bonus; this slip straight returns about ₦${multiBonus(legs.map((p) => ({ odds: p.odds, p: p.marketChance }))).payback.toFixed(2)} per ₦1 with the bonus. Set Flex in SportyBet before you place the slip.`} />
         {legs.length >= 5 && (() => {
           // Drop the least likely legs until "all but two" lands at least half the time.
@@ -231,7 +244,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
 
       <ol className="picks">
         {legs.map((p) => (
-          <PickRow key={p.id} p={p} now={now} view={view} lean={lean} actions={<>
+          <PickRow key={p.id} p={p} now={now} view={view} lean={lean} cost worst={legs.length > 1 && p.id === costliest} actions={<>
             <button type="button" onClick={() => swap(p)}>Smart switch</button>
             <button type="button" onClick={() => remove(p)}>Remove</button>
           </>} />

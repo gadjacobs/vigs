@@ -1450,3 +1450,14 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
 .keep-good .keep-tag { background: var(--fair-wash); color: var(--fair); } .keep-good .keep-bar i { background: var(--fair); }
 .keep-mid .keep-tag { background: var(--signal-wash); color: var(--ink); } .keep-mid .keep-bar i { background: var(--signal); }
 .keep-low .keep-tag { background: var(--house-wash); color: var(--house); } .keep-low .keep-bar i { background: var(--house); }
+
+/* Leg cost tags and the one-tap cheaper swap. */
+.costtag { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 700;
+  background: var(--paper-sunk); color: var(--ink-muted); white-space: nowrap; }
+.costtag.worst { background: var(--house-wash); color: var(--house); }
+.cheaper { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; margin: 8px 0 4px;
+  padding: 10px 14px; min-height: 56px; border: 1.5px dashed color-mix(in srgb, var(--fair) 55%, transparent); background: transparent; }
+.cheaper > span { display: grid; gap: 2px; min-width: 0; }
+.cheaper small { font-weight: 400; font-size: 12px; line-height: 17px; color: var(--ink-muted); }
+.cheaper > b { flex: none; font-family: var(--font-num); font-size: 20px; font-weight: 800; color: var(--fair); }
+.cheapest { margin: 6px 0 2px; font-size: 12px; color: var(--ink-muted); }

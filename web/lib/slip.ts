@@ -107,3 +107,27 @@ export function smartSwitch(slipPicks: Pick[], cands: Pick[], legId: string): Pi
     Math.abs(Math.log(b.odds / leg.odds)) < Math.abs(Math.log(a.odds / leg.odds)) ? b : a,
   );
 }
+
+const keepOf = (ls: Pick[]) => ls.reduce((a, p) => a * p.odds * p.marketChance, 1);
+
+/**
+ * The one swap that keeps the most of the stake at about the same odds (within
+ * 10%): any leg for another selection of the same match, or of a match not on
+ * the slip. Null when nothing gains at least ₦3 per ₦1,000.
+ */
+export function cheaperSwap(legs: Pick[], cands: Pick[]): { out: Pick; inn: Pick; keep: number; before: number } | null {
+  const before = keepOf(legs);
+  const odds = legs.reduce((a, p) => a * p.odds, 1);
+  const used = new Set(legs.map((p) => p.eventId));
+  const on = new Set(legs.map((p) => p.id));
+  let best: { out: Pick; inn: Pick; keep: number; before: number } | null = null;
+  for (const out of legs) {
+    for (const inn of cands) {
+      if (on.has(inn.id) || (inn.eventId !== out.eventId && used.has(inn.eventId))) continue;
+      if (Math.abs((odds / out.odds) * inn.odds / odds - 1) > 0.1) continue;
+      const keep = (before / (out.odds * out.marketChance)) * inn.odds * inn.marketChance;
+      if (keep >= before + 0.003 && (!best || keep > best.keep)) best = { out, inn, keep, before };
+    }
+  }
+  return best;
+}

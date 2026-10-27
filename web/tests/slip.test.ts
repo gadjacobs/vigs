@@ -160,3 +160,36 @@ describe("cooked Double up keeps its legs close together", () => {
     expect(d.legs.every((p) => p.kickoff === 30 * MIN)).toBe(true);
   });
 });
+
+describe("cooked target slips lean toward markets that held their price", () => {
+  const leg = (e: string, m: string, odds: number, mc: number): Pick => ({
+    ...pick(e, m, odds, mc), market: m, kickoff: 0, marketChance: mc, lo: mc - 0.01, hi: mc + 0.01,
+  });
+  it("prefers the market whose record is above its price at the same odds", () => {
+    const cands = [leg("a", "O15", 1.35, 0.71), leg("a", "H_O05", 1.35, 0.71), leg("b", "O15", 1.35, 0.71), leg("b", "H_O05", 1.35, 0.71)];
+    const lean = [
+      { market: "H_O05", lo: 0.67, hi: 0.8, n: 20000, landed: 14600, priced: 14200, z: 3, held: true },
+      { market: "O15", lo: 0.67, hi: 0.8, n: 20000, landed: 14000, priced: 14200, z: -2, held: true },
+    ];
+    const d = cookSlates(cands, lean as never).find((s) => s.style === "double")!;
+    expect(d.legs.every((p) => p.market === "H_O05")).toBe(true);
+  });
+});
+
+import { cheaperSwap } from "../lib/slip";
+
+describe("Make it cheaper", () => {
+  const leg = (e: string, m: string, odds: number, mc: number): Pick => ({ ...pick(e, m, odds, mc), market: m, marketChance: mc });
+  it("swaps the costly leg for a cheaper one at about the same odds", () => {
+    const a = leg("a", "O15", 1.5, 0.6), b = leg("b", "O15", 1.5, 0.64);
+    const c = leg("a", "H_O05", 1.52, 0.64), far = leg("z", "O25", 3.0, 0.32);
+    const sw = cheaperSwap([a, b], [a, b, c, far])!;
+    expect(sw.out.id).toBe(a.id);
+    expect(sw.inn.id).toBe(c.id);
+    expect(sw.keep).toBeGreaterThan(sw.before);
+  });
+  it("says nothing is cheaper when nothing is", () => {
+    const a = leg("a", "O15", 1.5, 0.64), b = leg("b", "O15", 1.5, 0.64);
+    expect(cheaperSwap([a, b], [a, b, leg("c", "O15", 1.5, 0.6)])).toBeNull();
+  });
+});

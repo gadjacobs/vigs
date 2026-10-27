@@ -1,6 +1,6 @@
 import { atLeast } from "./flex";
 import type { LeanRow } from "./insights";
-import { marketsAtOrAbove } from "./lean";
+import { leanOf, marketsAtOrAbove } from "./lean";
 import type { Pick } from "./picks";
 import { confidence, slipConfidence, type Confidence } from "./plain";
 import { MAX_LEGS, toTarget } from "./slip";
@@ -101,7 +101,13 @@ const WIDER_GAIN = 1.05;
  * every leg in one round instead of two hours apart. Later rounds join only
  * when they lift the chance by 5% or more.
  */
-function targetSlip(cands: Pick[], target: number, lo: number, hi: number, tol = 0.1): Pick[] {
+function targetSlip(cands: Pick[], target: number, lo: number, hi: number, tol = 0.1, lean?: LeanRow[]): Pick[] {
+  // Each leg's market chance plus its market's record at that chance (shrunk,
+  // and only where the record held on later days). Replayed on 9-27 Oct with the
+  // record from earlier days only, the legs this picks landed above their price
+  // (Tenner +3.6%, 20 odds +2.6%, Fiver +0.6%) where price alone picked legs
+  // that landed just below it; slips returned 0.92-1.04 per ₦1 against 0.89-1.00.
+  const score = (p: Pick) => Math.min(0.99, Math.max(0.01, market(p) + leanOf(lean, p.market, market(p)).adj));
   // A single leg can't make a slip, so no leg may reach the target on its own.
   const top = Math.min(hi, target * (1 - tol) - 0.01);
   const band = cands.filter((p) => p.odds >= lo && p.odds <= top);
@@ -110,9 +116,9 @@ function targetSlip(cands: Pick[], target: number, lo: number, hi: number, tol =
   let best: Pick[] = [], bestP = 0;
   for (const w of WINDOWS) {
     const pool = band.filter((p) => p.kickoff <= first + w * 60_000);
-    const legs = byConfidence(pool, (ps) => toTarget(ps, target, tol, MAX_LEGS, market));
+    const legs = byConfidence(pool, (ps) => toTarget(ps, target, tol, MAX_LEGS, score));
     if (legs.length < 2) continue;
-    const p = legs.reduce((a, x) => a * market(x), 1);
+    const p = legs.reduce((a, x) => a * score(x), 1);
     if (!best.length || p >= bestP * WIDER_GAIN) { best = legs; bestP = p; }
   }
   return best;
@@ -145,11 +151,11 @@ export function cookSlates(cands: Pick[], lean?: LeanRow[]): Slate[] {
   // Total-odds slips from short legs (1.25 to 2.2).
   for (const [style, target, name] of [["double", 2, "Double up"], ["fiver", 5, "Fiver"], ["tenner", 10, "Tenner"]] as const)
     out.push(make(style, name, `About ${target} odds from short, likely legs: they keep more value than one long shot.`,
-      targetSlip(cands, target, 1.25, 2.2)));
+      targetSlip(cands, target, 1.25, 2.2, 0.1, lean)));
 
   // Long odds from many likely legs, up to SportyBet's 50.
   for (const [style, target, name, lo] of [["long", 20, "Long shot", 1.15], ["hundred", 100, "Hundred", 1.2], ["thousand", 1000, "Thousand", 1.2]] as const) {
-    const legs = targetSlip(cands, target, lo, 2.5, 0.15);
+    const legs = targetSlip(cands, target, lo, 2.5, 0.15, lean);
     if (legs.length >= 4)
       out.push(make(style, name, `About ${target.toLocaleString("en-NG")} odds from the likeliest leg per match. Every leg pays the bookmaker's cut, so slips this long land rarely; Flex shows the chance with a miss or two allowed.`, legs, true));
   }
