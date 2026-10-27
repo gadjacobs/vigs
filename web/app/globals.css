@@ -1461,3 +1461,7 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
 .cheaper small { font-weight: 400; font-size: 12px; line-height: 17px; color: var(--ink-muted); }
 .cheaper > b { flex: none; font-family: var(--font-num); font-size: 20px; font-weight: 800; color: var(--fair); }
 .cheapest { margin: 6px 0 2px; font-size: 12px; color: var(--ink-muted); }
+/* A new code flashes once as it scrolls into view. */
+.booked.flash { animation: enter 320ms cubic-bezier(.2, .7, .2, 1) both, bookflash 1.6s 300ms ease-out 1; }
+@keyframes bookflash { 0%, 35% { box-shadow: 0 0 0 4px var(--signal); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .booked.flash { animation: none; box-shadow: 0 0 0 3px var(--signal); } }

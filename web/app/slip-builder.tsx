@@ -73,10 +73,22 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
   const hasLegs = ids.length > 0, booked = Boolean(result?.ok);
   // A new code: bring it into view (booking from the bar at the bottom leaves it off screen).
   const bookedCode = result?.ok ? result.code : null;
+  // Some phone browsers drop a smooth scroll started while the page is still
+  // changing, so it waits a moment, then checks and jumps if the code is still
+  // off screen; the card flashes so the eye finds it.
   useEffect(() => {
     if (!bookedCode) return;
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    requestAnimationFrame(() => bookRef.current?.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "center" }));
+    const go = (smooth: boolean) => {
+      const el = bookRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      window.scrollTo({ top: Math.max(0, window.scrollY + r.top - Math.max(72, (window.innerHeight - r.height) / 2)), behavior: smooth ? "smooth" : "auto" });
+    };
+    const off = () => { const r = bookRef.current?.getBoundingClientRect(); return !r || r.top < 56 || r.bottom > window.innerHeight - 72; };
+    const t1 = setTimeout(() => go(!still), 80);
+    const t2 = setTimeout(() => { if (off()) go(false); }, 1000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [bookedCode]);
   useEffect(() => {
     const el = bookRef.current;
@@ -199,7 +211,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
         )}
         <div ref={bookRef}>
           {result?.ok ? (
-            <div className="booked" aria-live="polite">
+            <div className="booked flash" aria-live="polite">
               <div className="booked-head">
                 <span className="booked-kicker">Booking code</span>
                 <strong className="num booked-code">{result.code}</strong>
