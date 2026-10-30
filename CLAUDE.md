@@ -62,7 +62,7 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   clock and are copied into the ledger by `vigs ledger import-codes`; legs that had
   kicked off when booked are never scored. `vigs export-insights` feeds Record.
 - Live (`web/lib/live.ts`, `hedge.ts`, `app/live-actions.ts`): Codes polls SportyBet's live feed
-  every 10 s while a leg plays; chance to land = SportyBet's live probability per open leg
+  every 15 s while a leg plays; chance to land = SportyBet's live probability per open leg
   (1/0 once the score decides it); legs to play use the upcoming list, else the match's own prematch
   feed (the list drops a round ~9 min before kickoff). The tick saves each round's prematch prices
   (`lib/prematch.ts`, `pre:{kickoff}`, 2 days) so codes first opened after kickoff still get prematch odds.
@@ -73,7 +73,9 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   leg count, straight slips only) shows on slips, cooked slips and codes; template floor 1.20. Our picks "Bonus slip": likeliest
   leg per match at 1.20-1.30 (no double chance), 10-35 legs; its return uses insights `bonus_legs` (landed/priced). First half vs usual (`lib/fhusual.ts`,
   insights `fh_usual`): marker on FH legs and the Tonight filter `fh=likelier`. Hedge only does arithmetic and books a code; never bets.
-  The tick watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
+  The tick (`lib/ticker.ts` `runTickOnce`) runs inside the collector in GitHub Actions (`web/tools/tick.mts`, needs a
+  `REDIS_URL` secret) to keep it off the Vercel plan's CPU; `/api/push/tick` is the fallback, called at most once a minute.
+  It watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
   One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no
   result is sent > 45 min after a code's last kickoff. Collector cron is every 30 min (runs chain).
 - Markets include double chance (DC1X/DC12/DCX2: market chance = sum of the two de-vigged 1X2

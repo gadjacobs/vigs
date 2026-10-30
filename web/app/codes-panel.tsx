@@ -340,7 +340,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     })();
   }, []);
 
-  // Live scores and chances for open codes: every 10 seconds while a leg is in
+  // Live scores and chances for open codes: every 15 seconds while a leg is in
   // play, every minute otherwise. A code whose leg has ended, or is already
   // beaten, is read again from SportyBet so it settles without waiting.
   const pollLive = useCallback(async (force = false) => {
@@ -429,7 +429,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     setSwing(readSwing());
     if (!haveStatus) return;
     pollLive(true);
-    const t = setInterval(() => pollLive(), 10_000);
+    const t = setInterval(() => pollLive(), 15_000);
     return () => clearInterval(t);
   }, [haveStatus, pollLive]);
 
@@ -560,7 +560,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
         </div>
       )}
       <div className="codebar">
-        <p className="status">{tab === "open" ? "Scores update every 10 seconds while a leg plays." : "Removing a code hides it here; the record keeps its result."}</p>
+        <p className="status">{tab === "open" ? "Scores update every 15 seconds while a leg plays." : "Removing a code hides it here; the record keeps its result."}</p>
         {loaded && list.length > 0 && (
           <div className="density" role="radiogroup" aria-label="Card size">
             <button type="button" role="radio" aria-checked={!compact} onClick={() => chooseDensity(false)}>Full</button>

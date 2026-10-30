@@ -44,12 +44,20 @@ publish() {
   . tools/publish.sh
 }
 
-echo "push tick: url $([ -n "${PUSH_TICK_URL:-}" ] && echo set || echo MISSING), secret $([ -n "${PUSH_TICK_SECRET:-}" ] && echo set || echo MISSING)"
-# Push notifications: ask the web app to follow watched codes, settle them and
-# send due tips. It answers with how soon to call again: about every 20 seconds
-# while a watched leg is in play, every 2 minutes otherwise. Needs
-# PUSH_TICK_URL and PUSH_TICK_SECRET; skipped otherwise.
-if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
+# The background pass (follow watched codes, settle them, send notifications,
+# cook and book the slips, slip alerts). With REDIS_URL and Node it runs right
+# here, on GitHub's CPU (web/tools/tick.mts), waiting as long as each pass asks:
+# about every 20 seconds while a watched leg is in play, 2 minutes otherwise.
+# Without them it falls back to asking the web app (PUSH_TICK_URL and
+# PUSH_TICK_SECRET), at most once a minute, since every call there uses the
+# Vercel plan's CPU allowance.
+TICK_UNTIL=$(( $(date +%s) + CHUNKS * MINUTES * 60 ))
+if [ -n "${REDIS_URL:-}" ] && [ -x "$(command -v node)" ] && [ -d "$VIG_REPO/web/node_modules" ]; then
+  echo "push tick: running here (REDIS_URL set)"
+  ( cd "$VIG_REPO/web" && TICK_UNTIL=$TICK_UNTIL exec node node_modules/tsx/dist/cli.mjs tools/tick.mts ) &
+  TICKER=$!
+elif [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
+  echo "push tick: through the web app (add a REDIS_URL secret to run it here instead)"
   (
     while true; do
       body=$(curl -sS -m 60 -w "\n%{http_code}" -X POST -H "Authorization: Bearer $PUSH_TICK_SECRET" "$PUSH_TICK_URL") \
@@ -60,12 +68,14 @@ if [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
       [ "$code" != 200 ] || [ -z "$err" ] || echo "push tick: $err"
       next=$(printf '%s' "$body" | grep -o '"next":[0-9]*' | grep -o '[0-9]*$' || true)
       case "$next" in ''|*[!0-9]*) next=120 ;; esac
-      [ "$next" -lt 15 ] && next=15
+      [ "$next" -lt 60 ] && next=60
       [ "$next" -gt 300 ] && next=300
       sleep "$next"
     done
   ) &
   TICKER=$!
+else
+  echo "push tick: off (no REDIS_URL, PUSH_TICK_URL or PUSH_TICK_SECRET)"
 fi
 
 # The watcher runs for the whole job in the background, so odds, live prices and

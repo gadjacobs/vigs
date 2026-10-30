@@ -290,7 +290,7 @@ prematch prices from booking time or from before kickoff, and shows none
 rather than a wrong one, and any code typed into "Track a code". One read of
 SportyBet's share endpoint gives each leg's status and final score.
 
-While a leg plays, Codes reads SportyBet's live feed every 10 seconds: each
+While a leg plays, Codes reads SportyBet's live feed every 15 seconds: each
 leg's minute and score, and the **chance to land**: each open leg's chance from
 SportyBet's own live probability (1 or 0 once the score decides it, so an over
 that has gone over shows as landed at once), multiplied across the code, with
@@ -333,7 +333,13 @@ deployed or a new round is published. Setup, once:
 3. GitHub → Settings → Secrets and variables → Actions: secret
    `PUSH_TICK_SECRET` (the same string) and variable `PUSH_TICK_URL`
    (`https://<your app>/api/push/tick`).
-4. Open Alerts on the phone, turn notifications on, and send a test.
+4. Recommended, to keep the background work off Vercel's CPU allowance (the
+   free plan's 4 hours a month ran out once): GitHub → Settings → Secrets and
+   variables → Actions, secret `REDIS_URL` (the same value as in Vercel's
+   environment variables). The collector then runs the pass itself
+   (`web/tools/tick.mts`) instead of calling `PUSH_TICK_URL`. If Vercel has
+   `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, add them as secrets too.
+5. Open Alerts on the phone, turn notifications on, and send a test.
 
 **Slip alerts** (Alerts and Settings, per account) tell you when a saved
 Tonight filter, or one of the Our picks templates, comes up with a slip that
