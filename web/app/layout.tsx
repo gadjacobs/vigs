@@ -9,6 +9,7 @@ import { UpdateToast } from "./update-toast";
 import { BUILD } from "@/lib/build";
 import { BetaLink } from "./beta-link";
 import { Resume } from "./resume";
+import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
@@ -59,6 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {children}
         <UpdateToast build={BUILD} />
         <Resume />
+        <Analytics />
         <SpeedInsights />
       </body>
     </html>
