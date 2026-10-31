@@ -1,4 +1,5 @@
 "use client";
+import { OpenInSportyBet } from "./open-sporty";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { hideCode, syncCodes } from "./profile-actions";
 import { ShareButton, ShareSheet } from "./share-sheet";
@@ -11,7 +12,6 @@ import { CopyButton } from "./copy-button";
 import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
 import type { SavedCode as Saved } from "@/lib/profile";
-import { shareUrl } from "@/lib/share";
 import { isFinal, readAll, readCodes, readFinal, readHidden, readOpen, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
 import { flexLevels, FlexRow } from "./flex-row";
 import { multiBonus } from "@/lib/bonus";
@@ -294,8 +294,15 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   // Opened from a landed notification's "Share the ticket" button.
   const [shareFor, setShareFor] = useState<string | null>(null);
   useEffect(() => {
-    const c = new URLSearchParams(location.search).get("share");
+    const sp = new URLSearchParams(location.search);
+    const c = sp.get("share");
     if (c && /^[A-Z0-9]{4,12}$/.test(c)) { setShareFor(c); window.history.replaceState(null, "", "/codes"); }
+    // From a notification about a code Vig booked: add it here so it can be followed, then open it from its card.
+    const t = sp.get("track")?.toUpperCase();
+    if (t && /^[A-Z0-9]{4,12}$/.test(t)) {
+      if (!readCodes().some((x) => x.code === t)) rememberCode({ code: t, at: Date.now(), legs: 0, odds: 0, last: Date.now() + 3600_000 });
+      window.history.replaceState(null, "", "/codes");
+    }
   }, []);
   const closeAlerts = useCallback(() => setAlertFor(null), []);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -695,7 +702,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
               })()}
               </>)}
               <div className="codeactions">
-                <a className="button primary" href={shareUrl(c.code)}>Open in SportyBet</a>
+                <OpenInSportyBet code={c.code} />
                 <div className="codetools">
                   <CopyButton text={c.code} label="Copy" />
                   {(t || !err) && !foreign && <ShareButton code={c.code} fallback={t ? {

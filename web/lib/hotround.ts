@@ -12,6 +12,12 @@ import { claim, getJson, setJson } from "./store";
 // Rounds are 38 minutes apart and a match takes about 30, so the result is
 // known a few minutes before the next round kicks off.
 
+// Switched off 31 Oct: re-tested with errors clustered by round (legs in one
+// round rise and fall together) and confirmed on later days, it did not hold
+// (+1.7 then +0.1 z on overs 2.5). Rounds are still judged and their overs slip
+// logged with no stake, so Record keeps measuring it; no boost, no alert.
+export { HOT_ON } from "./hotflag";
+import { HOT_ON } from "./hotflag";
 export const HOT_MIN = 0.2; // goals a match over the prices' expectation
 export const HOT_LIFT = 0.012; // overs land 1.2% (relative) more often
 const MIN = 60_000;
@@ -55,7 +61,8 @@ export function hotAdj(market: string, chance: number): number {
 }
 
 /** Mark (and adjust) legs in a hot league's next round. */
-export function applyHot(cands: Pick[], hot: HotRound[]): Pick[] {
+export function applyHot(cands: Pick[], hot: HotRound[], force = false): Pick[] {
+  if (!HOT_ON && !force) return cands;
   for (const p of cands) {
     const h = hot.find((x) => x.league === p.league && x.next === p.kickoff);
     const adj = h ? hotAdj(p.market, p.marketChance) : 0;

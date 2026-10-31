@@ -1,9 +1,9 @@
 "use client";
+import { OpenInSportyBet } from "../open-sporty";
 import { useState } from "react";
 import { rememberCode } from "../codes-panel";
 import { adoptCode } from "../push-actions";
 import { ShareButton } from "../share-sheet";
-import { shareUrl } from "@/lib/share";
 
 type Props = { code: string; legs: number; odds: number; last: number; style: string; edit: React.ReactNode };
 
@@ -18,7 +18,7 @@ export function SlateActions({ code, legs, odds, last, style, edit }: Props) {
     <div className="codeactions">
       <div className="slatecodebar">
         <strong className="num slatecode">{code}</strong>
-        <a className="button primary" href={shareUrl(code)} onClick={keep}>Open in SportyBet</a>
+        <OpenInSportyBet code={code} onClick={keep} />
       </div>
       <div className="codetools">
         <button type="button" onClick={async () => {

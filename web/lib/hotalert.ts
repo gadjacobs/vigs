@@ -1,4 +1,4 @@
-import { applyHot, detectHot, hotLegs, hotPayload, nextRoundFixtures, roundsDue, type HotRound } from "./hotround";
+import { applyHot, detectHot, hotLegs, hotPayload, nextRoundFixtures, roundsDue, HOT_ON, type HotRound } from "./hotround";
 import { loadBlend } from "./blend";
 import { logBooking } from "./codelog";
 import { rememberEstimates, rememberPrematch, SLATE_CODE_SECONDS } from "./codes";
@@ -9,7 +9,6 @@ import { loadModel } from "./model";
 import { candidates } from "./picks";
 import { loadSub, send } from "./push";
 import { DEFAULT_QUERY } from "./query";
-import { shareUrl } from "./share";
 import { book, selection } from "./sportybet";
 import { claim, getJson, members, setJson } from "./store";
 
@@ -28,7 +27,8 @@ export async function runHot(now = Date.now()): Promise<{ due: number; hot: numb
     const fx = await nextRoundFixtures(h);
     if (!fx.length || h.next - now < 60_000) continue;
     const q = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 3, now };
-    const cands = applyHot(candidates(model, fx, q, blend).candidates, [h]);
+    // The shadow slip still uses the adjustment, so Record measures the idea as it was.
+    const cands = applyHot(candidates(model, fx, q, blend).candidates, [h], true);
     const legs = hotLegs(cands, h, (p) => leanOf(ins?.lean, p.market, p.marketChance).adj);
     if (legs.length >= 3) {
       try {
@@ -46,13 +46,15 @@ export async function runHot(now = Date.now()): Promise<{ due: number; hot: numb
     // Keep the slip with the round, for the app.
     const all = (await getJson<HotRound[]>("hot:now").catch(() => null)) ?? [];
     await setJson("hot:now", all.map((x) => (x.league === h.league && x.next === h.next ? h : x)), 45 * 60).catch(() => undefined);
+    if (!HOT_ON) continue;
     const p = hotPayload(h);
     for (const id of await members("subs").catch(() => [] as string[])) {
       const s = await loadSub(id).catch(() => null);
       if (!s || s.hot === false) continue;
       // About a third of rounds run hot, so at most one of these alerts every 30 minutes per device.
       if (!(await claim(`hot:sent:${id}`, 30 * 60).catch(() => false))) continue;
-      if (await send(s, { ...p, url: h.code ? shareUrl(h.code) : "/picks", tag: `hot-${h.league}`, kind: "hot", code: h.code })) sent++;
+      // Opens Vig's Codes with the code added (it then opens in SportyBet from there).
+      if (await send(s, { ...p, url: h.code ? `/codes?track=${h.code}` : "/picks", tag: `hot-${h.league}`, kind: "hot", code: h.code })) sent++;
     }
   }
   return { due, hot: found.length, sent };

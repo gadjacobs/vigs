@@ -1,8 +1,8 @@
 "use client";
+import { OpenInSportyBet } from "./open-sporty";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { bookSlip, type BookResult } from "./actions";
 import { rememberCode } from "./codes-panel";
-import { shareUrl } from "@/lib/share";
 import { saveView } from "./profile-actions";
 import { watchBooking } from "./push-actions";
 import { CopyButton } from "./copy-button";
@@ -218,7 +218,7 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
                 <span className="booked-sub">{result.legs} legs · <span className="num">{s.odds.toFixed(2)}</span> odds</span>
               </div>
               <div className="codeactions">
-                <a className="button primary" href={shareUrl(result.code)}>Open in SportyBet</a>
+                <OpenInSportyBet code={result.code} />
                 <div className="codetools">
                   <CopyButton text={result.code} label="Copy" />
                   <ShareButton code={result.code} />

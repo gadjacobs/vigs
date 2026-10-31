@@ -25,6 +25,12 @@ describe("hot rounds", () => {
     expect(r.matches).toBe(2);
     expect(r.resid).toBeCloseTo((4 + 2) / 2 - x, 5);
   });
+  it("is switched off for the app: legs keep their chances", () => {
+    const p = { market: "O25", marketChance: 0.5, estimate: 0.5, lo: 0.45, hi: 0.55, league: "Spain", kickoff: 1000 } as unknown as Pick;
+    applyHot([p], [{ league: "Spain", kickoff: 0, resid: 0.5, matches: 10, next: 1000 }]);
+    expect(p.estimate).toBe(0.5);
+    expect(p.hot).toBeUndefined();
+  });
   it("lifts overs and lowers unders by the measured amount", () => {
     expect(hotAdj("O25", 0.5)).toBeCloseTo(HOT_LIFT * 0.5);
     expect(hotAdj("FH_U15", 0.6)).toBeCloseTo(-HOT_LIFT * 0.4);
@@ -37,7 +43,7 @@ describe("hot rounds", () => {
       marketChance: 0.96 / o, estimate: 0.96 / o, lo: 0.9 / o, hi: 1 / o, historyRate: null, historyN: 0, edge: 0, grade: "Rough", why: "", source: "guarded",
     });
     const cands = applyHot([pick("a", "O15", 1.3), pick("a", "O05", 1.05), pick("a", "U25", 1.4), pick("b", "H_O05", 1.25),
-      pick("c", "O15", 1.3, 2000), pick("d", "O15", 1.3, 1000, "Italy")], [h]);
+      pick("c", "O15", 1.3, 2000), pick("d", "O15", 1.3, 1000, "Italy")], [h], true);
     const legs = hotLegs(cands, h, () => 0);
     expect(legs.map((p) => p.id).sort()).toEqual(["a|O15", "b|H_O05"]);
     expect(cands.find((p) => p.id === "a|U25")!.hot!.adj).toBeLessThan(0);

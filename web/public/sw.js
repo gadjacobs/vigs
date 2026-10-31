@@ -32,7 +32,7 @@ const KINDS = {
   last: { icon: "/notify/swing.png", badge: "/badge-96.png", vibrate: [120, 60, 120] },
   match: { icon: "/notify/goal.png", badge: "/notify/badge-goal.png", vibrate: [40] },
   hot: { icon: "/notify/goal.png", badge: "/notify/badge-goal.png", vibrate: [60, 40, 60, 40, 60], sticky: true,
-    actions: [{ action: "open", title: "Open in SportyBet" }] },
+    actions: [{ action: "open", title: "Open in Vig" }] },
 };
 const quietKinds = () => caches.open(PREFS).then((c) => c.match("/__notify"))
   .then((r) => (r ? r.json() : {})).catch(() => ({}));

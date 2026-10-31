@@ -1,4 +1,5 @@
 "use client";
+import { HOT_ON } from "@/lib/hotflag";
 import { NotifyStyle } from "./notify-style";
 import { useEffect, useState, useTransition } from "react";
 import { pushPrefs, subscribePush, testPush, unsubscribePush } from "../push-actions";
@@ -124,11 +125,11 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
               <input type="checkbox" role="switch" checked={swings} disabled={pending}
                 onChange={(e) => { setSwings(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Big moments on." : "Big moments off.", ours, e.target.checked); }} />
             </label>
-            <label className="switch">
+            {HOT_ON && (<label className="switch">
               <span><strong>Hot rounds</strong><small>When a league&apos;s round scores well over its prices, an overs slip for its next round (overs have landed about 1.2% more often then). At most one every 30 minutes</small></span>
               <input type="checkbox" role="switch" checked={hot} disabled={pending}
                 onChange={(e) => { setHot(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Hot rounds on." : "Hot rounds off.", ours, swings, codeDefault, e.target.checked); }} />
-            </label>
+            </label>)}
             <label className="field">For each new code
               <select value={codeDefault} disabled={pending}
                 onChange={(e) => { const v = e.target.value as typeof codeDefault; setCodeDefault(v); if (sub) save(sub, results, tips, "Saved.", ours, swings, v); }}>

@@ -1,10 +1,10 @@
 "use client";
+import { OpenInSportyBet } from "./open-sporty";
 import { useEffect, useState } from "react";
 import { bookHedge, hedgeQuote, type HedgeQuote } from "./live-actions";
 import { CopyButton } from "./copy-button";
 import { hedgePlan, stakeUp } from "@/lib/hedge";
 import { MARKET_LABELS } from "@/lib/markets";
-import { shareUrl } from "@/lib/share";
 
 const DC_LABELS: Record<string, string> = { DC1X: "Home or draw", DC12: "Home or away", DCX2: "Draw or away" };
 const naira = (x: number) => `₦${Math.round(x).toLocaleString("en-NG")}`;
@@ -90,7 +90,7 @@ export function HedgeSheet({ code, leg, odds, stake: initialStake, onClose }: {
           <div className="row">
             {booked && "code" in booked ? (
               <>
-                <a className="button primary" href={shareUrl(booked.code)}>Open {booked.code} in SportyBet</a>
+                <OpenInSportyBet code={booked.code}>Open {booked.code} in SportyBet</OpenInSportyBet>
                 <CopyButton text={booked.code} />
               </>
             ) : (
