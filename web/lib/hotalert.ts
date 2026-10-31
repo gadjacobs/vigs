@@ -11,7 +11,7 @@ import { loadSub, send } from "./push";
 import { DEFAULT_QUERY } from "./query";
 import { shareUrl } from "./share";
 import { book, selection } from "./sportybet";
-import { getJson, members, setJson } from "./store";
+import { claim, getJson, members, setJson } from "./store";
 
 // The tick's hot-round step: judge rounds that have just finished, and for each
 // one that ran hot, book an overs slip for the league's next round and tell
@@ -50,6 +50,8 @@ export async function runHot(now = Date.now()): Promise<{ due: number; hot: numb
     for (const id of await members("subs").catch(() => [] as string[])) {
       const s = await loadSub(id).catch(() => null);
       if (!s || s.hot === false) continue;
+      // About a third of rounds run hot, so at most one of these alerts every 30 minutes per device.
+      if (!(await claim(`hot:sent:${id}`, 30 * 60).catch(() => false))) continue;
       if (await send(s, { ...p, url: h.code ? shareUrl(h.code) : "/picks", tag: `hot-${h.league}`, kind: "hot", code: h.code })) sent++;
     }
   }

@@ -125,7 +125,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
                 onChange={(e) => { setSwings(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Big moments on." : "Big moments off.", ours, e.target.checked); }} />
             </label>
             <label className="switch">
-              <span><strong>Hot rounds</strong><small>When a league&apos;s round scores well over its prices, an overs slip for its next round (overs have landed about 1.2% more often then)</small></span>
+              <span><strong>Hot rounds</strong><small>When a league&apos;s round scores well over its prices, an overs slip for its next round (overs have landed about 1.2% more often then). At most one every 30 minutes</small></span>
               <input type="checkbox" role="switch" checked={hot} disabled={pending}
                 onChange={(e) => { setHot(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Hot rounds on." : "Hot rounds off.", ours, swings, codeDefault, e.target.checked); }} />
             </label>
