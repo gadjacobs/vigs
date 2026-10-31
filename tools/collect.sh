@@ -48,9 +48,8 @@ publish() {
 # cook and book the slips, slip alerts). With REDIS_URL and Node it runs right
 # here, on GitHub's CPU (web/tools/tick.mts), waiting as long as each pass asks:
 # about every 20 seconds while a watched leg is in play, 2 minutes otherwise.
-# Without them it falls back to asking the web app (PUSH_TICK_URL and
-# PUSH_TICK_SECRET), at most once a minute, since every call there uses the
-# Vercel plan's CPU allowance.
+# Without them it asks the web app (PUSH_TICK_URL and PUSH_TICK_SECRET) on the
+# same schedule; each call there uses the Vercel plan's CPU (fine on Pro).
 TICK_UNTIL=$(( $(date +%s) + CHUNKS * MINUTES * 60 ))
 if [ -n "${REDIS_URL:-}" ] && [ -x "$(command -v node)" ] && [ -d "$VIG_REPO/web/node_modules" ]; then
   echo "push tick: running here (REDIS_URL set)"
@@ -68,7 +67,7 @@ elif [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then
       [ "$code" != 200 ] || [ -z "$err" ] || echo "push tick: $err"
       next=$(printf '%s' "$body" | grep -o '"next":[0-9]*' | grep -o '[0-9]*$' || true)
       case "$next" in ''|*[!0-9]*) next=120 ;; esac
-      [ "$next" -lt 60 ] && next=60
+      [ "$next" -lt 15 ] && next=15
       [ "$next" -gt 300 ] && next=300
       sleep "$next"
     done

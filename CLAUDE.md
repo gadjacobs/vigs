@@ -74,7 +74,7 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   leg per match at 1.20-1.30 (no double chance), 10-35 legs; its return uses insights `bonus_legs` (landed/priced). First half vs usual (`lib/fhusual.ts`,
   insights `fh_usual`): marker on FH legs and the Tonight filter `fh=likelier`. Hedge only does arithmetic and books a code; never bets.
   The tick (`lib/ticker.ts` `runTickOnce`) runs inside the collector in GitHub Actions (`web/tools/tick.mts`, needs a
-  `REDIS_URL` secret) to keep it off the Vercel plan's CPU; `/api/push/tick` is the fallback, called at most once a minute.
+  `REDIS_URL` secret) to keep it off the Vercel plan's CPU; `/api/push/tick` is the fallback on the same schedule.
   It watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
   One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no
   result is sent > 45 min after a code's last kickoff. Collector cron is every 30 min (runs chain).
