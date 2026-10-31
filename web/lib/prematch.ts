@@ -1,4 +1,4 @@
-import { upcoming } from "./sportybet";
+import { upcoming, type Fixture } from "./sportybet";
 import { getJson, setJson } from "./store";
 
 // The last prematch prices of every round, kept two days, so a code first
@@ -24,8 +24,29 @@ export async function snapshotRounds(now = Date.now()): Promise<number> {
     const had = (await getJson<Round>(roundKey(kickoff))) ?? {};
     await setJson(roundKey(kickoff), { ...had, ...prices }, KEEP_SECONDS);
   }
+  // The fixtures themselves (teams, league) too, for the hot-round slip: by the
+  // time a round's result is known the next round can be off SportyBet's list.
+  const byKo = new Map<number, Fixture[]>();
+  for (const f of soon) byKo.set(f.kickoff, [...(byKo.get(f.kickoff) ?? []), f]);
+  for (const [kickoff, fx] of byKo) {
+    const had = (await getJson<Fixture[]>(`prefx:${kickoff}`)) ?? [];
+    const ids = new Set(fx.map((f) => f.eventId));
+    await setJson(`prefx:${kickoff}`, [...had.filter((f) => !ids.has(f.eventId)), ...fx], 6 * 3600);
+  }
+  if (byKo.size) {
+    const known = ((await getJson<number[]>("prefx:index")) ?? []).filter((k) => k > now - 3 * 3600_000);
+    await setJson("prefx:index", [...new Set([...known, ...byKo.keys()])].sort((a, b) => a - b), 6 * 3600);
+  }
   return rounds.size;
 }
+
+/** Saved fixtures (with prices) of the rounds kicking off at these times. */
+export async function savedFixtures(kickoffs: number[]): Promise<Fixture[]> {
+  const out: Fixture[] = [];
+  for (const k of [...new Set(kickoffs)].slice(0, 20)) out.push(...((await getJson<Fixture[]>(`prefx:${k}`).catch(() => null)) ?? []));
+  return out;
+}
+export const savedRoundTimes = async () => (await getJson<number[]>("prefx:index").catch(() => null)) ?? [];
 
 /** Saved prices for these legs' rounds, keyed by event. */
 export async function savedPrices(kickoffs: number[]): Promise<Round> {

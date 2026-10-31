@@ -53,6 +53,14 @@ function LeanWarn({ p, lean }: { p: Pick; lean?: LeanRow[] }) {
   return <p className="why longshot">In our data this market, at this chance, has landed {pct(row.landed / row.n)} of the time against {pct(row.priced / row.n)} priced ({row.n.toLocaleString()} matches).</p>;
 }
 
+/** Next round of a league whose last round ran hot: overs have landed a little more often. */
+function HotMark({ p }: { p: Pick }) {
+  if (!p.hot) return null;
+  const up = p.hot.adj > 0;
+  const said = `This league's last round scored ${p.hot.resid.toFixed(2)} goals a match over its prices; after rounds like that, the next round's overs have landed about 1.2% more often than priced (unders less often). Chance adjusted by ${(p.hot.adj * 100).toFixed(1)} points.`;
+  return <span className={`hotmark ${up ? "up" : "down"}`} title={said}>🔥 Hot round {up ? "▲" : "▼"}<span className="sr-only"> {said}</span></span>;
+}
+
 /** What this leg gives the bookmaker per ₦1,000 over many plays: 1 − odds × its de-vigged chance. */
 function CostTag({ p, worst }: { p: Pick; worst?: boolean }) {
   const cut = Math.max(0, 1 - p.odds * p.marketChance);
@@ -80,7 +88,7 @@ export function PickRow({ p, actions, now, view = "detailed", lean, cost, worst 
         </p>
         <div className="tags">
           <span className={`badge conf-${conf.toLowerCase()}`}>{conf} confidence</span>
-          <LeanMark p={p} lean={lean} /><FhMark p={p} />{cost && <CostTag p={p} worst={worst} />}
+          <LeanMark p={p} lean={lean} /><FhMark p={p} /><HotMark p={p} />{cost && <CostTag p={p} worst={worst} />}
         </div>
         <LeanWarn p={p} lean={lean} />
         {p.odds >= 5 && <p className="why longshot">Long shot: prices this big have paid back far less than they cost.</p>}
@@ -106,7 +114,7 @@ export function PickRow({ p, actions, now, view = "detailed", lean, cost, worst 
       </dl>
       <Bar p={p} />
       <p className="why">{p.grade}: {p.why}.</p>
-      <div className="tags"><LeanMark p={p} lean={lean} /><FhMark p={p} />{cost && <CostTag p={p} worst={worst} />}</div>
+      <div className="tags"><LeanMark p={p} lean={lean} /><FhMark p={p} /><HotMark p={p} />{cost && <CostTag p={p} worst={worst} />}</div>
       <LeanWarn p={p} lean={lean} />
       {p.odds >= 5 && <p className="why longshot">Long shot: in Vig&apos;s data, prices over 5 have returned far less than they cost (see Record).</p>}
       {actions && <div className="row leg-actions">{actions}</div>}

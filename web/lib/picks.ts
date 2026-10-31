@@ -27,6 +27,7 @@ export type Pick = {
   why: string;
   source: "guarded" | "blend";
   fh?: { now: number; usual: number }; // first half: goal chance now vs the fixture's usual (lib/fhusual.ts)
+  hot?: { adj: number; resid: number }; // next round of a league whose last round ran hot (lib/hotround.ts)
 };
 
 /** Without odds history there is no walk-forward test, so nothing can be Solid. */

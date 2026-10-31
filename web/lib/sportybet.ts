@@ -183,6 +183,25 @@ export async function eventMarkets(eventId: string, live: boolean): Promise<Live
   return data;
 }
 
+export type Result = { eventId: string; league: string; home: string; away: string; kickoff: number; hg: number; ag: number };
+
+/** Finished matches that kicked off between two times (SportyBet's results list). */
+export async function results(start: number, end: number): Promise<Result[]> {
+  const out: Result[] = [];
+  for (let page = 1; page < 10; page++) {
+    const q = new URLSearchParams({ pageNum: String(page), pageSize: "100", sportId: SPORT, startTime: String(start), endTime: String(end) });
+    const data = await call<{ totalNum?: number; tournaments?: { events: (ApiEvent & { matchStatus?: string; setScore?: string })[] }[] }>(`${BASE}/eventResultList?${q}`);
+    const events = (data.tournaments ?? []).flatMap((t) => t.events ?? []);
+    for (const e of events) {
+      const s = pair(e.setScore);
+      if (e.matchStatus !== "End" || !s) continue;
+      out.push({ eventId: e.eventId, league: e.sport.category.name, home: e.homeTeamName, away: e.awayTeamName, kickoff: Number(e.estimateStartTime), hg: s[0], ag: s[1] });
+    }
+    if (!events.length || page * 100 >= Number(data.totalNum ?? 0)) break;
+  }
+  return out;
+}
+
 export type Selection = { eventId: string; marketId: string; specifier: string | null; outcomeId: string };
 
 export function selection(market: string, eventId: string): Selection {

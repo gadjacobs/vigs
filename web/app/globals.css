@@ -1465,3 +1465,8 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
 .booked.flash { animation: enter 320ms cubic-bezier(.2, .7, .2, 1) both, bookflash 1.6s 300ms ease-out 1; }
 @keyframes bookflash { 0%, 35% { box-shadow: 0 0 0 4px var(--signal); } 100% { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .booked.flash { animation: none; box-shadow: 0 0 0 3px var(--signal); } }
+.hotmark { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 800; white-space: nowrap; }
+.hotmark.up { background: color-mix(in srgb, #ff7a1a 18%, transparent); color: #d9570a; }
+.hotmark.down { background: var(--paper-sunk); color: var(--ink-muted); }
+:root[data-theme="dark"] .hotmark.up { color: #ffa25e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .hotmark.up { color: #ffa25e; } }

@@ -23,6 +23,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
   const [sub, setSub] = useState<PushSubscription | null>(null);
   const [results, setResults] = useState(true);
   const [swings, setSwings] = useState(true);
+  const [hot, setHot] = useState(true);
   const [codeDefault, setCodeDefault] = useState<"goals" | "default" | "off">("default");
   const [tips, setTips] = useState<string[]>([]);
   const [ours, setOurs] = useState<OursPrefs>(OURS_DEFAULT);
@@ -45,6 +46,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       if (p) {
         setResults(p.results);
         setSwings(p.swings);
+        setHot(p.hot !== false);
         setCodeDefault(p.codeDefault);
         setTips(p.tips);
         if (p.ours) setOurs(p.ours);
@@ -53,9 +55,9 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
     })().catch(() => setState("unsupported"));
   }, []);
 
-  const save = (s: PushSubscription, r: boolean, t: string[], note: string, o: OursPrefs = ours, sw: boolean = swings, cd = codeDefault) =>
+  const save = (s: PushSubscription, r: boolean, t: string[], note: string, o: OursPrefs = ours, sw: boolean = swings, cd = codeDefault, h: boolean = hot) =>
     start(async () => {
-      const res = await subscribePush(s.toJSON() as never, { results: r, tips: t, ours: o, swings: sw, codeDefault: cd });
+      const res = await subscribePush(s.toJSON() as never, { results: r, tips: t, ours: o, swings: sw, codeDefault: cd, hot: h });
       setMsg(res.ok ? note : res.error);
     });
 
@@ -69,7 +71,7 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
       } catch (e) {
         return setMsg(`This browser could not register with its push service (${(e as Error).message}). Try again, or use Chrome.`);
       }
-      const res = await subscribePush(s.toJSON() as never, { results, tips, ours, swings, codeDefault });
+      const res = await subscribePush(s.toJSON() as never, { results, tips, ours, swings, codeDefault, hot });
       if (!res.ok) return setMsg(res.error);
       setSub(s);
       setState("on");
@@ -121,6 +123,11 @@ export function AlertsPanel({ vapidKey, filters }: { vapidKey: string; filters: 
               <span><strong>Big moments</strong><small>A goal that swings a code, and when one leg is left</small></span>
               <input type="checkbox" role="switch" checked={swings} disabled={pending}
                 onChange={(e) => { setSwings(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Big moments on." : "Big moments off.", ours, e.target.checked); }} />
+            </label>
+            <label className="switch">
+              <span><strong>Hot rounds</strong><small>When a league&apos;s round scores well over its prices, an overs slip for its next round (overs have landed about 1.2% more often then)</small></span>
+              <input type="checkbox" role="switch" checked={hot} disabled={pending}
+                onChange={(e) => { setHot(e.target.checked); if (sub) save(sub, results, tips, e.target.checked ? "Hot rounds on." : "Hot rounds off.", ours, swings, codeDefault, e.target.checked); }} />
             </label>
             <label className="field">For each new code
               <select value={codeDefault} disabled={pending}

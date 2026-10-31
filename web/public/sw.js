@@ -2,7 +2,7 @@
 // v2: monochrome status-bar badge (Android draws the badge as a white silhouette,
 // so a full-colour icon there shows as a blank square or the browser's logo).
 const OFFLINE = "/offline.html";
-const CACHE = "vig-v5";
+const CACHE = "vig-v6";
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.add(OFFLINE)).then(() => self.skipWaiting()));
@@ -31,6 +31,8 @@ const KINDS = {
   swing: { icon: "/notify/swing.png", badge: "/notify/badge-goal.png", vibrate: [60, 40, 60] },
   last: { icon: "/notify/swing.png", badge: "/badge-96.png", vibrate: [120, 60, 120] },
   match: { icon: "/notify/goal.png", badge: "/notify/badge-goal.png", vibrate: [40] },
+  hot: { icon: "/notify/goal.png", badge: "/notify/badge-goal.png", vibrate: [60, 40, 60, 40, 60], sticky: true,
+    actions: [{ action: "open", title: "Open in SportyBet" }] },
 };
 const quietKinds = () => caches.open(PREFS).then((c) => c.match("/__notify"))
   .then((r) => (r ? r.json() : {})).catch(() => ({}));
@@ -94,6 +96,11 @@ self.addEventListener("notificationclick", (event) => {
   // "Share the ticket" opens Codes with that code's share sheet up.
   const to = event.action === "share" && d.code ? `/codes?share=${encodeURIComponent(d.code)}` : d.url || "/";
   const url = new URL(to, self.location.origin).href;
+  // A slip's SportyBet link opens on its own, leaving Vig where it was.
+  if (new URL(url).origin !== self.location.origin) {
+    event.waitUntil(self.clients.openWindow(url));
+    return;
+  }
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       for (const w of wins) if (w.url.startsWith(self.location.origin) && "focus" in w) return w.navigate(url).then((c) => (c || w).focus());

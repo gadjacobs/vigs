@@ -5,6 +5,7 @@ import { MARKET_LABELS } from "./markets";
 import { loadInsights } from "./insights";
 import { loadModel } from "./model";
 import { candidates } from "./picks";
+import { applyHot, currentHot } from "./hotround";
 import { DEFAULT_QUERY } from "./query";
 import { buildSet } from "./ourpicks";
 import { cookSlates, type Slate } from "./slates";
@@ -28,7 +29,7 @@ async function roundKey(now: number) {
 async function cook(round: string, now: number, bookCodes: boolean): Promise<Cooked> {
   const [model, fixtures, blend, insights] = await Promise.all([loadModel(), upcoming(), loadBlend(), loadInsights()]);
   const q = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, now };
-  const cands = candidates(model, fixtures, q, blend).candidates;
+  const cands = applyHot(candidates(model, fixtures, q, blend).candidates, await currentHot(now).catch(() => []));
   const slates = cookSlates(cands, insights?.lean);
   const templates: NonNullable<Cooked["templates"]> = [];
   if (bookCodes) {

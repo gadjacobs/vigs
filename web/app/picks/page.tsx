@@ -1,3 +1,4 @@
+import { applyHot, currentHot } from "@/lib/hotround";
 import type { Pick } from "@/lib/picks";
 import { viewOf } from "@/lib/view";
 import { MAX_LEGS } from "@/lib/slip";
@@ -103,7 +104,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const blend = await loadBlend();
   const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 24, mode: "count", count: MAX_ON_SLIP, sort: "likely" };
   const insights = await loadInsights();
-  const cands = model ? applyFh(candidates(model, fixtures, { ...q, now }, blend).candidates, fixtures, insights?.fh_usual, false) : [];
+  const cands = model ? applyHot(applyFh(candidates(model, fixtures, { ...q, now }, blend).candidates, fixtures, insights?.fh_usual, false), await currentHot(now).catch(() => [])) : [];
   const lean = insights?.lean;
   const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP, floor, lean, misses: miss });
   const fq = flexSet && built.slip.length > miss + 1 ? flexQuote(built.slip.map((p) => p.marketChance), built.slip.length - miss) : null;

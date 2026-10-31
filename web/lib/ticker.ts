@@ -5,6 +5,7 @@ import { claim, setJson } from "./store";
 import { tidyStore } from "./tidy";
 import { buildOurs, buildTip } from "./tips";
 import { runWatches } from "./watches";
+import { runHot } from "./hotalert";
 
 // One pass of the background work: cook and book the slips, save prematch
 // prices, follow and settle watched codes, send notifications and slip alerts,
@@ -34,6 +35,9 @@ export async function runTickOnce(now = Date.now()) {
   // The last prematch prices of the next rounds, for codes first opened after kickoff.
   const rounds = await step("prices", async () =>
     (await claim("scan:prematch", 50).catch(() => true)) ? await snapshotRounds(now) : null, null);
+  // Hot rounds: judge rounds that have just finished; alert with an overs slip
+  // for the next round of any league that ran hot (lib/hotround.ts).
+  const hot = await step("hot", () => runHot(now), null);
   const out = await step("tick", () => tick(buildTip, now, buildOurs), null);
   if (out?.error) errors.push(`tick: ${out.errors} failed, first: ${out.error}`);
   // Slip alerts on saved filters and templates (each account at most every 10 minutes).
@@ -44,5 +48,8 @@ export async function runTickOnce(now = Date.now()) {
     console.error(`push tick: ${error}`);
     await setJson("tickError", { at: now, error } satisfies TickError, 7 * 86400).catch(() => undefined);
   }
-  return { ...(out ?? { next: 60 }), cooked, rounds, alerts, tidy, error };
+  // While a round is about to finish, check every 20 s: its result is known only
+  // a few minutes before the league's next round kicks off.
+  const next = Math.min(out?.next ?? 60, hot?.due ? 20 : 300);
+  return { ...(out ?? {}), next, cooked, rounds, hot, alerts, tidy, error };
 }

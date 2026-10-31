@@ -107,7 +107,7 @@ function targetSlip(cands: Pick[], target: number, lo: number, hi: number, tol =
   // record from earlier days only, the legs this picks landed above their price
   // (Tenner +3.6%, 20 odds +2.6%, Fiver +0.6%) where price alone picked legs
   // that landed just below it; slips returned 0.92-1.04 per ₦1 against 0.89-1.00.
-  const score = (p: Pick) => Math.min(0.99, Math.max(0.01, market(p) + leanOf(lean, p.market, market(p)).adj));
+  const score = (p: Pick) => Math.min(0.99, Math.max(0.01, market(p) + leanOf(lean, p.market, market(p)).adj + (p.hot?.adj ?? 0)));
   // A single leg can't make a slip, so no leg may reach the target on its own.
   const top = Math.min(hi, target * (1 - tol) - 0.01);
   const band = cands.filter((p) => p.odds >= lo && p.odds <= top);

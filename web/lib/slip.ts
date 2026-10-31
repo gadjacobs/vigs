@@ -1,3 +1,4 @@
+import { multiBonus } from "./bonus";
 import type { Pick } from "./picks";
 
 // Slips hold at most one selection per match. Legs on different matches are
@@ -108,7 +109,9 @@ export function smartSwitch(slipPicks: Pick[], cands: Pick[], legId: string): Pi
   );
 }
 
-const keepOf = (ls: Pick[]) => ls.reduce((a, p) => a * p.odds * p.marketChance, 1);
+// What a slip keeps per ₦1 over many plays, with SportyBet's multi-bet bonus
+// (a swap that drops a leg under 1.20 loses its share of the bonus).
+const keepOf = (ls: Pick[]) => multiBonus(ls.map((p) => ({ odds: p.odds, p: p.marketChance }))).payback;
 
 /**
  * The one swap that keeps the most of the stake at about the same odds (within
@@ -125,7 +128,7 @@ export function cheaperSwap(legs: Pick[], cands: Pick[]): { out: Pick; inn: Pick
     for (const inn of cands) {
       if (on.has(inn.id) || (inn.eventId !== out.eventId && used.has(inn.eventId))) continue;
       if (Math.abs((odds / out.odds) * inn.odds / odds - 1) > 0.1) continue;
-      const keep = (before / (out.odds * out.marketChance)) * inn.odds * inn.marketChance;
+      const keep = keepOf(legs.map((p) => (p === out ? inn : p)));
       if (keep >= before + 0.003 && (!best || keep > best.keep)) best = { out, inn, keep, before };
     }
   }

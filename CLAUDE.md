@@ -72,7 +72,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   `multiBonus`: legs ≥ 1.20 qualify, ratio = weighted leg payback ÷ slip payback − 1 within a range per
   leg count, straight slips only) shows on slips, cooked slips and codes; template floor 1.20. Our picks "Bonus slip": likeliest
   leg per match at 1.20-1.30 (no double chance), 10-35 legs; its return uses insights `bonus_legs` (landed/priced). First half vs usual (`lib/fhusual.ts`,
-  insights `fh_usual`): marker on FH legs and the Tonight filter `fh=likelier`. Hedge only does arithmetic and books a code; never bets.
+  insights `fh_usual`): marker on FH legs and the Tonight filter `fh=likelier`. Hot rounds (`lib/hotround.ts`, `hotalert.ts`):
+  when a league's round scores ≥ 0.2 goals a match over its saved prices (`pre:`/`prefx:`, results from `eventResultList`),
+  overs in its next round get +1.2% (held out, docs/research-2026-10-31.md); the tick books an overs slip (legs ≥ 1.20) and
+  alerts subs with `hot` on (default). The multi-bet bonus is confirmed on vFootball: the keep meter leads with it. Hedge only does arithmetic and books a code; never bets.
   The tick (`lib/ticker.ts` `runTickOnce`) runs inside the collector in GitHub Actions (`web/tools/tick.mts`, needs a
   `REDIS_URL` secret) to keep it off the Vercel plan's CPU; `/api/push/tick` is the fallback on the same schedule.
   It watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).

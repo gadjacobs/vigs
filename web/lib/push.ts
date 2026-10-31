@@ -14,6 +14,7 @@ export type Sub = {
   keys: { p256dh: string; auth: string };
   results: boolean; // tell me when a watched code wins or loses
   swings?: boolean; // goals that move a watched code's chance, and its last leg (default on)
+  hot?: boolean; // hot-round alerts with an overs slip (default on)
   codeDefault?: "goals" | "default" | "off"; // for codes without their own choice
   tips: string[]; // "HH:MM" Lagos
   query: string; // Tonight filters for tips when the account has none saved
@@ -35,7 +36,7 @@ export type Watch = {
   decided?: string[]; // legs ("eventId|market") the score had already decided, so their matches go quiet
 };
 /** `kind` picks how the phone shows it (icon, buzz, picture, buttons; see public/sw.js). */
-export type NoteKind = "landed" | "lost" | "goal" | "swing" | "last" | "match";
+export type NoteKind = "landed" | "lost" | "goal" | "swing" | "last" | "match" | "hot";
 export type Payload = { title: string; body: string; url: string; tag?: string; cheer?: boolean; kind?: NoteKind; code?: string };
 
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? "mailto:vig@example.com";

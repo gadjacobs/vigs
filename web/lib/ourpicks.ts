@@ -59,7 +59,7 @@ const TRUSTED_MIN = 0.6; // "most confident" legs are likely ones too; the slip 
 
 /** One leg per match, the likeliest after the lean, best first. */
 export function topPicks(cands: Pick[], lean: LeanRow[] | undefined, floor: number, trusted: boolean): Pick[] {
-  const score = (p: Pick) => p.marketChance + leanOf(lean, p.market, p.marketChance).adj;
+  const score = (p: Pick) => p.marketChance + leanOf(lean, p.market, p.marketChance).adj + (p.hot?.adj ?? 0);
   const ok = (p: Pick) => {
     if (p.odds < floor) return false;
     if (!trusted) return true;
@@ -97,7 +97,7 @@ export function buildSet(id: SetId, cands: Pick[], o: { bar: number; target: num
   if (id === "bonus") {
     // Likeliest leg per match inside the band (widening to 1.35 if the band runs short).
     // Double chance is left out: SportyBet prices it with a smaller cut, so its bonus formula tops it up less.
-    const pick = (hi: number) => onePerMatch(cands.filter((p) => p.odds >= BONUS_BAND[0] && p.odds < hi && p.grade !== "Avoid" && !p.market.startsWith("DC")), (p) => p.marketChance + leanOf(o.lean, p.market, p.marketChance).adj);
+    const pick = (hi: number) => onePerMatch(cands.filter((p) => p.odds >= BONUS_BAND[0] && p.odds < hi && p.grade !== "Avoid" && !p.market.startsWith("DC")), (p) => p.marketChance + leanOf(o.lean, p.market, p.marketChance).adj + (p.hot?.adj ?? 0));
     let pool = pick(BONUS_BAND[1]);
     if (pool.length < o.n) pool = pick(1.35);
     return { pool, slip: pool.slice(0, o.n), flex: false };
