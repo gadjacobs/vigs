@@ -15,6 +15,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // The service worker, manifest and icons load without cookies; the tick checks its own secret.
-  matcher: ["/((?!login|welcome|_next/static|_next/image|favicon.ico|sw.js|offline.html|manifest.webmanifest|icon-|badge-|notify/|apple-touch-icon|api/push/tick|api/codes/log|api/auth/google).*)"],
+  // The service worker, manifest, icons and Vercel's analytics scripts (/_vercel) load without
+  // cookies; the tick checks its own secret.
+  matcher: ["/((?!login|welcome|_next/static|_next/image|favicon.ico|sw.js|offline.html|manifest.webmanifest|icon-|badge-|notify/|_vercel|apple-touch-icon|api/push/tick|api/codes/log|api/auth/google).*)"],
 };
