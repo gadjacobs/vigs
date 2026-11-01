@@ -71,7 +71,9 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   "Flex big odds" grows a slip to a Flex odds target. SportyBet's multi-bet bonus (`lib/bonus.ts`
   `multiBonus`: legs ≥ 1.20 qualify, ratio = weighted leg payback ÷ slip payback − 1 within a range per
   leg count, straight slips only) shows on slips, cooked slips and codes; template floor 1.20. Our picks "Bonus slip": likeliest
-  leg per match at 1.20-1.30 (no double chance), 10-35 legs; its return uses insights `bonus_legs` (landed/priced). First half vs usual (`lib/fhusual.ts`,
+  leg per match at 1.20-1.25 (widening to 1.30/1.35; no double chance), 10-35 legs; "Goal": the same legs, fewest whose
+  bonus odds reach ×2-×1,000 the stake (one bold bet beats many small ones at a cut). Lean is off (`LEAN_ON`, `lib/lean.ts`):
+  no market landed apart from its price once errors were clustered by round, so no ▲/▼ markers and no nudge. First half vs usual (`lib/fhusual.ts`,
   insights `fh_usual`): marker on FH legs and the Tonight filter `fh=likelier`. Hot rounds (`lib/hotround.ts`, `hotalert.ts`):
   when a league's round scores ≥ 0.2 goals a match over its saved prices (`pre:`/`prefx:`, results from `eventResultList`),
   overs in its next round looked +1.2%, but it did not hold with errors clustered by round (docs/research-2026-10-31.md),

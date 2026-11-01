@@ -114,10 +114,28 @@ describe("SportyBet multi-bet bonus", () => {
 });
 
 describe("bonus slip", () => {
-  it("takes the likeliest leg per match priced 1.20-1.30", () => {
+  it("takes the likeliest leg per match priced 1.20-1.25, widening when short", () => {
     const mk = (e: string, market: string, odds: number, p: number) => ({ id: `${e}|${market}`, eventId: e, market, odds, marketChance: p, estimate: p, grade: "Rough" });
     const cands = [mk("a", "U35", 1.25, 0.77), mk("a", "O15", 1.22, 0.79), mk("b", "U35", 1.4, 0.69), mk("c", "A_O05", 1.28, 0.75), mk("d", "O05", 1.05, 0.93)] as never[];
     const b = buildSet("bonus", cands, { bar: 0, target: 0, n: 10, maxSlip: 50 });
     expect(b.slip.map((p: { id: string }) => p.id)).toEqual(["a|O15", "c|A_O05"]);
+  });
+});
+
+describe("goal slip", () => {
+  const mk = (e: string, odds: number) => ({ id: `${e}|U35`, eventId: e, market: "U35", odds, marketChance: 0.977 / odds, estimate: 0.977 / odds, grade: "Rough" });
+  const cands = "abcdefghijklmnopqrstuvwxyz".split("").map((e) => mk(e, 1.22)) as never[];
+  it("takes the fewest legs whose odds with the bonus reach the goal", async () => {
+    const { goalOdds } = await import("../lib/ourpicks");
+    const b = buildSet("goal", cands, { bar: 0, target: 10, n: 0, maxSlip: 50 });
+    expect(goalOdds(b.slip)).toBeGreaterThanOrEqual(10);
+    expect(goalOdds(b.slip.slice(0, -1))).toBeLessThan(10);
+    // Its chance stays close to the best any plan has: payback / goal.
+    const hit = b.slip.reduce((a: number, p: { marketChance: number }) => a * p.marketChance, 1);
+    expect(hit * goalOdds(b.slip)).toBeGreaterThan(0.95);
+  });
+  it("returns every leg in range when the goal is out of reach", () => {
+    const b = buildSet("goal", cands.slice(0, 3), { bar: 0, target: 1000, n: 0, maxSlip: 50 });
+    expect(b.slip.length).toBe(3);
   });
 });

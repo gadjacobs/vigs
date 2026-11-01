@@ -1,5 +1,6 @@
 import type { LeanRow } from "./insights";
-import { leanOf } from "./lean";
+import { LEAN_ON, leanOf } from "./lean";
+import { multiBonus } from "./bonus";
 import { flexQuote } from "./flex";
 export { leanOf } from "./lean";
 import type { Pick } from "./picks";
@@ -19,13 +20,16 @@ import { toTarget } from "./slip";
 //   Italy), with the chance that at least k of n land for SportyBet's Flex.
 // - best: the best bet per match, ranked by the bookmaker's de-vigged chance
 //   at odds of 1.2 or more, with no market filling more than 40% of the slip.
-// - top: 50 of the likeliest selections, one per match, leaning toward markets
-//   that have landed above their price at that chance level (see `lean`).
+// - top: 50 of the likeliest selections, one per match.
 // - trusted: the same, only where the bookmaker's price and the model agree
-//   closely (High confidence) and the market's record at that level is at or
-//   above its price, and a chance of 60% or more.
-export type SetId = "bonus" | "top" | "trusted" | "flex" | "best" | "safe" | "odds" | "bold" | "draws";
+//   closely (High confidence), with a chance of 60% or more.
+// - goal: one straight bonus slip sized to turn the stake into a goal in a
+//   single bet. Every bet gives the bookmaker its cut, so when the aim is to
+//   reach a set sum, one slip that pays it gives the best chance (bold play);
+//   many small bets pay the cut many times over.
+export type SetId = "goal" | "bonus" | "top" | "trusted" | "flex" | "best" | "safe" | "odds" | "bold" | "draws";
 export const SETS: { id: SetId; label: string }[] = [
+  { id: "goal", label: "Goal" },
   { id: "bonus", label: "Bonus slip" },
   { id: "top", label: "Most likely" },
   { id: "trusted", label: "Most confident" },
@@ -46,12 +50,16 @@ export const FLOORS = [1.05, 1.1, 1.2, 1.3] as const; // lowest price a leg may 
 // 1.20: SportyBet's multi-bet bonus counts only legs priced 1.20 or more (lib/bonus.ts).
 export const FLOOR_DEFAULT = 1.2;
 // Bonus slips: legs priced just over SportyBet's 1.20 bonus line, one per match.
-// Such legs land a little more often than priced (insights `bonus_legs`: 13,370 legs,
-// landed / priced 1.008, 90% range 1.0005-1.015, Oct 2026), and SportyBet's bonus,
-// worked out from its own prices, grows faster with legs than its cut compounds
-// (lib/bonus.ts), most of all from 30 legs.
+// At 1.20-1.25 SportyBet's prices pay back about 97.7% per leg, the most of any
+// leg that counts for the bonus (1.5-1.7: about 96.9%; 38,395 matches to 31 Oct
+// 2026), and its bonus keeps a slip's payback near its legs' at any length up to
+// 50 (lib/bonus.ts). No market at these prices landed apart from its price once
+// errors were clustered by round (docs/research-2026-10-31.md).
 export const BONUS_COUNTS = [10, 20, 30, 33, 35] as const;
-export const BONUS_BAND: [number, number] = [1.2, 1.3];
+export const BONUS_BAND: [number, number] = [1.2, 1.25];
+const BONUS_WIDER = [1.3, 1.35]; // when the band runs short of matches
+// Goal: what the stake should become, as a multiple of it.
+export const GOALS = [2, 5, 10, 50, 100, 1000] as const;
 export const FLEX_TARGETS = [50, 100, 500, 1000] as const; // Flex odds to reach
 export const FLEX_MISSES = [1, 2, 3] as const;
 export const FLEX_FLOORS = [1.1, 1.2, 1.3, 1.5, 1.8] as const;
@@ -65,7 +73,7 @@ export function topPicks(cands: Pick[], lean: LeanRow[] | undefined, floor: numb
     if (!trusted) return true;
     // Without the published record (before the first hourly publish), agreement and chance alone.
     const z = leanOf(lean, p.market, p.marketChance).z;
-    const recordOk = !lean?.length || (z !== null && z >= 0);
+    const recordOk = !LEAN_ON || !lean?.length || (z !== null && z >= 0);
     return p.marketChance >= TRUSTED_MIN && confidence(p.lo, p.hi) === "High" && recordOk;
   };
   return onePerMatch(cands.filter(ok), score);
@@ -91,16 +99,36 @@ function onePerMatch(ps: Pick[], key: (p: Pick) => number): Pick[] {
   return [...best.values()].sort((a, b) => key(b) - key(a));
 }
 
+/** What a straight slip pays per ₦1 when every leg lands, SportyBet's bonus included. */
+export const goalOdds = (legs: Pick[]) => multiBonus(legs.map((p) => ({ odds: p.odds, p: p.marketChance }))).totalOdds;
+
+/** The fewest of `ranked` (likeliest first) whose odds with the bonus reach `target`; all of them if none do. */
+export function goalSlip(ranked: Pick[], target: number, max: number): Pick[] {
+  const top = ranked.slice(0, max);
+  for (let k = 1; k <= top.length; k++) if (goalOdds(top.slice(0, k)) >= target) return top.slice(0, k);
+  return top;
+}
+
 export type Built = { pool: Pick[]; slip: Pick[]; flex: boolean };
 
 export function buildSet(id: SetId, cands: Pick[], o: { bar: number; target: number; n: number; maxSlip: number; floor?: number; lean?: LeanRow[]; misses?: number }): Built {
-  if (id === "bonus") {
-    // Likeliest leg per match inside the band (widening to 1.35 if the band runs short).
+  if (id === "bonus" || id === "goal") {
+    // Likeliest leg per match inside the band (widening to 1.30, then 1.35, if it runs short).
     // Double chance is left out: SportyBet prices it with a smaller cut, so its bonus formula tops it up less.
     const pick = (hi: number) => onePerMatch(cands.filter((p) => p.odds >= BONUS_BAND[0] && p.odds < hi && p.grade !== "Avoid" && !p.market.startsWith("DC")), (p) => p.marketChance + leanOf(o.lean, p.market, p.marketChance).adj + (p.hot?.adj ?? 0));
-    let pool = pick(BONUS_BAND[1]);
-    if (pool.length < o.n) pool = pick(1.35);
-    return { pool, slip: pool.slice(0, o.n), flex: false };
+    if (id === "bonus") {
+      let pool = pick(BONUS_BAND[1]);
+      for (const hi of BONUS_WIDER) if (pool.length < o.n) pool = pick(hi);
+      return { pool, slip: pool.slice(0, o.n), flex: false };
+    }
+    let pool: Pick[] = [];
+    let slip: Pick[] = [];
+    for (const hi of [BONUS_BAND[1], ...BONUS_WIDER]) {
+      pool = pick(hi);
+      slip = goalSlip(pool, o.target, o.maxSlip);
+      if (slip.length && goalOdds(slip) >= o.target) break;
+    }
+    return { pool, slip, flex: false };
   }
   if (id === "flex") {
     // The likeliest leg per match at the price floor, most likely first, added

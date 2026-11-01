@@ -161,18 +161,19 @@ describe("cooked Double up keeps its legs close together", () => {
   });
 });
 
-describe("cooked target slips lean toward markets that held their price", () => {
+describe("cooked target slips and the lean (off: no market beat its price)", () => {
   const leg = (e: string, m: string, odds: number, mc: number): Pick => ({
     ...pick(e, m, odds, mc), market: m, kickoff: 0, marketChance: mc, lo: mc - 0.01, hi: mc + 0.01,
   });
-  it("prefers the market whose record is above its price at the same odds", () => {
+  it("ignores a market's record at the same odds while the lean is off", () => {
     const cands = [leg("a", "O15", 1.35, 0.71), leg("a", "H_O05", 1.35, 0.71), leg("b", "O15", 1.35, 0.71), leg("b", "H_O05", 1.35, 0.71)];
     const lean = [
       { market: "H_O05", lo: 0.67, hi: 0.8, n: 20000, landed: 14600, priced: 14200, z: 3, held: true },
       { market: "O15", lo: 0.67, hi: 0.8, n: 20000, landed: 14000, priced: 14200, z: -2, held: true },
     ];
     const d = cookSlates(cands, lean as never).find((s) => s.style === "double")!;
-    expect(d.legs.every((p) => p.market === "H_O05")).toBe(true);
+    const plain = cookSlates(cands).find((s) => s.style === "double")!;
+    expect(d.legs.map((p) => p.id)).toEqual(plain.legs.map((p) => p.id));
   });
 });
 

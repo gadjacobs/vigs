@@ -172,6 +172,7 @@ describe("double chance and team goals", () => {
 
 describe("top 50 templates", async () => {
   const { topPicks, leanOf } = await import("../lib/ourpicks");
+  const { leanRecord } = await import("../lib/lean");
   const pick = (eventId: string, market: string, chance: number, odds: number, lo = chance - 0.01, hi = chance + 0.01) =>
     ({ id: `${eventId}|${market}`, eventId, market, marketChance: chance, odds, lo, hi, estimate: chance, kickoff: 1 }) as never;
   const lean = [
@@ -179,19 +180,23 @@ describe("top 50 templates", async () => {
     { market: "O05", lo: 0.85, hi: 1.0001, n: 8000, landed: 7150, priced: 7200, z: -1.2 },
   ];
   it("shrinks the lean toward zero with few examples", () => {
-    expect(leanOf(lean, "U35", 0.9).adj).toBeCloseTo((100 / 8000) * (8000 / 10000), 9);
-    expect(leanOf(lean, "BY", 0.9)).toEqual({ adj: 0, z: null, row: null });
+    expect(leanRecord(lean, "U35", 0.9).adj).toBeCloseTo((100 / 8000) * (8000 / 10000), 9);
+    expect(leanRecord(lean, "BY", 0.9)).toEqual({ adj: 0, z: null, row: null });
     // A lean that didn't hold up on later days gives no nudge but keeps its record.
     const held = lean.map((r) => ({ ...r, held: false }));
-    expect(leanOf(held, "U35", 0.9).adj).toBe(0);
-    expect(leanOf(held, "U35", 0.9).row).not.toBeNull();
+    expect(leanRecord(held, "U35", 0.9).adj).toBe(0);
+    expect(leanRecord(held, "U35", 0.9).row).not.toBeNull();
   });
-  it("keeps one leg per match, leaning toward markets above their price", () => {
+  it("gives no nudge while the lean is off, keeping the record", () => {
+    expect(leanOf(lean, "U35", 0.9).adj).toBe(0);
+    expect(leanOf(lean, "U35", 0.9).z).toBe(2.5);
+  });
+  it("keeps one leg per match, the likeliest by the market", () => {
     const got = topPicks([pick("a", "O05", 0.905, 1.1), pick("a", "U35", 0.9, 1.1), pick("b", "O05", 0.95, 1.04)], lean, 1.1, false);
-    expect(got.map((p: { id: string }) => p.id)).toEqual(["a|U35"]);
+    expect(got.map((p: { id: string }) => p.id)).toEqual(["a|O05"]);
   });
-  it("most confident needs agreement and a record at or above price", () => {
+  it("most confident needs a 60% chance and agreement", () => {
     const got = topPicks([pick("a", "O05", 0.92, 1.1), pick("b", "U35", 0.9, 1.1), pick("c", "U35", 0.9, 1.1, 0.8, 0.95)], lean, 1.1, true);
-    expect(got.map((p: { id: string }) => p.id)).toEqual(["b|U35"]);
+    expect(got.map((p: { id: string }) => p.id)).toEqual(["a|O05", "b|U35"]);
   });
 });

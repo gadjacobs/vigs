@@ -6,9 +6,21 @@ import type { LeanRow } from "./insights";
 
 const SHRINK = 2000; // examples at which a market's record counts half
 
+// Off 1 Nov 2026: with errors clustered by round and checked on later days, no
+// market at any chance level landed apart from its price (119 tests, none held;
+// docs/research-2026-10-31.md). At the same odds every market is priced to pay
+// back the same, so the record no longer nudges leg choice; Record still shows it.
+export const LEAN_ON = false;
+
+/** As `leanRecord`, with no nudge while the lean is off. */
+export function leanOf(lean: LeanRow[] | undefined, market: string, chance: number): { adj: number; z: number | null; row: LeanRow | null } {
+  const r = leanRecord(lean, market, chance);
+  return LEAN_ON ? r : { ...r, adj: 0 };
+}
+
 /** The market's record at this chance, its excess landing rate per selection
  * shrunk toward zero when examples are few, and its z-score. */
-export function leanOf(lean: LeanRow[] | undefined, market: string, chance: number): { adj: number; z: number | null; row: LeanRow | null } {
+export function leanRecord(lean: LeanRow[] | undefined, market: string, chance: number): { adj: number; z: number | null; row: LeanRow | null } {
   const r = lean?.find((x) => x.market === market && chance >= x.lo && chance < x.hi) ?? null;
   if (!r || !r.n) return { adj: 0, z: null, row: null };
   // A market whose lean didn't hold up on later days keeps its record but no nudge.

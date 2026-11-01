@@ -11,7 +11,7 @@ import { SlipBuilder } from "../slip-builder";
 import { loadBlend } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
-import { BONUS_COUNTS, BEST_COUNTS, buildSet, COUNTS, FLEX_FLOORS, FLEX_MISSES, FLEX_TARGETS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
+import { BONUS_COUNTS, BEST_COUNTS, buildSet, GOALS, COUNTS, FLEX_FLOORS, FLEX_MISSES, FLEX_TARGETS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
 import { applyFh } from "@/lib/fhusual";
 import { FLEX_PAYBACK, flexQuote } from "@/lib/flex";
 import { multiBonus } from "@/lib/bonus";
@@ -27,13 +27,14 @@ import { SlateCard } from "./slate-card";
 export const dynamic = "force-dynamic";
 
 const MAX_ON_SLIP = MAX_LEGS;
-type SP = { set?: string; bar?: string; odds?: string; n?: string; tab?: string; floor?: string; miss?: string };
+type SP = { set?: string; goal?: string; bar?: string; odds?: string; n?: string; tab?: string; floor?: string; miss?: string };
 
 const ABOUT: Record<SetId, string> = {
-  top: "The likeliest selection in each match, at the price floor or above, best first. Ties lean toward markets that have landed above their price at that chance level in our data (unders, lately) and away from those below it. Edit freely; Flex shows the chance with a miss or two.",
-  bonus: "A straight slip built for SportyBet's multi-bet bonus: the likeliest leg in each match priced 1.20 to 1.30, just over the bonus line (double chance left out, as it earns less bonus). Legs like these have landed slightly more often than their price, and the bonus grows faster with legs than the bookmaker's cut compounds, most of all from 30 legs, so these are the slips where the record puts the long-run return closest to, or above, the stake. Each slip still usually loses: 10 legs land about 1 in 10, 33 legs about 1 in 2,000. Check that SportyBet shows the bonus on your slip before you place it.",
+  goal: "One slip to turn your stake into a goal in a single bet. Every bet gives SportyBet its cut, about ₦23 per ₦1,000 on the legs used here, so spreading the money over many small bets pays that cut again and again and reaches the goal less often. One straight slip of legs priced 1.20 to 1.25 (the cheapest legs that count for SportyBet's multi-bet bonus), with the bonus on top, gets close to the best chance any plan of bets has. It is still a long shot for big goals, and losing the stake is the usual result. Check that SportyBet shows the bonus on your slip before you place it.",
+  top: "The likeliest selection in each match, at the price floor or above, best first. Edit freely; Flex shows the chance with a miss or two.",
+  bonus: "A straight slip built for SportyBet's multi-bet bonus: the likeliest leg in each match priced 1.20 to 1.25, just over the bonus line (double chance left out, as it earns less bonus). These are the cheapest legs that count for the bonus: SportyBet's prices pay back about ₦0.977 per ₦1 on them, against about ₦0.969 at 1.50 to 1.70, and the bonus keeps the whole slip close to that at any length. No market at these prices has landed more often than its price in our data, so this is the cheapest long slip, not one that beats the bookmaker. Each slip usually loses: 10 legs land about 1 in 8, 33 legs about 1 in 1,000. Check that SportyBet shows the bonus on your slip before you place it.",
   flex: "A long slip played with Flex, built to reach the Flex odds you pick: the likeliest leg per match at your lowest price, added until the odds with your misses allowed reach the target. SportyBet sets Flex odds so they return about ₦0.65 per ₦1 on vFootball whichever legs you pick (a straight slip returns about ₦0.96 per leg: ₦0.66 at 10 legs, ₦0.44 at 20), so Flex only beats a straight slip on long slips, and a higher lowest price just means fewer legs.",
-  trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely and whose market has landed at or above its price at that chance level in our data. 20 legs to start; up to 50 if that many qualify.",
+  trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely. 20 legs to start; up to 50 if that many qualify.",
   best: "One leg per match: its likeliest selection at odds of 1.2 or more, by the bookmaker's own chance, with no market filling more than 40% of the slip, so you get a spread of markets.",
   safe: "For every published match, the best-paying selection with a chance at or above the bar.",
   odds: "The likeliest slip near your total odds, built from legs priced 1.25 to 2.2 that the market and model broadly agree on. In the settled data, prices under 2 lost 1-2% of stakes on average while prices over 5 lost 24-48%, so several short legs keep more value than one long shot.",
@@ -80,14 +81,15 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const miss = FLEX_MISSES.find((m) => String(m) === sp.miss) ?? 1;
   const tab = sp.tab === "build" || (sp.set && sp.tab !== "cooked") ? "build" : "cooked";
   const bar = OUR_BARS.find((b) => String(Math.round(b * 100)) === sp.bar) ?? OUR_DEFAULT;
-  const target = flexSet ? FLEX_TARGETS.find((t) => String(t) === sp.odds) ?? 100 : TARGETS.find((t) => String(t) === sp.odds) ?? 10;
+  const goalSet = set === "goal";
+  const target = goalSet ? GOALS.find((g) => String(g) === sp.goal) ?? 10 : flexSet ? FLEX_TARGETS.find((t) => String(t) === sp.odds) ?? 100 : TARGETS.find((t) => String(t) === sp.odds) ?? 10;
   const n = set === "bonus" ? BONUS_COUNTS.find((c) => String(c) === sp.n) ?? 10
     : top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? (set === "trusted" ? 20 : 50)
     : set === "best"
     ? BEST_COUNTS.find((c) => String(c) === sp.n) ?? 10
     : COUNTS.find((c) => String(c) === sp.n) ?? (set === "draws" ? 4 : 3);
   const link = (o: Partial<Record<keyof SP, string | number>>) =>
-    `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), odds: target, n, floor, miss, ...o }).map(([k, v]) => [k, String(v)]))}`;
+    `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), ...(goalSet ? { goal: target } : { odds: target }), n, floor, miss, ...o }).map(([k, v]) => [k, String(v)]))}`;
 
   const { profile } = await myProfile();
   const view = viewOf(profile, (await cookies()).get("vig_view")?.value);
@@ -154,6 +156,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       {set === "odds" && <Chips name="Total odds" value={target} options={TARGETS} label={(t) => String(t)} href={(t) => link({ odds: t })} />}
       {(set === "bold" || set === "draws") && <Chips name="Legs" value={n} options={COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
       {set === "best" && <Chips name="Legs" value={n} options={BEST_COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
+      {goalSet && <Chips name="Turn the stake into" value={target} options={GOALS} label={(g) => `×${g.toLocaleString("en-NG")}`} href={(g) => link({ goal: g })} />}
       {set === "bonus" && <Chips name="Legs" value={n} options={BONUS_COUNTS} label={(c) => String(c)} href={(c) => link({ n: c })} />}
       {flexSet && <Chips name="Flex odds" value={target} options={FLEX_TARGETS} label={(t) => t.toLocaleString("en-NG")} href={(t) => link({ odds: t })} />}
       {flexSet && <Chips name="Misses allowed" value={miss} options={FLEX_MISSES} label={(m) => String(m)} href={(m) => link({ miss: m })} />}
@@ -172,15 +175,30 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       {set === "bonus" && built.slip.length > 1 && (() => {
         const b = multiBonus(built.slip.map((p) => ({ odds: p.odds, p: p.marketChance })));
         const hit = built.slip.reduce((a, p) => a * p.marketChance, 1);
-        const bl = insights?.bonus_legs;
-        // The bonus is fixed by SportyBet's prices; only the chance each leg lands moves with k.
-        const at = (k: number) => b.totalOdds * built.slip.reduce((a, p) => a * Math.min(0.999, p.marketChance * k), 1);
         return (
           <p className="note">
             {built.slip.length} legs pay <strong className="num">{Math.round(b.totalOdds).toLocaleString("en-NG")}</strong> times the stake with SportyBet&apos;s bonus of +{Math.round(b.ratio * 100)}%,
             and land {oneIn(hit)} by the market&apos;s chances, which put the long-run return at ₦{b.payback.toFixed(2)} per ₦1.
-            {bl && bl.n >= 1000 ? <> Legs like these have landed {((bl.k - 1) * 100).toFixed(1)}% more often than priced ({bl.n.toLocaleString("en-NG")} legs), which puts it at about <strong className="num">₦{at(bl.k).toFixed(2)}</strong> (90% range ₦{at(bl.k_lo).toFixed(2)} to ₦{at(bl.k_hi).toFixed(2)}).</> : null}
             {built.slip.length < n ? ` Only ${built.slip.length} matches have a leg in range right now.` : ""}
+          </p>
+        );
+      })()}
+      {goalSet && built.slip.length > 0 && (() => {
+        const b = multiBonus(built.slip.map((p) => ({ odds: p.odds, p: p.marketChance })));
+        const hit = built.slip.reduce((a, p) => a * p.marketChance, 1);
+        const stake = profile?.prefs?.stake ?? DEFAULT_STAKE;
+        const ngn = (x: number) => `₦${Math.round(x).toLocaleString("en-NG")}`;
+        // No plan of bets returns more than its payback on average, so none reaches
+        // `target` times the stake more often than about payback / target.
+        const best = Math.min(1, b.payback / target);
+        return (
+          <p className="note">
+            {b.totalOdds < target
+              ? <>Only {built.slip.length} matches have a leg in range right now: the slip pays {b.totalOdds.toFixed(2)} times the stake, short of ×{target.toLocaleString("en-NG")}. Check back when the next round is published.</>
+              : <>{ngn(stake)} becomes <strong className="num">{ngn(stake * b.totalOdds)}</strong> if all {built.slip.length} legs land
+                ({b.totalOdds.toFixed(2)} odds{b.ratio > 0 ? <>, SportyBet&apos;s bonus of +{Math.round(b.ratio * 100)}% included</> : null}):
+                {" "}<strong className="num">{chance(hit)}</strong> of the time, {oneIn(hit)}.
+                {" "}With SportyBet&apos;s cut, no plan of bets reaches ×{target.toLocaleString("en-NG")} more than about {chance(best)} of the time; small bets one after another come out well under that.</>}
           </p>
         );
       })()}
@@ -191,7 +209,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
           {" "}In the long run Flex returns about ₦{FLEX_PAYBACK.toFixed(2)} per ₦1; the same legs straight, with SportyBet&apos;s multi-bet bonus, would return about ₦{straightBack.toFixed(2)}.
         </p>
       )}
-      {built.slip.length > 1 && !flexSet && (
+      {built.slip.length > 1 && !flexSet && !goalSet && (
         <p className="note">
           {built.slip.length} legs at {odds.toFixed(2)}: all land {chance(all)} of the time ({oneIn(all)}).
           {set === "safe" ? " Each pick is likely, but every extra leg multiplies the risk; short slips or singles keep more of each pick's chance." : ""}
