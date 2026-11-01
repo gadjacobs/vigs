@@ -12,7 +12,7 @@ import { CopyButton } from "./copy-button";
 import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
 import type { SavedCode as Saved } from "@/lib/profile";
-import { isFinal, readAll, readCodes, readFinal, readHidden, readOpen, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
+import { isFinal, readAll, readCodes, readFinal, readHidden, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
 import { flexLevels, FlexRow } from "./flex-row";
 import { multiBonus } from "@/lib/bonus";
 import { Teams } from "./teams";
@@ -321,14 +321,17 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const pollRef = useRef<(force?: boolean) => void>(() => undefined);
 
   // Settled codes never change, so they are kept on the device and not checked
-  // again. Open ones show their last reading at once, marked as updating, and are
-  // all read again together; live scores are fetched straight after.
-  const refresh = useCallback((list: Saved[]) => {
+  // again. Open ones are read again together and show as loading until then (an
+  // old reading's chances and scores would be wrong); live scores follow straight
+  // after. `fresh`: drop the open codes' current readings first (back from the background).
+  const refresh = useCallback((list: Saved[], fresh = false) => {
     const done = readFinal();
     const todo = list.map((c) => c.code).filter((c) => !done[c]);
-    const known = readOpen();
-    const cached = Object.fromEntries(todo.flatMap((c) => (known[c] ? [[c, known[c]]] : [])));
-    setStatus((s) => ({ ...done, ...cached, ...s }));
+    setStatus((s) => {
+      const n = { ...done, ...s };
+      if (fresh) for (const c of todo) delete n[c];
+      return n;
+    });
     if (!todo.length) return;
     setUpdating((u) => new Set([...u, ...todo]));
     void (async () => {
@@ -458,7 +461,10 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       .catch(() => undefined);
     window.addEventListener("vig-codes", load);
     // Back in the foreground: re-read every open code and the live scores now.
-    const resume = () => { refresh(readCodes().filter((c) => { const st = statusRef.current[c.code]; return !st || !("legs" in st) || !isFinal(st); })); pollLive(true); };
+    const resume = () => {
+      setLive({});
+      refresh(readCodes().filter((c) => { const st = statusRef.current[c.code]; return !st || !("legs" in st) || !isFinal(st); }), true);
+    };
     window.addEventListener("vig-resume", resume);
     // Live scores come from the live feed; SportyBet's share endpoint is only
     // read again for codes not loaded yet, or with a leg that should be over.
@@ -720,7 +726,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   {last && !foreign && <button type="button" onClick={() => setHedge({ code: c.code, odds: t!.odds,
                     leg: { eventId: last.eventId, market: last.market, kickoff: last.kickoff, home: last.home, away: last.away, label: last.label } })}>Hedge</button>}
                   {compact && <button type="button" onClick={() => flipCard(c.code)}>Collapse</button>}
-                  {tab === "history" && <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>}
+                  <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>
                 </div>
               </div>
               {t && !settled && !foreign && endpoint === null && isOpen && (

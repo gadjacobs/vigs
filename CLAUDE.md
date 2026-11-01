@@ -66,7 +66,9 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   (1/0 once the score decides it); legs to play use the upcoming list, else the match's own prematch
   feed (the list drops a round ~9 min before kickoff). The tick saves each round's prematch prices
   (`lib/prematch.ts`, `pre:{kickoff}`, 2 days) so codes first opened after kickoff still get prematch odds.
-  Codes cards: Full or Compact (per device), legs in kickoff order. Flex odds follow SportyBet's own rule
+  Codes cards: Full or Compact (per device), legs in kickoff order; any code can be removed (hidden, with undo; no more alerts).
+  Never show an old reading: open codes load fresh, and back from > 60 s in the background a veil covers the page until
+  it refreshes (`app/resume.tsx`). "Open in SportyBet" is the plain share link (an Android intent opened SportyBet's in-app browser). Flex odds follow SportyBet's own rule
   (`lib/flex.ts` `flexQuote`: payback 0.65 for virtual games ÷ chance at least k land); Our picks
   "Flex big odds" grows a slip to a Flex odds target. SportyBet's multi-bet bonus (`lib/bonus.ts`
   `multiBonus`: legs ≥ 1.20 qualify, ratio = weighted leg payback ÷ slip payback − 1 within a range per

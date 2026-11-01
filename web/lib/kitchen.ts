@@ -75,7 +75,15 @@ export async function currentSlates(now = Date.now()): Promise<Cooked> {
   const stored = await getJson<Cooked>("slates").catch(() => null);
   if (stored?.round === round) return stored;
   if (!(await claim("slates:cooking", 90).catch(() => false))) {
-    return stored ?? (await cook(round, now, false));
+    // Another viewer (or the tick) is cooking this round: wait for it rather
+    // than show the last round's slips, whose legs may have kicked off.
+    for (let i = 0; i < 12; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const got = await getJson<Cooked>("slates").catch(() => null);
+      if (got?.round === round) return got;
+    }
+    // Still cooking: only slips with no leg started yet.
+    return stored ? { ...stored, slates: stored.slates.filter((s) => s.legs.every((p) => p.kickoff > now)) } : await cook(round, now, false);
   }
   const fresh = await cook(round, now, true);
   await setJson("slates", fresh).catch(() => undefined);

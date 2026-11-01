@@ -1470,3 +1470,10 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
 .hotmark.down { background: var(--paper-sunk); color: var(--ink-muted); }
 :root[data-theme="dark"] .hotmark.up { color: #ffa25e; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .hotmark.up { color: #ffa25e; } }
+
+/* Back from the background: old odds are covered until the fresh page lands. */
+.resumeveil { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: color-mix(in srgb, var(--ground) 78%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  color: var(--ink); font-weight: 600; animation: veilin .18s ease-out; }
+.resumeveil .spin { width: 28px; height: 28px; border-width: 3px; color: var(--signal); }
+@keyframes veilin { from { opacity: 0; } to { opacity: 1; } }
