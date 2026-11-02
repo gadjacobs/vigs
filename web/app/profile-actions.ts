@@ -1,4 +1,5 @@
 "use server";
+import { mergeMoney, type MoneyEntry } from "@/lib/money";
 import { currentUser, loadProfile, mergeCodes, updateProfile, type Prefs, type SavedCode, type SavedFilter } from "@/lib/profile";
 import { impossible, type SlipWatch } from "@/lib/watches";
 import { storeReady } from "@/lib/store";
@@ -73,6 +74,7 @@ export async function savePrefs(prefs: Prefs) {
     home: prefs.home === "/picks" || prefs.home === "/codes" ? prefs.home : "/",
   };
   if (prefs.onboarded !== undefined) clean.onboarded = Boolean(prefs.onboarded);
+  if (prefs.limit !== undefined) clean.limit = Number.isFinite(prefs.limit) ? Math.min(10_000_000, Math.max(0, Math.round(Number(prefs.limit)))) : 0;
   await updateProfile(user, (p) => ({ ...p, prefs: { ...p.prefs, ...clean } }));
   return true;
 }
@@ -115,4 +117,21 @@ export async function removeWatch(id: string): Promise<SlipWatch[] | null> {
   if (!user) return null;
   const p = await updateProfile(user, (p) => ({ ...p, watches: (p.watches ?? []).filter((x) => x.id !== id) }));
   return p.watches ?? [];
+}
+
+/** My money on every device: this device's entries merged with the account's. */
+export async function syncMoney(local: MoneyEntry[]): Promise<{ money: MoneyEntry[]; limit: number } | null> {
+  const user = await me();
+  if (!user) return null;
+  const p = await updateProfile(user, (p) => ({ ...p, money: mergeMoney(p.money ?? [], Array.isArray(local) ? local.slice(0, 600) : []) }));
+  return { money: p.money ?? [], limit: p.prefs?.limit ?? 0 };
+}
+
+/** The daily stake limit in ₦ (0: none). */
+export async function saveLimit(limit: number) {
+  const user = await me();
+  if (!user) return false;
+  const clean = Number.isFinite(limit) ? Math.min(10_000_000, Math.max(0, Math.round(limit))) : 0;
+  await updateProfile(user, (p) => ({ ...p, prefs: { ...p.prefs, limit: clean } }));
+  return true;
 }

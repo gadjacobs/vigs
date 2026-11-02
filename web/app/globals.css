@@ -1477,3 +1477,92 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
   color: var(--ink); font-weight: 600; animation: veilin .18s ease-out; }
 .resumeveil .spin { width: 28px; height: 28px; border-width: 3px; color: var(--signal); }
 @keyframes veilin { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Codes, round 4: My money, a roomier card, icon actions ─────────────── */
+.money { position: relative; overflow: hidden; margin: 4px 0 16px; padding: 16px; border-radius: var(--r-lg);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--paper) 92%, var(--signal)) 0%, var(--paper) 60%);
+  border: 1px solid var(--rule); box-shadow: var(--shadow-card); }
+.money-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.money-head h2 { margin: 0; font-size: 13px; line-height: 16px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted); font-family: inherit; font-weight: 800; }
+.seg2 { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--paper-sunk); }
+.seg2 button { min-height: 30px; padding: 2px 12px; border: 0; border-radius: 999px; background: transparent; font-size: 13px; color: var(--ink-muted); }
+.seg2 button[aria-checked="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--rule); }
+.money-empty { margin: 10px 0 4px; font-size: 14px; line-height: 20px; color: var(--ink-muted); }
+.money-main { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 10px; }
+.money-net { display: grid; gap: 2px; min-width: 0; }
+.money-net .num { font-family: var(--font-num); font-weight: 800; font-size: 40px; line-height: 40px; letter-spacing: -0.5px; }
+.money-net.up .num { color: var(--fair); }
+.money-net.down .num { color: var(--house); }
+.money-net small { font-size: 12px; color: var(--ink-muted); }
+.money-bars { display: flex; align-items: flex-end; gap: 5px; height: 56px; flex: none; }
+.money-bars > span { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; width: 14px; height: 100%; }
+.money-bars i { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: var(--rule); max-height: calc(100% - 14px); }
+.money-bars .up i { background: var(--fair); }
+.money-bars .down i { background: var(--house); }
+.money-bars em { font-style: normal; font-size: 10px; line-height: 11px; color: var(--ink-muted); }
+.money-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 14px 0 0; }
+.money-stats div { display: grid; gap: 2px; min-width: 0; }
+.money-stats dt { font-size: 11px; line-height: 14px; color: var(--ink-muted); white-space: nowrap; }
+.money-stats dd { margin: 0; font-weight: 800; font-size: 15px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.money-limit { display: grid; gap: 6px; width: 100%; margin-top: 14px; min-height: 0; padding: 10px 12px; text-align: left;
+  font-weight: 500; font-size: 13px; line-height: 18px; background: var(--paper-sunk); border: 0; border-radius: var(--r-sm); color: var(--ink); }
+.money-limit u { text-decoration-color: var(--signal); text-decoration-thickness: 2px; text-underline-offset: 3px; font-weight: 700; }
+.limitbar { display: block; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--rule) 70%, transparent); overflow: hidden; }
+.limitbar i { display: block; height: 100%; border-radius: inherit; background: var(--fair); transition: width .4s ease-out; }
+.money-limit.over .limitbar i { background: var(--house); }
+.money-limit.over { box-shadow: inset 0 0 0 1px var(--house); }
+
+.trackbar { display: flex; gap: 8px; margin: 0 0 4px; padding: 4px; border-radius: 999px; background: var(--paper); border: 1px solid var(--rule); }
+.trackbar input { flex: 1; min-width: 0; min-height: 40px; padding: 0 14px; border: 0; background: transparent; color: var(--ink); font: inherit;
+  font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.trackbar input::placeholder { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--ink-muted); }
+.trackbar input:focus { outline: none; }
+.trackbar:focus-within { box-shadow: 0 0 0 2px var(--focus); }
+.trackbar button { min-height: 40px; border-radius: 999px; padding: 6px 18px; background: var(--ink); color: var(--paper); border: 0; }
+.codebar .status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+
+.codemeta { margin: 4px 0 0; }
+.codeodds { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; color: var(--ink-muted); font-size: 14px; }
+.codeodds strong { font-family: var(--font-num); font-weight: 800; font-size: 30px; line-height: 32px; color: var(--ink); }
+.bonuspill { align-self: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; color: var(--on-signal); background: var(--signal); }
+.codesub { margin: 2px 0 0; font-size: 13px; line-height: 18px; color: var(--ink-muted); }
+.chancebig em b { font-weight: 800; }
+
+.stakechip { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px; margin: 12px 0 0; min-height: 36px; padding: 6px 12px;
+  border-radius: 999px; font-size: 14px; font-weight: 700; background: var(--paper-sunk); border: 1px solid var(--rule); color: var(--ink); text-align: left; }
+.stakechip small { font-weight: 500; font-size: 12px; color: var(--ink-muted); }
+.stakechip.add { border-style: dashed; color: var(--ink-muted); background: transparent; }
+.stakechip.won { border-color: var(--fair); background: var(--fair-wash); }
+.stakechip.lost { color: var(--ink-muted); }
+
+.codecard .codeactions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; margin: 12px 0 0; }
+.codecard .codeactions > .button.primary { min-height: 48px; font-size: 16px; }
+.codecard .codetools { display: flex; gap: 6px; flex-wrap: nowrap; }
+.iconbtn { display: inline-grid; place-items: center; width: 44px; height: 48px; min-height: 0 !important; padding: 0 !important;
+  border-radius: var(--r-sm); background: var(--paper-sunk); border: 1px solid var(--rule); color: var(--ink); }
+.iconbtn.done { color: var(--fair); border-color: var(--fair); }
+.iconbtn.alertbtn.on { color: var(--on-signal); background: var(--signal); border-color: var(--signal); }
+.iconbtn.alertbtn.off { color: var(--ink-muted); }
+@media (max-width: 360px) { .iconbtn { width: 40px; } }
+
+.optlist.menu button { min-height: 56px; }
+.optlist.menu button.danger strong { color: var(--house); }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.presets button { min-height: 38px; padding: 4px 14px; border-radius: 999px; font-size: 14px; background: var(--paper-sunk); border: 1px solid var(--rule); color: var(--ink); }
+.presets button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.sheet .field input[type="text"] { width: 100%; font-size: 20px; }
+.sheet .field .hint { font-weight: 400; color: var(--ink-muted); margin-top: 4px; }
+.sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
+.sheet-actions .button.primary { flex: 1 1 160px; }
+.limitnote { margin: 8px 0 0; padding: 8px 12px; border-radius: var(--r-sm); font-size: 13px; line-height: 18px; background: var(--signal-wash); color: var(--ink); }
+.limitnote.over { background: var(--house-wash); }
+.codeleft { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.codecard .codetop .chancebig { flex: none; }
+.sheet-actions .button.primary, .sheet-actions button.primary { justify-content: center; text-align: center; }
+
+.slatemore { margin: 10px 0 0; border-top: 1px solid var(--rule); }
+.slatemore > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; min-height: 44px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink-muted); }
+.slatemore > summary::-webkit-details-marker { display: none; }
+.slatemore > summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform .2s; margin-right: 4px; }
+.slatemore[open] > summary::after { transform: rotate(-135deg); }

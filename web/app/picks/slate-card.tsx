@@ -35,8 +35,12 @@ export function SlateCard({ s }: { s: Slate }) {
         ))}
       </ol>
       </details>
-      <KeepMeter legs={s.legs} />
-      <FlexRow ps={s.legs.map((p) => p.estimate)} market={s.legs.map((p) => p.marketChance)} />
+      {/* Cost and Flex fold away so a page of slips reads as a menu, not a wall. */}
+      <details className="slatemore">
+        <summary>What it keeps · Flex</summary>
+        <KeepMeter legs={s.legs} />
+        <FlexRow ps={s.legs.map((p) => p.estimate)} market={s.legs.map((p) => p.marketChance)} />
+      </details>
       {s.code ? (
         <SlateActions code={s.code} legs={s.legs.length} odds={s.odds} last={s.last} style={s.style}
           edit={<Link className="button" href={`/picks/edit?slate=${encodeURIComponent(s.id)}`}>Edit</Link>} />

@@ -15,6 +15,7 @@ export type Profile = {
   filters?: SavedFilter[];                 // named Tonight filters
   prefs?: Prefs;
   watches?: import("./watches").SlipWatch[]; // slip alerts on saved filters and templates
+  money?: import("./money").MoneyEntry[];   // stakes and returns you entered (My money)
   updated: number;
 };
 
@@ -22,6 +23,7 @@ export type SavedFilter = { name: string; qs: string };
 export type Prefs = {
   name?: string; stake?: number; home?: "/" | "/picks" | "/codes";
   onboarded?: boolean; // finished (or skipped) the first-run tour
+  limit?: number;      // daily stake limit in ₦ (0 or unset: none)
 };
 export const DEFAULT_STAKE = 1000;
 

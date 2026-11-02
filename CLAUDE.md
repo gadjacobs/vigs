@@ -67,6 +67,9 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   feed (the list drops a round ~9 min before kickoff). The tick saves each round's prematch prices
   (`lib/prematch.ts`, `pre:{kickoff}`, 2 days) so codes first opened after kickoff still get prematch odds.
   Codes cards: Full or Compact (per device), legs in kickoff order; any code can be removed (hidden, with undo; no more alerts).
+  My money (`lib/money.ts`, `app/money.tsx`, profile `money`, prefs `limit`): stakes and paid-back amounts the user types
+  on Codes (never read from SportyBet), settled automatically (odds with the bonus if landed, 0 if lost; typed amounts stay),
+  7/30-day net, and a daily limit that warns in the stake sheet and under Book.
   Never show an old reading: open codes load fresh, and back from > 60 s in the background a veil covers the page until
   it refreshes (`app/resume.tsx`). "Open in SportyBet" is the plain share link (an Android intent opened SportyBet's in-app browser). Flex odds follow SportyBet's own rule
   (`lib/flex.ts` `flexQuote`: payback 0.65 for virtual games ÷ chance at least k land); Our picks

@@ -1,7 +1,10 @@
 "use client";
 import { OpenInSportyBet } from "./open-sporty";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { hideCode, syncCodes } from "./profile-actions";
+import { hideCode, saveLimit, syncCodes, syncMoney } from "./profile-actions";
+import { LimitSheet, MoneyPanel, StakeChip, StakeSheet, useMoney } from "./money";
+import { putEntry, readMoney, writeLimit, writeMoney } from "./money-store";
+import { settleEntry, todayAgainst, type MoneyEntry } from "@/lib/money";
 import { ShareButton, ShareSheet } from "./share-sheet";
 import { createPortal } from "react-dom";
 import { alertState, followMatch, setCodeAlertAction, trackCodes } from "./push-actions";
@@ -128,6 +131,9 @@ const ALERT_MODES = [
 
 function Spark({ points }: { points: [number, number][] }) {
   if (points.length < 2) return null;
+  // A flat line says nothing: only once the chance has moved by a point or more.
+  const cs = points.map((x) => x[1]);
+  if (Math.max(...cs) - Math.min(...cs) < 0.01) return null;
   const t0 = points[0][0], t1 = points.at(-1)![0] || t0 + 1;
   const xy = points.map(([t, c]) => `${((t - t0) / Math.max(1, t1 - t0)) * 100},${(1 - c) * 24 + 2}`).join(" ");
   return (
@@ -223,6 +229,34 @@ async function pushEndpoint(): Promise<string | null> {
 }
 
 const BELL = "M6 16V11a6 6 0 1112 0v5l2 2H4zM10 20a2 2 0 004 0";
+const MORE = "M5 12h.01M12 12h.01M19 12h.01";
+
+/** A code's less frequent actions, as a bottom sheet. */
+function MoreSheet({ code, items, onClose }: { code: string; items: { label: string; hint: string; danger?: boolean; on: () => void }[]; onClose: () => void }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", esc);
+    return () => removeEventListener("keydown", esc);
+  }, [onClose]);
+  return (
+    <div className="sheet-backdrop" onClick={onClose} role="presentation">
+      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="more-title" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grip" aria-hidden="true" />
+        <div className="sheet-head">
+          <h2 id="more-title"><span className="num">{code}</span></h2>
+          <button type="button" className="x" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="optlist menu">
+          {items.map((it) => (
+            <button key={it.label} type="button" className={it.danger ? "danger" : ""} onClick={it.on}>
+              <span><strong>{it.label}</strong><small>{it.hint}</small></span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 const BELL_OFF = "M6 16V11a6 6 0 0110-4.5M18 11v5l2 2H8M10 20a2 2 0 004 0M3 3l18 18";
 const Icon = ({ d }: { d: string }) => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
@@ -280,6 +314,18 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const flipCard = (code: string) => setExpanded((e) => { const n = new Set(e); if (n.has(code)) n.delete(code); else n.add(code); return n; });
   const [pages, setPages] = useState(1);
   const [undo, setUndo] = useState<Saved | null>(null);
+  const money = useMoney();
+  const [stakeFor, setStakeFor] = useState<string | null>(null);
+  const [limitOpen, setLimitOpen] = useState(false);
+  const [moreFor, setMoreFor] = useState<string | null>(null);
+  const [clock, setClock] = useState(0);
+  useEffect(() => { setClock(Date.now()); const t = setInterval(() => setClock(Date.now()), 60_000); return () => clearInterval(t); }, []);
+  // My money: merge this device's stakes with the account's.
+  useEffect(() => {
+    syncMoney(readMoney()).then((r) => { if (r) { writeMoney(r.money); writeLimit(r.limit); } }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const saveEntry = (e: MoneyEntry) => { putEntry(e); syncMoney([e]).catch(() => undefined); };
   const [live, setLive] = useState<Record<string, LiveLeg>>({});
   const [swing, setSwing] = useState<Swing>({});
   const [hedge, setHedge] = useState<{ code: string; leg: HedgeLeg; odds: number | null } | null>(null);
@@ -305,6 +351,27 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     }
   }, []);
   const closeAlerts = useCallback(() => setAlertFor(null), []);
+  const closeStake = useCallback(() => setStakeFor(null), []);
+  const closeLimit = useCallback(() => setLimitOpen(false), []);
+  const closeMore = useCallback(() => setMoreFor(null), []);
+  // A staked code that has settled gets what it paid back (typed-in amounts stay).
+  useEffect(() => {
+    const now = Date.now();
+    const done: MoneyEntry[] = [];
+    for (const e of readMoney()) {
+      const t = status[e.code];
+      if (!e.stake || e.back !== null || !t || !("legs" in t) || t.foreign) continue;
+      const lost = t.state === "lost" || t.legs.some((l) => l.status === "lost");
+      if (t.state !== "won" && !(lost && isFinal(t, now))) continue;
+      const saved = codes.find((c) => c.code === e.code)?.odds;
+      const odds = t.legs.every((l) => l.odds) ? t.legs.map((l) => l.odds!) : t.odds ? [t.odds] : saved ? [saved] : null;
+      if (!odds && t.state === "won") continue; // no prices seen: the stake sheet takes what it paid
+      done.push(settleEntry(e, t.state === "won" ? "won" : "lost", odds ?? [], now));
+    }
+    if (!done.length) return;
+    writeMoney([...done, ...readMoney().filter((x) => !done.some((d) => d.code === x.code))]);
+    syncMoney(done).catch(() => undefined);
+  }, [status, codes]);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const say = (m: string) => {
     setNote(m);
@@ -540,12 +607,12 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
 
   return (
     <section id="codes" className="codes-block" aria-labelledby="codes-title">
-      <form className="row track" onSubmit={track}>
-        <label className="field">Track any code
-          <input type="text" value={entry} onChange={(e) => setEntry(e.target.value)} placeholder="e.g. GGQH9D"
-            autoCapitalize="characters" autoComplete="off" spellCheck={false} />
-        </label>
-        <button type="submit" disabled={pending}>{pending ? "Checking…" : "Track"}</button>
+      {clock > 0 && <MoneyPanel entries={money.entries} limit={money.limit} now={clock} onLimit={() => setLimitOpen(true)} />}
+      <form className="trackbar" onSubmit={track}>
+        <label className="sr-only" htmlFor="track-code">Track any code</label>
+        <input id="track-code" type="text" value={entry} onChange={(e) => setEntry(e.target.value)} placeholder="Track any code, e.g. GGQH9D"
+          autoCapitalize="characters" autoComplete="off" spellCheck={false} />
+        <button type="submit" disabled={pending || !entry.trim()}>{pending ? "Checking…" : "Track"}</button>
       </form>
 
       <div className="codetabs" role="tablist" aria-label="Codes">
@@ -573,7 +640,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
         </div>
       )}
       <div className="codebar">
-        <p className="status">{tab === "open" ? "Scores update every 15 seconds while a leg plays." : "Removing a code hides it here; the record keeps its result."}</p>
+        <p className="status">{tab === "open" ? <><i className="livedot" aria-hidden="true" /> Live every 15 s while a leg plays</> : "Removing a code hides it here; the record keeps it."}</p>
         {loaded && list.length > 0 && (
           <div className="density" role="radiogroup" aria-label="Card size">
             <button type="button" role="radio" aria-checked={!compact} onClick={() => chooseDensity(false)}>Full</button>
@@ -615,7 +682,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
           const chanceEl = foreign ? null : chance !== null && !lostN ? (
               <div className="chancebig" aria-label={`${pctText(chance)}% chance to land`}>
                 <Ring p={chance} tone={chance >= 0.5 ? "good" : chance >= 0.2 ? "mid" : "low"}><Ticker value={chance * 100} /><small>%</small></Ring>
-                <em>{delta !== 0 ? <b className={delta > 0 ? "up" : "down"}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta)}</b> : null} to land</em>
+                <em>to land{delta !== 0 ? <b className={delta > 0 ? "up" : "down"}> {delta > 0 ? "▲" : "▼"}{Math.abs(delta)}</b> : null}</em>
               </div>
             ) : parts && parts.missing && !lostN ? (
               parts.p >= 1 ? (
@@ -662,6 +729,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
             <li key={c.code} className={`codecard ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""} ${cheer.has(c.code) ? "cheer" : ""}`}>
               {cheer.has(c.code) && <Confetti />}
               <div className="codetop">
+                <div className="codeleft">
                 <div className="codehead">
                   <strong className="num codeid">{c.code}</strong>
                   {foreign ? <span className="badge state-upcoming">Not vFootball</span>
@@ -669,23 +737,27 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   {err && <span className="badge state-lost">Unavailable</span>}
                   {updating.has(c.code) && <span className="updating" role="status"><i className="spin" aria-hidden="true" />Updating</span>}
                 </div>
-                {chanceEl}
-              </div>
-              <p className="codemeta">
-                {odds ? <><strong className="num">{odds.toFixed(2)}</strong> odds{(() => {
+                <div className="codemeta">
+                {odds ? <p className="codeodds"><strong className="num">{odds.toFixed(2)}</strong> odds{(() => {
                   // SportyBet's multi-bet bonus, from the prematch prices (its cut is about 4%).
                   const b = t && t.legs.every((l) => l.odds) ? multiBonus(t.legs.map((l) => ({ odds: l.odds!, p: 1 / (l.odds! * 1.04) }))) : null;
-                  return b && b.ratio > 0 ? <span className="muted"> +{Math.round(b.ratio * 100)}% bonus</span> : null;
-                })()} · </> : null}
-                {legs.length || c.legs} legs
-                {lastKo && !settled ? <> · last game <b className="num lastko">{lagos(lastKo)}</b>{lastIn ? <span className="muted"> ({lastIn})</span> : null}</> : null}
-                {" "}· booked {lagos(c.at)}
-              </p>
+                  return b && b.ratio > 0 ? <span className="bonuspill">+{Math.round(b.ratio * 100)}% bonus</span> : null;
+                })()}</p> : null}
+                <p className="codesub">
+                  {legs.length || c.legs} legs
+                  {lastKo && !settled ? <> · ends <b className="num lastko">{lagos(lastKo)}</b>{lastIn ? <span className="muted"> {lastIn}</span> : null}</> : <> · booked {lagos(c.at)}</>}
+                </p>
+              </div>
+                </div>
+                {chanceEl}
+              </div>
               {parts && parts.missing > 0 && !lostN && !foreign && (
                 <p className="codewait">{parts.missing - parts.settling
                   ? `${parts.missing - parts.settling} leg${parts.missing - parts.settling > 1 ? "s" : ""} not priced yet (SportyBet hasn't published the round), so the chance counts only the priced legs.`
                   : `${parts.settling} leg${parts.settling > 1 ? "s" : ""} settling.`}</p>
               )}
+              {!foreign && (t || c.odds) ? <StakeChip entry={money.entries.find((e) => e.code === c.code)} odds={odds}
+                legOdds={t && t.legs.every((l) => l.odds) ? t.legs.map((l) => l.odds!) : []} onEdit={() => setStakeFor(c.code)} /> : null}
               {foreign ? (
                 <p className="codeline">Vig follows vFootball only, so this code&apos;s results aren&apos;t tracked here. Check it in SportyBet.</p>
               ) : (<>
@@ -710,23 +782,21 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
               <div className="codeactions">
                 <OpenInSportyBet code={c.code} />
                 <div className="codetools">
-                  <CopyButton text={c.code} label="Copy" />
-                  {(t || !err) && !foreign && <ShareButton code={c.code} fallback={t ? {
+                  <CopyButton text={c.code} label="Copy" icon />
+                  {(t || !err) && !foreign && <ShareButton code={c.code} icon fallback={t ? {
                     code: c.code, odds: t.odds, chance: chance, state: shownState === "won" ? "won" : shownState === "lost" ? "lost" : "open",
                     legs: legs.map((l) => ({ home: l.home, away: l.away, label: l.label, odds: l.odds, kickoff: l.kickoff, status: eff(l), score: l.score })),
                   } : undefined} />}
                   {t && !settled && !foreign && endpoint && (
-                    <button type="button" className={`alertbtn ${mode === "goals" ? "on" : mode === "off" ? "off" : "key"}`}
+                    <button type="button" className={`iconbtn alertbtn ${mode === "goals" ? "on" : mode === "off" ? "off" : ""}`}
                       aria-haspopup="dialog" onClick={() => setAlertFor({ code: c.code, lastKickoff: t.lastKickoff })}
                       aria-label={`Alerts for ${c.code}: ${ALERT_MODES.find(([v]) => v === (mode ?? "default"))![1]}`}>
                       <Icon d={mode === "off" ? BELL_OFF : BELL} />
-                      <span aria-hidden="true">{mode === "goals" ? "Goals" : mode === "off" ? "Off" : "Alerts"}</span>
                     </button>
                   )}
-                  {last && !foreign && <button type="button" onClick={() => setHedge({ code: c.code, odds: t!.odds,
-                    leg: { eventId: last.eventId, market: last.market, kickoff: last.kickoff, home: last.home, away: last.away, label: last.label } })}>Hedge</button>}
-                  {compact && <button type="button" onClick={() => flipCard(c.code)}>Collapse</button>}
-                  <button type="button" className="danger-ghost" onClick={() => remove(c)} aria-label={`Remove ${c.code}`}>Remove</button>
+                  <button type="button" className="iconbtn" aria-haspopup="dialog" aria-label={`More for ${c.code}`} onClick={() => setMoreFor(c.code)}>
+                    <Icon d={MORE} />
+                  </button>
                 </div>
               </div>
               {t && !settled && !foreign && endpoint === null && isOpen && (
@@ -789,6 +859,40 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       {shareFor && createPortal(<ShareSheet code={shareFor} onClose={() => setShareFor(null)} />, document.body)}
       {alertFor && <AlertSheet code={alertFor.code} mode={modes[alertFor.code] ?? "default"} onClose={closeAlerts}
         onPick={(m) => { chooseMode(alertFor.code, m, alertFor.lastKickoff); closeAlerts(); }} />}
+      {stakeFor && (() => {
+        const t = status[stakeFor];
+        const tt = t && "legs" in t ? t : null;
+        return <StakeSheet code={stakeFor} entry={money.entries.find((e) => e.code === stakeFor)} settled={Boolean(tt && (tt.state !== "open" || isFinal(tt)))}
+          defaultStake={stake} limit={money.limit} todayStaked={todayAgainst(money.entries, 0).staked} onClose={closeStake}
+          onSave={(n, back) => {
+            const old = money.entries.find((e) => e.code === stakeFor);
+            const at = codes.find((c) => c.code === stakeFor)?.at ?? Date.now();
+            saveEntry({ code: stakeFor, at: old?.at ?? at, stake: n, back: n ? back : null, ...(back !== null && n ? { manual: true } : {}), edited: Date.now() });
+            closeStake();
+            say(n ? `Stake saved for ${stakeFor}.` : `${stakeFor} left out of My money.`);
+          }} />;
+      })()}
+      {limitOpen && <LimitSheet limit={money.limit} onClose={closeLimit}
+        onSave={(n) => { writeLimit(n); saveLimit(n).catch(() => undefined); closeLimit(); say(n ? "Daily limit saved." : "No daily limit."); }} />}
+      {moreFor && (() => {
+        const t = status[moreFor];
+        const tt = t && "legs" in t ? t : null;
+        const lg = tt ? tt.legs.filter((l) => { const s2 = effective(l, live); return s2 === "waiting" || s2 === "playing"; }) : [];
+        const lostAny = tt ? tt.legs.some((l) => effective(l, live) === "lost") : true;
+        const lastLeg = tt && tt.state === "open" && !lostAny && lg.length === 1 ? lg[0] : null;
+        const saved = codes.find((c) => c.code === moreFor);
+        return (
+          <MoreSheet code={moreFor} onClose={closeMore} items={[
+            { label: "Your stake", hint: "What you placed and what came back", on: () => { closeMore(); setStakeFor(moreFor); } },
+            ...(lastLeg ? [{ label: "Hedge the last leg", hint: "Work out a cover bet on the other outcomes", on: () => {
+              closeMore();
+              setHedge({ code: moreFor, odds: tt!.odds, leg: { eventId: lastLeg.eventId, market: lastLeg.market, kickoff: lastLeg.kickoff, home: lastLeg.home, away: lastLeg.away, label: lastLeg.label } });
+            } }] : []),
+            ...(compact && expanded.has(moreFor) ? [{ label: "Collapse card", hint: "Back to the compact row", on: () => { closeMore(); flipCard(moreFor); } }] : []),
+            ...(saved ? [{ label: "Remove from Codes", hint: "Hides it on every device and stops its alerts; Undo for a few seconds", danger: true, on: () => { closeMore(); remove(saved); } }] : []),
+          ]} />
+        );
+      })()}
       {hedge && <HedgeSheet code={hedge.code} leg={hedge.leg} odds={hedge.odds} stake={stake} onClose={closeHedge} />}
       {more > 0 && <button type="button" className="moreb" onClick={() => setPages((p) => p + 1)}>Show {Math.min(more, PAGE)} more</button>}
     </section>

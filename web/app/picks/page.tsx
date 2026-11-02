@@ -126,13 +126,9 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
         <Link href={`/picks?tab=build&set=${set}`} aria-current={tab === "build" ? "page" : undefined}>Build your own<TabPending /></Link>
       </nav>
       {tab === "cooked" && (<>
-      <p className="lede">Slips cooked for the rounds published now, named by style and already booked. Open one in SportyBet, or edit it first.</p>
       {cooked && cooked.slates.length > 0 ? (
         <>
-          <p className="status">
-            {cooked.slates.length} slips cooked at {lagos(cooked.cooked_at)} Lagos. Which slips appear depends on what this round offers:
-            each needs enough legs at its confidence level. They are recooked when a new round is published.
-          </p>
+          <p className="lede">Booked and ready, cooked at {lagos(cooked.cooked_at)} for the rounds published now. Open one in SportyBet or edit it first; new ones come with each round.</p>
           <nav className="slipjump" aria-label="Jump to a slip">
             {cooked.slates.map((s) => (
               <a key={s.id} href={`#slip-${s.style}`}><span>{s.name}</span><b className="num">{s.odds < 100 ? s.odds.toFixed(2) : Math.round(s.odds).toLocaleString("en-NG")}</b></a>

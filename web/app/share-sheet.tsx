@@ -13,11 +13,17 @@ export function snapOf(d: ShareData): string {
 }
 
 /** A Share button that opens a bottom sheet: card preview, then one tap per app. */
-export function ShareButton({ code, className = "", fallback }: { code: string; className?: string; fallback?: ShareData }) {
+const SHARE = "M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5";
+
+export function ShareButton({ code, className = "", fallback, icon = false }: { code: string; className?: string; fallback?: ShareData; icon?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className={className} onClick={() => setOpen(true)}>Share</button>
+      {icon
+        ? <button type="button" className={`iconbtn ${className}`} aria-label={`Share ${code}`} onClick={() => setOpen(true)}>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={SHARE} /></svg>
+          </button>
+        : <button type="button" className={className} onClick={() => setOpen(true)}>Share</button>}
       {/* In a portal: inside a card or a button row the sheet would inherit their layout. */}
       {open && createPortal(<ShareSheet code={code} fallback={fallback} onClose={() => setOpen(false)} />, document.body)}
     </>

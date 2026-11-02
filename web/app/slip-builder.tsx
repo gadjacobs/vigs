@@ -1,5 +1,6 @@
 "use client";
 import { OpenInSportyBet } from "./open-sporty";
+import { LimitNote } from "./money";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { bookSlip, type BookResult } from "./actions";
 import { rememberCode } from "./codes-panel";
@@ -232,14 +233,15 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
                 {watching ? " You'll get a notification when it lands or loses." : <> <a href="/alerts">Turn on notifications</a> to hear when it settles.</>}
               </p>
             </div>
-          ) : (
+          ) : (<>
             <div className="bookbar">
               <button className="primary bookbtn" type="button" disabled={!legs.length || pending} onClick={book}>
                 {pending ? "Booking…" : <>Get booking code<small><span className="num">{legs.length}</span> legs · <span className="num">{s.odds.toFixed(2)}</span> odds</small></>}
               </button>
               <button type="button" className="linkish" onClick={() => edit(initial, "Slip reset.")} disabled={pending}>Reset slip</button>
             </div>
-          )}
+            <LimitNote />
+          </>)}
         </div>
         <p className="status" role="status" aria-live="polite">{msg}</p>
       </div>
