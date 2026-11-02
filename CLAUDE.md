@@ -54,7 +54,7 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 - Cooked slips (`web/lib/slates.ts`, `kitchen.ts`): cooked and booked once per published
   round (by the tick or the first viewer), stored as `slates`; each code logged once as
   user "vig" (Most likely / Most confident templates too, as `template:top`/`template:trusted`). Steady and Tight
-  games pick markets from `lean` (`web/lib/lean.ts`; seven chance levels; only markets whose lean `held` on later days), falling back to fixed under lists. Never show share-endpoint odds after kickoff (they are in-play prices).
+  games pick markets from `lean` (`web/lib/lean.ts`; seven chance levels; only markets whose lean `held` on later days), falling back to fixed under lists. Never show share-endpoint odds after kickoff as a *prematch* price (they are in-play prices); Vig's picks, the code log and the record never use them.
 - Google sign-in (`/api/auth/google`): `GOOGLE_ACCOUNTS` allowlist maps emails to accounts.
 - Our picks (`web/lib/ourpicks.ts`, `/picks`): templates top/trusted (Most likely / Most confident, leaning on
   `insights.json` `lean`, per-market landed vs priced by chance level), sets safe/odds/bold/draws; `vigs ourpicks`
@@ -70,6 +70,11 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   My money (`lib/money.ts`, `app/money.tsx`, profile `money`, prefs `limit`): stakes and paid-back amounts the user types
   on Codes (never read from SportyBet), settled automatically (odds with the bonus if landed, 0 if lost; typed amounts stay),
   7/30-day net, and a daily limit that warns in the stake sheet and under Book.
+  Codes pricing (`lib/codes.ts` `priceLeg`, `trackWithPrematch`): a leg Vig saw before kickoff keeps its prematch price; a leg already in play
+  when the code was first loaded is priced at the live price captured then (`codelive:`, 3 days, `Leg.live`, "Live" tag, "Re-price now" re-reads it),
+  because SportyBet pays the in-play price for a slip placed then. The multi-bet bonus on a card is an estimate (1.04 cut as the chance stand-in,
+  which can read high: 11 legs showed +35% where SportyBet paid +25%, 2 Nov 2026); typing SportyBet's Pot. Win in the stake sheet (`MoneyEntry.pot`)
+  replaces it with the exact figure and shows the implied bonus (`lib/money.ts` `impliedBonus`).
   Never show an old reading: open codes load fresh, and back from > 60 s in the background a veil covers the page until
   it refreshes (`app/resume.tsx`). "Open in SportyBet" is the plain share link (an Android intent opened SportyBet's in-app browser). Flex odds follow SportyBet's own rule
   (`lib/flex.ts` `flexQuote`: payback 0.65 for virtual games ÷ chance at least k land); Our picks

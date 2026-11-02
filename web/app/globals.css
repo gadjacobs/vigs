@@ -1566,3 +1566,20 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
 .slatemore > summary::-webkit-details-marker { display: none; }
 .slatemore > summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform .2s; margin-right: 4px; }
 .slatemore[open] > summary::after { transform: rotate(-135deg); }
+
+/* Live prices captured when a code was loaded with legs already in play. */
+.liveprice { margin: 6px 0 0; font-size: 13px; line-height: 18px; color: var(--ink-muted); }
+.liveprice .livepill { margin-right: 4px; }
+.linkbtn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.linkbtn:disabled { opacity: .5; cursor: default; }
+.livetag { margin-left: 5px; padding: 0 5px; border-radius: 4px; font-size: 10px; line-height: 14px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--house); border: 1px solid currentColor; }
+
+/* The chance ring as a button: tap to see which legs drag it down. */
+.ringbtn { background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit; text-align: inherit; cursor: pointer; border-radius: 12px; }
+.ringbtn:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.whyring { margin: 8px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--surface-2, rgba(127,127,127,.1)); font-size: 13px; line-height: 18px; }
+.whyring p { margin: 0 0 6px; }
+.whyring ul { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 4px; }
+.whyring li { display: flex; justify-content: space-between; gap: 12px; }
+.whyring li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.whyring .muted { margin: 0; }

@@ -10,6 +10,7 @@ export type MoneyEntry = {
   stake: number;         // ₦ staked; 0 = removed (kept so other devices drop it too)
   back: number | null;   // ₦ paid back once settled; null while open
   manual?: boolean;      // `back` typed in (Flex, cash-out), so settling never overwrites it
+  pot?: number;          // SportyBet's "Pot. Win" as typed in: the exact payout if it lands, bonus included
   edited: number;        // last change, for merging devices
 };
 
@@ -27,7 +28,8 @@ export function mergeMoney(a: MoneyEntry[], b: MoneyEntry[], now = Date.now()): 
     if (!e || !/^[A-Z0-9]{4,12}$/.test(e.code) || !(e.at > now - KEEP_DAYS * 86_400_000)) continue;
     const stake = Math.min(10_000_000, Math.max(0, Math.round(+e.stake || 0)));
     const back = e.back === null || e.back === undefined ? null : Math.min(1e10, Math.max(0, Math.round(+e.back || 0)));
-    const clean: MoneyEntry = { code: e.code, at: +e.at, stake, back, edited: +e.edited || 0, ...(e.manual ? { manual: true } : {}) };
+    const pot = Math.min(1e10, Math.max(0, Math.round(+(e.pot ?? 0) || 0)));
+    const clean: MoneyEntry = { code: e.code, at: +e.at, stake, back, edited: +e.edited || 0, ...(e.manual ? { manual: true } : {}), ...(pot > stake ? { pot } : {}) };
     const old = by.get(e.code);
     if (!old || clean.edited > old.edited) by.set(e.code, clean);
   }
@@ -41,11 +43,26 @@ export function slipReturn(legOdds: number[]): number {
   return multiBonus(legOdds.map((o) => ({ odds: o, p: 1 / (o * 1.04) }))).totalOdds;
 }
 
-/** An entry once its code is decided: a landed code pays stake × odds with the bonus, a lost one 0.
- * Typed-in amounts stay. */
+/** What a stake pays if the slip lands: SportyBet's own Pot. Win when the user typed it in,
+ * else the stake × the odds with the bonus as Vig works it out (an estimate). */
+export const potentialWin = (e: Pick<MoneyEntry, "stake" | "pot">, legOdds: number[]): number =>
+  e.pot && e.pot > e.stake ? e.pot : e.stake * slipReturn(legOdds);
+
+/** The multi-bet bonus ratio SportyBet applied, from its Pot. Win: the extra over the plain odds
+ * divided by the combined odds of the legs that qualify (1.20 or more). Null when it can't be told. */
+export function impliedBonus(stake: number, pot: number, legOdds: number[]): number | null {
+  if (!(stake > 0) || !(pot > stake) || !legOdds.length || legOdds.some((o) => !(o > 1))) return null;
+  const all = legOdds.reduce((a, o) => a * o, 1);
+  const q = legOdds.filter((o) => o >= 1.2).reduce((a, o) => a * o, 1);
+  const extra = pot / stake - all;
+  return q > 1 && extra > 0 ? extra / q : null;
+}
+
+/** An entry once its code is decided: a landed code pays its Pot. Win (SportyBet's if typed in, else
+ * stake × odds with the bonus), a lost one 0. Typed-in amounts stay. */
 export function settleEntry(e: MoneyEntry, state: "won" | "lost", legOdds: number[], now = Date.now()): MoneyEntry {
   if (e.manual || e.back !== null) return e;
-  return { ...e, back: state === "won" ? Math.round(e.stake * slipReturn(legOdds)) : 0, edited: now };
+  return { ...e, back: state === "won" ? Math.round(potentialWin(e, legOdds)) : 0, edited: now };
 }
 
 /** Midnight in Lagos at or before `t`. */

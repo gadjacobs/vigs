@@ -1,7 +1,7 @@
 "use server";
 import { after } from "next/server";
 import { cookies } from "next/headers";
-import { trackWithPrematch, type Tracked } from "@/lib/codes";
+import { repriceLive, trackWithPrematch, type Tracked } from "@/lib/codes";
 import { dropSub, loadSub, pushReady, saveSub, send, subId, watchCode, type OursPrefs } from "@/lib/push";
 import { SETS } from "@/lib/ourpicks";
 import { myProfile } from "@/lib/profile";
@@ -73,6 +73,16 @@ export async function trackCodes(codes: string[]): Promise<(Tracked | { code: st
   // Logging loads the model and the round; it runs after the reply so Codes isn't kept waiting.
   after(() => logTracked(out.flatMap((t) => ("legs" in t ? [t] : []))).catch(() => undefined));
   return out;
+}
+
+/** Read a code again and take its in-play prices as they are now (see `repriceLive`). */
+export async function repriceCode(code: string): Promise<Tracked | { code: string; error: string }> {
+  if (!/^[A-Z0-9]{4,12}$/.test(code)) return { code, error: "That is not a booking code" };
+  try {
+    return await repriceLive(code);
+  } catch (e) {
+    return { code, error: (e as Error).message };
+  }
 }
 
 async function logTracked(ts: Tracked[]) {

@@ -7,7 +7,7 @@ import { putEntry, readMoney, writeLimit, writeMoney } from "./money-store";
 import { settleEntry, todayAgainst, type MoneyEntry } from "@/lib/money";
 import { ShareButton, ShareSheet } from "./share-sheet";
 import { createPortal } from "react-dom";
-import { alertState, followMatch, setCodeAlertAction, trackCodes } from "./push-actions";
+import { alertState, followMatch, repriceCode, setCodeAlertAction, trackCodes } from "./push-actions";
 import { liveCodes } from "./live-actions";
 import { HedgeSheet, type HedgeLeg } from "./hedge-sheet";
 import type { LiveLeg } from "@/lib/live";
@@ -94,6 +94,18 @@ function legProbs(t: Tracked, live: Record<string, LiveLeg>): number[] | null {
     ps.push(c);
   }
   return ps;
+}
+
+/** The open legs with the lowest chance, weakest first: what drags the slip's chance down. */
+function weakLegs(t: Tracked, live: Record<string, LiveLeg>, n = 3): { leg: Tracked["legs"][number]; chance: number }[] {
+  const out: { leg: Tracked["legs"][number]; chance: number }[] = [];
+  for (const l of t.legs) {
+    const st = effective(l, live);
+    if (st !== "waiting" && st !== "playing") continue;
+    const c = live[legKey(l)]?.chance;
+    if (c !== undefined && c !== null) out.push({ leg: l, chance: c });
+  }
+  return out.sort((a, b) => a.chance - b.chance).slice(0, n);
 }
 
 /** The chance from the legs that are priced, and how many aren't yet (rounds SportyBet hasn't published). */
@@ -298,6 +310,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
   const [status, setStatus] = useState<Record<string, Tracked | { code: string; error: string }>>({});
   const [entry, setEntry] = useState("");
   const [pending, start] = useTransition();
+  const [whyFor, setWhyFor] = useState<string | null>(null); // the card whose chance ring is explained
   const [tab, setTab] = useState<"open" | "history">("open");
   const [filter, setFilter] = useState<"all" | "won" | "lost">("all");
   const [openFilter, setOpenFilter] = useState<"all" | "live" | "later">("all");
@@ -548,6 +561,15 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     };
   }, [refresh, pollLive]);
 
+  // Take a code's in-play prices again (a slip loaded in SportyBet later than here).
+  const reprice = (code: string) => {
+    start(async () => {
+      const r = await repriceCode(code);
+      setStatus((s) => ({ ...s, [code]: r }));
+      say("legs" in r ? `${code}: live prices taken again.` : `${code}: could not read it just now.`);
+    });
+  };
+
   const track = (e: React.FormEvent) => {
     e.preventDefault();
     const code = entry.trim().toUpperCase();
@@ -743,14 +765,40 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   const b = t && t.legs.every((l) => l.odds) ? multiBonus(t.legs.map((l) => ({ odds: l.odds!, p: 1 / (l.odds! * 1.04) }))) : null;
                   return b && b.ratio > 0 ? <span className="bonuspill">+{Math.round(b.ratio * 100)}% bonus</span> : null;
                 })()}</p> : null}
+                {t && !foreign && !settled && (t.liveLegs ?? 0) > 0 ? (
+                  <p className="liveprice">
+                    <span className="livepill">Live</span> {t.liveLegs} leg{t.liveLegs > 1 ? "s were" : " was"} in play when this code was loaded, priced at the live odds then.{" "}
+                    <button type="button" className="linkbtn" disabled={updating.has(c.code)} onClick={() => reprice(c.code)}>Re-price now</button>
+                  </p>
+                ) : null}
                 <p className="codesub">
                   {legs.length || c.legs} legs
                   {lastKo && !settled ? <> · ends <b className="num lastko">{lagos(lastKo)}</b>{lastIn ? <span className="muted"> {lastIn}</span> : null}</> : <> · booked {lagos(c.at)}</>}
                 </p>
               </div>
                 </div>
-                {chanceEl}
+                {chanceEl && t && !settled ? (
+                  <button type="button" className="ringbtn" aria-expanded={whyFor === c.code} aria-label={`Why is the chance ${chance !== null ? `${pctText(chance)}%` : "this"}?`}
+                    onClick={() => setWhyFor((w) => (w === c.code ? null : c.code))}>{chanceEl}</button>
+                ) : chanceEl}
               </div>
+              {whyFor === c.code && t && !settled && (() => {
+                const weak = weakLegs(t, live);
+                if (!weak.length) return null;
+                const base = chance ?? parts?.p ?? null;
+                const top = weak[0];
+                return (
+                  <div className="whyring" role="region" aria-label="What drives the chance">
+                    <p>The chance is every open leg&apos;s chance multiplied together{parts && parts.missing ? " (only the priced legs count so far)" : ""}. The shakiest:</p>
+                    <ul>
+                      {weak.map(({ leg, chance: p }) => (
+                        <li key={leg.eventId}><span>{leg.home} v {leg.away} · {leg.label}</span><b className="num">{pctText(p)}%</b></li>
+                      ))}
+                    </ul>
+                    {base !== null && top.chance > 0 && weak.length > 1 ? <p className="muted">Without {top.leg.home} v {top.leg.away} the slip would be {pctText(Math.min(1, base / top.chance))}%.</p> : null}
+                  </div>
+                );
+              })()}
               {parts && parts.missing > 0 && !lostN && !foreign && (
                 <p className="codewait">{parts.missing - parts.settling
                   ? `${parts.missing - parts.settling} leg${parts.missing - parts.settling > 1 ? "s" : ""} not priced yet (SportyBet hasn't published the round), so the chance counts only the priced legs.`
@@ -763,7 +811,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
               ) : (<>
               {legs.length > 0 && <LegBar legs={legs} eff={eff} flash={goalFlash} label={`${wonN} won, ${lostN} lost, ${left} to play`} />}
               <p className="codeline">
-                {t ? <><b>{wonN}</b> won · <b>{lostN}</b> lost · <b>{left}</b> to play{next ? <span className="muted"> · next {lagos(next.kickoff)}</span> : null}</>
+                {t ? <><b>{wonN}</b> won · <b>{lostN}</b> lost · <b>{left}</b> to play{next ? <span className="muted"> · next {lagos(next.kickoff)}{until(next.kickoff, now) ? ` (${until(next.kickoff, now)})` : ""}</span> : null}</>
                   : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : <span className="skel skel-line" aria-label="Loading" />}
               </p>
               {hist.length > 1 && chance !== null && !lostN && <Spark points={hist} />}
@@ -776,7 +824,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   : decided ? `${wonN} of ${legs.length} landed: played with Flex at ${wonN} of ${legs.length} or lower, this slip pays a reduced amount.`
                   : `${lostN} leg${lostN > 1 ? "s" : ""} lost. Played with Flex, this slip can still pay.`;
                 // Prematch prices stand in for SportyBet's chances (its cut is about 4%).
-                return <FlexRow ps={ps} note={note} peek={lostN && !decided ? "can still pay" : undefined} market={t.legs.map((l) => (l.odds ? 1 / (l.odds * 1.04) : 0))} />;
+                return <FlexRow ps={ps} note={note} stake={money.entries.find((e) => e.code === c.code)?.stake} peek={lostN && !decided ? "can still pay" : undefined} market={t.legs.map((l) => (l.odds ? 1 / (l.odds * 1.04) : 0))} />;
               })()}
               </>)}
               <div className="codeactions">
@@ -825,7 +873,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                     <li key={l.eventId} className={`leg-${st} ${course ? `course-${course}` : ""}`}>
                       <LegMark st={st} />
                       <span className="legmain"><Teams league={l.league} home={l.home} away={l.away} />
-                        <small>{!grouped && l.kickoff === lastKo && legs[0].kickoff !== lastKo && !settled ? <b className="lasttag">Last game</b> : null}{l.label}{view === "detailed" ? <> · {l.odds ? <>prematch <strong className="num">{l.odds.toFixed(2)}</strong></> : "prematch odds not seen"}</> : l.odds ? <> · <span className="num">{l.odds.toFixed(2)}</span></> : null} · {lagos(l.kickoff)}</small>
+                        <small>{!grouped && l.kickoff === lastKo && legs[0].kickoff !== lastKo && !settled ? <b className="lasttag">Last game</b> : null}{l.label}{view === "detailed" ? <> · {l.odds ? <>{l.live ? "live" : "prematch"} <strong className="num">{l.odds.toFixed(2)}</strong>{l.live && l.prematch ? <span className="muted"> (prematch {l.prematch.toFixed(2)})</span> : null}</> : "prematch odds not seen"}</> : l.odds ? <> · <span className="num">{l.odds.toFixed(2)}</span>{l.live ? <b className="livetag">live</b> : null}</> : null} · {lagos(l.kickoff)}</small>
                         {lc !== null && (st === "playing" || st === "waiting") && (
                           <span className="legmeter" aria-hidden="true"><span style={{ width: `${Math.round(lc * 100)}%` }} /></span>
                         )}
@@ -864,10 +912,10 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
         const tt = t && "legs" in t ? t : null;
         return <StakeSheet code={stakeFor} entry={money.entries.find((e) => e.code === stakeFor)} settled={Boolean(tt && (tt.state !== "open" || isFinal(tt)))}
           defaultStake={stake} limit={money.limit} todayStaked={todayAgainst(money.entries, 0).staked} onClose={closeStake}
-          onSave={(n, back) => {
+          onSave={(n, back, pot) => {
             const old = money.entries.find((e) => e.code === stakeFor);
             const at = codes.find((c) => c.code === stakeFor)?.at ?? Date.now();
-            saveEntry({ code: stakeFor, at: old?.at ?? at, stake: n, back: n ? back : null, ...(back !== null && n ? { manual: true } : {}), edited: Date.now() });
+            saveEntry({ code: stakeFor, at: old?.at ?? at, stake: n, back: n ? back : null, ...(back !== null && n ? { manual: true } : {}), ...(n && pot > n ? { pot } : {}), edited: Date.now() });
             closeStake();
             say(n ? `Stake saved for ${stakeFor}.` : `${stakeFor} left out of My money.`);
           }} />;

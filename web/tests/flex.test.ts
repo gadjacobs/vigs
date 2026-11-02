@@ -17,10 +17,10 @@ describe("flex", () => {
 });
 
 const leg = (status: Tracked["legs"][number]["status"]) => ({
-  eventId: "e", league: "", home: "", away: "", kickoff: Date.now(), market: "O15", label: "", status, score: null, ht: null, odds: 1.4, shareOdds: 1.4,
+  eventId: "e", league: "", home: "", away: "", kickoff: Date.now(), market: "O15", label: "", status, score: null, ht: null, odds: 1.4, prematch: 1.4, live: false, shareOdds: 1.4,
 });
 const code = (state: Tracked["state"], statuses: Tracked["legs"][number]["status"][]): Tracked => ({
-  code: "X", legs: statuses.map(leg), state, won: 0, lost: 0, odds: 2, lastKickoff: Date.now(), deadline: 0, unavailable: 0, foreign: false,
+  code: "X", legs: statuses.map(leg), state, won: 0, lost: 0, odds: 2, liveLegs: 0, lastKickoff: Date.now(), deadline: 0, unavailable: 0, foreign: false,
 });
 
 describe("a code is final", () => {

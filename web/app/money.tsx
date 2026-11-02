@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { dailyNet, lagosDay, naira, signed, slipReturn, tally, todayAgainst, type MoneyEntry } from "@/lib/money";
+import { dailyNet, impliedBonus, lagosDay, naira, signed, slipReturn, tally, todayAgainst, type MoneyEntry } from "@/lib/money";
 import { readLimit, readMoney } from "./money-store";
 
 // My money: stakes you enter on Codes, what they paid back, and an optional
@@ -84,12 +84,14 @@ export function MoneyPanel({ entries, limit, onLimit, now }: { entries: MoneyEnt
 export function StakeChip({ entry, legOdds, odds, onEdit }: { entry?: MoneyEntry; legOdds: number[]; odds: number | null; onEdit: () => void }) {
   if (!entry || !entry.stake)
     return <button type="button" className="stakechip add" onClick={onEdit}><span aria-hidden="true">＋</span> Add stake</button>;
-  const pays = legOdds.length ? entry.stake * slipReturn(legOdds) : odds ? entry.stake * odds : null;
+  const pays = entry.pot && entry.pot > entry.stake ? entry.pot : legOdds.length ? entry.stake * slipReturn(legOdds) : odds ? entry.stake * odds : null;
+  const sporty = Boolean(entry.pot && entry.pot > entry.stake);
+  const ratio = sporty ? impliedBonus(entry.stake, entry.pot!, legOdds) : null;
   return (
     <button type="button" className={`stakechip ${entry.back === null ? "" : entry.back > 0 ? "won" : "lost"}`} onClick={onEdit}
       aria-label={`Your stake ${naira(entry.stake)}. Change`}>
       <span className="num">{naira(entry.stake)}</span>
-      {entry.back === null ? (pays ? <><span aria-hidden="true">→</span><b className="num">{naira(pays)}</b><small>if it lands</small></> : null)
+      {entry.back === null ? (pays ? <><span aria-hidden="true">→</span><b className="num">{naira(pays)}</b><small>{sporty ? `SportyBet${ratio ? ` · +${Math.round(ratio * 100)}% bonus` : ""}` : "if it lands · estimate"}</small></> : null)
         : entry.back > 0 ? <><span aria-hidden="true">→</span><b className="num">{naira(entry.back)}</b><small>paid · {signed(entry.back - entry.stake)}</small></>
         : <small>lost</small>}
     </button>
@@ -99,10 +101,11 @@ export function StakeChip({ entry, legOdds, odds, onEdit }: { entry?: MoneyEntry
 /** Enter or change a code's stake (and, once settled, what it paid back). */
 export function StakeSheet({ code, entry, settled, defaultStake, limit, todayStaked, onSave, onClose }: {
   code: string; entry?: MoneyEntry; settled: boolean; defaultStake: number; limit: number; todayStaked: number;
-  onSave: (stake: number, back: number | null) => void; onClose: () => void;
+  onSave: (stake: number, back: number | null, pot: number) => void; onClose: () => void;
 }) {
   useEsc(onClose);
   const [stake, setStake] = useState(String(entry?.stake || defaultStake));
+  const [pot, setPot] = useState(entry?.pot ? String(entry.pot) : "");
   const [back, setBack] = useState(entry?.back !== null && entry?.back !== undefined ? String(entry.back) : "");
   const n = Math.round(Number(stake.replace(/[^\d.]/g, "")) || 0);
   const before = todayStaked - (entry?.stake ?? 0);
@@ -111,7 +114,7 @@ export function StakeSheet({ code, entry, settled, defaultStake, limit, todaySta
   return (
     <div className="sheet-backdrop" onClick={onClose} role="presentation">
       <form className="sheet" role="dialog" aria-modal="true" aria-labelledby="stake-title" onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => { e.preventDefault(); const b = back.trim() === "" ? null : Math.round(Number(back.replace(/[^\d.]/g, "")) || 0); onSave(n, settled ? b : null); }}>
+        onSubmit={(e) => { e.preventDefault(); const b = back.trim() === "" ? null : Math.round(Number(back.replace(/[^\d.]/g, "")) || 0); onSave(n, settled ? b : null, Math.round(Number(pot.replace(/[^\d.]/g, "")) || 0)); }}>
         <div className="sheet-grip" aria-hidden="true" />
         <div className="sheet-head">
           <h2 id="stake-title">Your stake on <span className="num">{code}</span></h2>
@@ -123,6 +126,12 @@ export function StakeSheet({ code, entry, settled, defaultStake, limit, todaySta
         <label className="field">Amount staked (₦)
           <input type="text" inputMode="numeric" value={stake} onChange={(e) => setStake(e.target.value)} autoFocus />
         </label>
+        {!settled && (
+          <label className="field">SportyBet&apos;s Pot. Win (₦, optional)
+            <input type="text" inputMode="numeric" value={pot} onChange={(e) => setPot(e.target.value)} placeholder="Vig works it out" />
+            <small className="hint">Copy it from your open bet in SportyBet and Vig shows exactly that. Without it, the bonus is an estimate and can be a few points off (SportyBet works it out from its own chances).</small>
+          </label>
+        )}
         {settled && (
           <label className="field">Paid back (₦)
             <input type="text" inputMode="numeric" value={back} onChange={(e) => setBack(e.target.value)} placeholder="Worked out for you" />
@@ -132,7 +141,7 @@ export function StakeSheet({ code, entry, settled, defaultStake, limit, todaySta
         {over && <p className="note warn" role="alert">This takes today to {naira(before + n)}, over your {naira(limit)} daily limit.</p>}
         <div className="sheet-actions">
           <button type="submit" className="button primary" disabled={!n}>Save</button>
-          {entry?.stake ? <button type="button" className="danger-ghost" onClick={() => onSave(0, null)}>I didn&apos;t place it</button> : null}
+          {entry?.stake ? <button type="button" className="danger-ghost" onClick={() => onSave(0, null, 0)}>I didn&apos;t place it</button> : null}
         </div>
       </form>
     </div>

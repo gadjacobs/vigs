@@ -4,7 +4,8 @@ import { getJson, setJson } from "./store";
 // The last prematch prices of every round, kept two days, so a code first
 // opened after kickoff (booked in SportyBet, not in Vig) still shows what its
 // legs were priced at. SportyBet's share endpoint gives in-play prices once a
-// match starts, which Vig never shows as the code's odds. The tick saves each
+// match starts, so they are never taken as a leg's prematch price (a leg first
+// loaded in play is priced at the live price captured then: lib/codes.ts). The tick saves each
 // round in the 20 minutes before it kicks off, while SportyBet lists all of it.
 // vFootball prices rarely move in that time.
 
