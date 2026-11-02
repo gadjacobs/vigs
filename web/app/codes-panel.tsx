@@ -17,7 +17,7 @@ import type { Tracked } from "@/lib/codes";
 import type { SavedCode as Saved } from "@/lib/profile";
 import { isFinal, readAll, readCodes, readFinal, readHidden, saveFinal, saveOpen, writeAll, writeHidden } from "./code-store";
 import { flexLevels, FlexRow } from "./flex-row";
-import { multiBonus } from "@/lib/bonus";
+import { chanceAtOdds, multiBonus } from "@/lib/bonus";
 import { Teams } from "./teams";
 
 export type { Saved };
@@ -302,7 +302,7 @@ function LegMark({ st }: { st: string }) {
     </span>
   );
 }
-const STATE: Record<Tracked["state"] | "upcoming", string> = { upcoming: "Upcoming", open: "In play", won: "Landed", lost: "Lost" };
+const STATE: Record<Tracked["state"] | "upcoming", string> = { upcoming: "Not started", open: "In play", won: "Landed", lost: "Lost" };
 
 export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; view?: "simple" | "detailed" }) {
   const [codes, setCodes] = useState<Saved[]>([]);
@@ -647,7 +647,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       </div>
       {tab === "open" && openAll.length > 1 && (
         <div className="codefilters" role="radiogroup" aria-label="Show open codes">
-          {([["all", `All ${openAll.length}`], ["live", `In play ${liveN}`], ["later", `Starting later ${openAll.length - liveN}`]] as const).map(([v, label]) => (
+          {([["all", `All ${openAll.length}`], ["live", `In play ${liveN}`], ["later", `Not started ${openAll.length - liveN}`]] as const).map(([v, label]) => (
             <button key={v} type="button" role="radio" aria-checked={openFilter === v} onClick={() => { setOpenFilter(v); setPages(1); }}>
               {v === "live" && <i className="livedot" aria-hidden="true" />}{label}
             </button>
@@ -684,6 +684,15 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
           // Big slips with several legs per round read best grouped under each kick-off time.
           const grouped = legs.length >= 8 && new Set(legs.map((l) => l.kickoff)).size * 2 <= legs.length;
           const eff = (l: (typeof legs)[number]) => effective(l, live);
+          // In play, not started and finished, told apart: counts, and the legs list in that order when they mix.
+          const cls = (s2: string) => (s2 === "playing" ? "playing" : s2 === "waiting" ? "waiting" : "done");
+          const nSettle = legs.filter((l) => eff(l) === "playing" && live[legKey(l)]?.state === "ended").length;
+          const nPlay = legs.filter((l) => eff(l) === "playing").length - nSettle;
+          const nWait = legs.filter((l) => eff(l) === "waiting").length;
+          const mixed = new Set(legs.map((l) => cls(eff(l)))).size > 1;
+          const RANK = { playing: 0, waiting: 1, done: 2 } as const;
+          const shown = mixed ? [...legs].sort((a, b) => RANK[cls(eff(a)) as keyof typeof RANK] - RANK[cls(eff(b)) as keyof typeof RANK] || a.kickoff - b.kickoff) : legs;
+          const GROUP = { playing: "In play", waiting: "Not started", done: "Finished" } as const;
           const next = legs.filter((l) => eff(l) === "waiting").sort((a, b) => a.kickoff - b.kickoff)[0];
           const left = legs.filter((l) => eff(l) === "waiting" || eff(l) === "playing").length;
           const wonN = legs.filter((l) => eff(l) === "won").length, lostN = legs.filter((l) => eff(l) === "lost").length;
@@ -737,7 +746,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   </span>
                   <span className="cr-meta">
                     {odds ? <span><b className="num">{odds.toFixed(2)}</b> odds ·</span> : null}
-                    {legs.length ? <span><b>{wonN}</b> of {legs.length} won</span> : `${c.legs} legs`}
+                    {legs.length ? <span><b>{wonN}</b> of {legs.length} won{nPlay ? <> · <b className="livecount">{nPlay} live</b></> : null}{nWait && (nPlay || wonN || lostN) ? <> · {nWait} not started</> : null}</span> : `${c.legs} legs`}
                     {!settled && lastKo ? <span>· last game {lagos(lastKo)}</span> : null}
                     {updating.has(c.code) ? <i className="spin" aria-hidden="true" /> : null}
                   </span>
@@ -761,8 +770,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 </div>
                 <div className="codemeta">
                 {odds ? <p className="codeodds"><strong className="num">{odds.toFixed(2)}</strong> odds{(() => {
-                  // SportyBet's multi-bet bonus, from the prematch prices (its cut is about 4%).
-                  const b = t && t.legs.every((l) => l.odds) ? multiBonus(t.legs.map((l) => ({ odds: l.odds!, p: 1 / (l.odds! * 1.04) }))) : null;
+                  // SportyBet's multi-bet bonus, from the legs' prices (what its own chances pay back at those odds).
+                  const b = t && t.legs.every((l) => l.odds) ? multiBonus(t.legs.map((l) => ({ odds: l.odds!, p: chanceAtOdds(l.odds!) }))) : null;
                   return b && b.ratio > 0 ? <span className="bonuspill">+{Math.round(b.ratio * 100)}% bonus</span> : null;
                 })()}</p> : null}
                 {t && !foreign && !settled && (t.liveLegs ?? 0) > 0 ? (
@@ -811,7 +820,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
               ) : (<>
               {legs.length > 0 && <LegBar legs={legs} eff={eff} flash={goalFlash} label={`${wonN} won, ${lostN} lost, ${left} to play`} />}
               <p className="codeline">
-                {t ? <><b>{wonN}</b> won · <b>{lostN}</b> lost · <b>{left}</b> to play{next ? <span className="muted"> · next {lagos(next.kickoff)}{until(next.kickoff, now) ? ` (${until(next.kickoff, now)})` : ""}</span> : null}</>
+                {t ? <><b>{wonN}</b> won · <b>{lostN}</b> lost{nPlay > 0 ? <> · <b className="livecount">{nPlay}</b> in play</> : null}{nSettle > 0 ? <> · <b>{nSettle}</b> settling</> : null} · <b>{nWait}</b> not started{next ? <span className="muted"> · next {lagos(next.kickoff)}{until(next.kickoff, now) ? ` (${until(next.kickoff, now)})` : ""}</span> : null}</>
                   : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : <span className="skel skel-line" aria-label="Loading" />}
               </p>
               {hist.length > 1 && chance !== null && !lostN && <Spark points={hist} />}
@@ -823,8 +832,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 const note = lostN === 0 ? undefined
                   : decided ? `${wonN} of ${legs.length} landed: played with Flex at ${wonN} of ${legs.length} or lower, this slip pays a reduced amount.`
                   : `${lostN} leg${lostN > 1 ? "s" : ""} lost. Played with Flex, this slip can still pay.`;
-                // Prematch prices stand in for SportyBet's chances (its cut is about 4%).
-                return <FlexRow ps={ps} note={note} stake={money.entries.find((e) => e.code === c.code)?.stake} peek={lostN && !decided ? "can still pay" : undefined} market={t.legs.map((l) => (l.odds ? 1 / (l.odds * 1.04) : 0))} />;
+                // The legs' prices stand in for SportyBet's chances (what they pay back at those odds).
+                return <FlexRow ps={ps} note={note} stake={money.entries.find((e) => e.code === c.code)?.stake} peek={lostN && !decided ? "can still pay" : undefined} market={t.legs.map((l) => (l.odds ? chanceAtOdds(l.odds) : 0))} />;
               })()}
               </>)}
               <div className="codeactions">
@@ -857,19 +866,25 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
               )}
               {isOpen && legs.length > 0 && (
                 <ol className="legs">
-                  {legs.flatMap((l, i) => {
+                  {shown.flatMap((l, i) => {
                     const st = eff(l), x = live[legKey(l)];
                     const playing = x?.state === "playing" && x.score;
                     const lc = x?.chance ?? null;
                     const course = st === "won" ? "won" : st === "lost" ? "lost" : playing && lc !== null ? (lc >= 0.5 ? "on" : "off") : "";
                     const followed = follows.has(l.eventId);
                     // A divider where the kick-off time changes; the last one is marked.
-                    const sep = grouped && (i === 0 || legs[i - 1].kickoff !== l.kickoff) ? [
-                      <li key={`ko-${l.kickoff}`} className="legsep" aria-hidden="true">
+                    const gcls = cls(st);
+                    const head = mixed && (i === 0 || cls(eff(shown[i - 1])) !== gcls) ? [
+                      <li key={`grp-${gcls}`} className={`legsep state state-${gcls}`}>
+                        {gcls === "playing" ? <i className="livedot" aria-hidden="true" /> : null}{GROUP[gcls]}
+                        <span>{shown.filter((y) => cls(eff(y)) === gcls).length}</span>
+                      </li>] : [];
+                    const sep = grouped && (i === 0 || shown[i - 1].kickoff !== l.kickoff || (head.length > 0)) ? [
+                      <li key={`ko-${l.kickoff}-${i}`} className="legsep" aria-hidden="true">
                         {lagos(l.kickoff)}{l.kickoff === lastKo && i > 0 ? " · last game" : ""}
                         <span>{legs.filter((y) => y.kickoff === l.kickoff).length}</span>
                       </li>] : [];
-                    return [...sep, (
+                    return [...head, ...sep, (
                     <li key={l.eventId} className={`leg-${st} ${course ? `course-${course}` : ""}`}>
                       <LegMark st={st} />
                       <span className="legmain"><Teams league={l.league} home={l.home} away={l.away} />
@@ -882,7 +897,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                         {playing && <span className={`livepill ${x!.phase === "HT" ? "ht" : ""}`}>{x!.phase === "HT" ? "HT" : x!.minute !== null ? `${x!.minute}'` : "Live"}</span>}
                         <b className={`score num ${goalFlash.has(l.eventId) ? "goal" : ""}`}>
                           {l.status === "won" || l.status === "lost" ? `${l.score}${l.market.startsWith("FH_") && l.ht ? ` (HT ${l.ht})` : ""}`
-                            : playing ? x!.score : l.kickoff > now ? lagos(l.kickoff)
+                            : playing ? x!.score : l.kickoff > now ? <>{lagos(l.kickoff)}{until(l.kickoff, now) ? <small className="legin"> {until(l.kickoff, now)}</small> : null}</>
                             : <span className="legwait"><i className="spin" aria-hidden="true" />{x?.state === "ended" ? "Settling" : <span className="sr-only">Checking</span>}</span>}
                         </b>
                         {lc !== null && (st === "playing" || st === "waiting") && <small className="legchance">{pctText(lc)}%</small>}

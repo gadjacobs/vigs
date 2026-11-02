@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dailyNet, lagosDay, lagosMonth, lagosWeek, mergeMoney, settleEntry, slipReturn, tally, todayAgainst, type MoneyEntry } from "../lib/money";
-import { multiBonus } from "../lib/bonus";
+import { chanceAtOdds, legPayback, multiBonus } from "../lib/bonus";
 
 const NOW = Date.UTC(2026, 10, 2, 12); // Mon 2 Nov 2026, 13:00 Lagos
 const e = (code: string, at: number, stake: number, back: number | null, edited = at): MoneyEntry => ({ code, at, stake, back, edited });
@@ -17,12 +17,19 @@ describe("my money", () => {
   it("pays a landed slip its odds with the multi-bet bonus, a lost one nothing", () => {
     const odds = [1.5, 1.5, 1.5, 1.5, 1.5];
     const per = slipReturn(odds);
-    expect(per).toBeCloseTo(multiBonus(odds.map((o) => ({ odds: o, p: 1 / (o * 1.04) }))).totalOdds, 9);
+    expect(per).toBeCloseTo(multiBonus(odds.map((o) => ({ odds: o, p: chanceAtOdds(o) }))).totalOdds, 9);
     expect(per).toBeGreaterThan(1.5 ** 5);
     expect(settleEntry(e("AAAA11", NOW, 1000, null), "won", odds, NOW).back).toBe(Math.round(1000 * per));
     expect(settleEntry(e("AAAA11", NOW, 1000, null), "lost", odds, NOW).back).toBe(0);
     // A typed-in amount (Flex, cash-out) stays.
     expect(settleEntry({ ...e("AAAA11", NOW, 1000, 300), manual: true }, "lost", odds, NOW).back).toBe(300);
+  });
+  it("pays back about 97.6% of a 1.20-1.25 leg by SportyBet's own chance, less as odds rise", () => {
+    expect(legPayback(1.22)).toBeGreaterThan(0.975);
+    expect(legPayback(1.22)).toBeLessThan(0.978);
+    expect(legPayback(1.6)).toBeLessThan(legPayback(1.22));
+    expect(legPayback(1.01)).toBe(legPayback(1.05)); // held at the ends
+    expect(chanceAtOdds(1.22)).toBeCloseTo(legPayback(1.22) / 1.22, 12);
   });
   it("counts days, weeks and months in Lagos", () => {
     expect(lagosDay(NOW)).toBe(Date.UTC(2026, 10, 1, 23));

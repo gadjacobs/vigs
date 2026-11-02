@@ -72,8 +72,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   7/30-day net, and a daily limit that warns in the stake sheet and under Book.
   Codes pricing (`lib/codes.ts` `priceLeg`, `trackWithPrematch`): a leg Vig saw before kickoff keeps its prematch price; a leg already in play
   when the code was first loaded is priced at the live price captured then (`codelive:`, 3 days, `Leg.live`, "Live" tag, "Re-price now" re-reads it),
-  because SportyBet pays the in-play price for a slip placed then. The multi-bet bonus on a card is an estimate (1.04 cut as the chance stand-in,
-  which can read high: 11 legs showed +35% where SportyBet paid +25%, 2 Nov 2026); typing SportyBet's Pot. Win in the stake sheet (`MoneyEntry.pot`)
+  because SportyBet pays the in-play price for a slip placed then. The multi-bet bonus on a card is an estimate (`lib/bonus.ts` `legPayback`: what SportyBet's own chance pays back at a leg's odds, measured in
+  docs/research-2026-11-02.md; the old flat 1.04 cut showed +35% on 11 legs where SportyBet paid +25%, the curve +27%); typing SportyBet's Pot. Win in the stake sheet (`MoneyEntry.pot`)
   replaces it with the exact figure and shows the implied bonus (`lib/money.ts` `impliedBonus`).
   Never show an old reading: open codes load fresh, and back from > 60 s in the background a veil covers the page until
   it refreshes (`app/resume.tsx`). "Open in SportyBet" is the plain share link (an Android intent opened SportyBet's in-app browser). Flex odds follow SportyBet's own rule

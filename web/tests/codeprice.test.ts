@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { chanceAtOdds, multiBonus } from "../lib/bonus";
 import { priceLeg } from "../lib/codes";
 import { impliedBonus, mergeMoney, potentialWin, settleEntry, slipReturn, type MoneyEntry } from "../lib/money";
 
@@ -36,8 +37,10 @@ describe("SportyBet's Pot. Win", () => {
     const r = impliedBonus(2030, 20146.66, legs);
     expect(r).not.toBeNull();
     expect(r!).toBeCloseTo(0.25, 2);
-    // The estimate caps at +35% for 11 legs: ₦2,000 would show about ₦21,438.
-    expect(2000 * slipReturn(legs)).toBeCloseTo(21438, -1);
+    // The estimate was +35% (₦21,438 on ₦2,000). With what SportyBet's chances pay back at these odds it is within 3 points of +25%.
+    const est = multiBonus(legs.map((o) => ({ odds: o, p: chanceAtOdds(o) }))).ratio;
+    expect(Math.abs(est - 0.25)).toBeLessThan(0.03);
+    expect(2000 * slipReturn(legs)).toBeLessThan(20_500);
   });
   it("can't be read without prices, or from a pot that is no more than the stake", () => {
     expect(impliedBonus(2030, 20146.66, [])).toBeNull();

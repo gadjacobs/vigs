@@ -13,6 +13,28 @@
 export const BONUS_MIN_ODDS = 1.2;
 export const BONUS_RANGES: Record<number, [number, number]> = { 2: [0, 0.03], 3: [0, 0.05], 4: [0, 0.08], 5: [0.05, 0.12], 6: [0.07, 0.16], 7: [0.07, 0.2], 8: [0.1, 0.25], 9: [0.1, 0.3], 10: [0.1, 0.33], 11: [0.15, 0.35], 12: [0.15, 0.37], 13: [0.15, 0.4], 14: [0.15, 0.42], 15: [0.15, 0.45], 16: [0.25, 0.5], 17: [0.25, 0.55], 18: [0.3, 0.6], 19: [0.3, 0.65], 20: [0.3, 0.7], 21: [0.35, 0.75], 22: [0.35, 0.8], 23: [0.35, 0.85], 24: [0.4, 0.9], 25: [0.4, 0.95], 26: [0.4, 1], 27: [0.45, 1.1], 28: [0.45, 1.2], 29: [0.5, 1.3], 30: [0.5, 1.6], 31: [0.5, 1.8], 32: [0.55, 1.9], 33: [0.55, 2], 34: [0.6, 2.1], 35: [0.6, 2.2], 36: [0.6, 2.3], 37: [0.65, 2.4], 38: [0.65, 2.5], 39: [0.7, 2.6], 40: [0.7, 2.7], 41: [0.7, 2.8], 42: [0.75, 2.9], 43: [0.75, 3], 44: [0.8, 3], 45: [0.8, 3], 46: [0.85, 3], 47: [0.85, 3], 48: [0.9, 3], 49: [0.9, 3], 50: [1, 3] };
 
+// What SportyBet's own chance for a leg pays back, by its odds: odds × SportyBet's probability, averaged over
+// 162,124 prematch outcomes (every match first seen 31 Oct and 1 Nov 2026; docs/research-2026-11-02.md). The cut is
+// thinner on favourites than on long shots, which is why the bonus on a slip of 1.20-1.25 legs reads about +27% at
+// 11 legs where a flat 4% cut said +35% (SportyBet paid +25%). Joined in log odds; held at the ends.
+const PAYBACK: [number, number][] = [[1.05, 0.9839], [1.15, 0.9783], [1.225, 0.9758], [1.275, 0.9738], [1.35, 0.9714], [1.45, 0.9689], [1.6, 0.965], [1.85, 0.9618], [2.5, 0.9544], [4, 0.9339]];
+
+/** What a leg at these odds pays back per ₦1 by SportyBet's own chance (about 0.976 at 1.20-1.25). */
+export function legPayback(odds: number): number {
+  if (odds <= PAYBACK[0][0]) return PAYBACK[0][1];
+  for (let i = 1; i < PAYBACK.length; i++) {
+    const [o1, p1] = PAYBACK[i];
+    if (odds <= o1) {
+      const [o0, p0] = PAYBACK[i - 1];
+      return p0 + ((Math.log(odds) - Math.log(o0)) / (Math.log(o1) - Math.log(o0))) * (p1 - p0);
+    }
+  }
+  return PAYBACK[PAYBACK.length - 1][1];
+}
+
+/** Stand-in for SportyBet's chance when only the odds are known (a code's legs): payback ÷ odds. */
+export const chanceAtOdds = (odds: number) => Math.min(1, legPayback(odds) / odds);
+
 export type Bonus = {
   qualifying: number;   // legs at 1.20 or more
   ratio: number;        // e.g. 0.5 = +50% of the qualifying odds

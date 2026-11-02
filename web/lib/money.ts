@@ -1,4 +1,4 @@
-import { multiBonus } from "./bonus";
+import { chanceAtOdds, multiBonus } from "./bonus";
 
 // My money: what you staked on each code and what it paid back, entered by you
 // (Vig never sees your SportyBet account). Pure, so the server merge, the Codes
@@ -37,10 +37,10 @@ export function mergeMoney(a: MoneyEntry[], b: MoneyEntry[], now = Date.now()): 
 }
 
 /** What a straight slip pays per ₦1 when every leg lands, SportyBet's multi-bet bonus included.
- * The bonus is worked out from prematch prices with a 4% cut standing in for its chances, as on the card. */
+ * The bonus is worked out from the legs' prices, with what SportyBet's chances pay back at those odds standing in for them (lib/bonus.ts `legPayback`), as on the card. */
 export function slipReturn(legOdds: number[]): number {
   if (!legOdds.length || legOdds.some((o) => !(o > 1))) return legOdds.reduce((a, o) => a * (o || 1), 1);
-  return multiBonus(legOdds.map((o) => ({ odds: o, p: 1 / (o * 1.04) }))).totalOdds;
+  return multiBonus(legOdds.map((o) => ({ odds: o, p: chanceAtOdds(o) }))).totalOdds;
 }
 
 /** What a stake pays if the slip lands: SportyBet's own Pot. Win when the user typed it in,

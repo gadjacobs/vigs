@@ -1583,3 +1583,11 @@ main:has(.tabpending.on) > :is(.slates, .results, section, .tiles, .slipjump, .n
 .whyring li { display: flex; justify-content: space-between; gap: 12px; }
 .whyring li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .whyring .muted { margin: 0; }
+
+/* In play vs not started vs finished, told apart in a code. */
+ol.legs li.legsep.state { padding-top: 12px; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+ol.legs li.legsep.state > span { margin-left: auto; }
+ol.legs li.legsep.state-playing { color: var(--house); }
+ol.legs li.legsep.state-waiting, ol.legs li.legsep.state-done { color: var(--ink-muted); }
+.livecount { color: var(--house); }
+.legin { display: block; font-weight: 400; color: var(--ink-muted); font-size: 11px; line-height: 14px; text-align: right; }
