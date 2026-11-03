@@ -1591,3 +1591,54 @@ ol.legs li.legsep.state-playing { color: var(--house); }
 ol.legs li.legsep.state-waiting, ol.legs li.legsep.state-done { color: var(--ink-muted); }
 .livecount { color: var(--house); }
 .legin { display: block; font-weight: 400; color: var(--ink-muted); font-size: 11px; line-height: 14px; text-align: right; }
+
+/* ── Round 5: live strip, paste to track, settle-up, swipe ─────────────── */
+.livestrip { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 16px;
+  background: var(--ink); color: var(--paper); font-size: 13px; line-height: 18px; text-decoration: none; white-space: nowrap; overflow: hidden;
+  animation: stripin .25s ease-out; }
+.livestrip b { font-weight: 800; letter-spacing: .02em; }
+.livestrip .num { font-weight: 800; padding: 1px 7px; border-radius: 999px; background: var(--signal); color: var(--on-signal); }
+.livestrip .ls-line { overflow: hidden; text-overflow: ellipsis; min-width: 0; opacity: .85; }
+.livestrip .ls-go { margin-left: auto; font-size: 20px; line-height: 1; opacity: .7; }
+.livestrip .livedot { flex: none; }
+.livestrip.goal { background: var(--signal); color: var(--on-signal); }
+.livestrip.goal .num { background: var(--on-signal); color: var(--signal); }
+.livestrip.goal .ls-line { opacity: 1; font-weight: 800; }
+@keyframes stripin { from { transform: translateY(-100%); } to { transform: none; } }
+
+.trackbar .pastebtn { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+.clipoffer { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; padding: 8px 8px 8px 14px; border-radius: var(--r);
+  background: var(--signal-wash); font-size: 14px; animation: veilin .2s ease-out; }
+.clipoffer > span { flex: 1; min-width: 0; }
+.clipoffer button.primary { min-height: 36px; padding: 4px 14px; }
+.clipoffer .x { min-height: 36px; width: 36px; padding: 0; background: transparent; border: 0; font-size: 20px; color: var(--ink-muted); }
+
+.settlecard { position: fixed; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 65; margin: 0 auto; max-width: 520px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 14px 12px 14px 16px;
+  border-radius: var(--r-lg); background: var(--paper); color: var(--ink); border: 1px solid var(--rule); box-shadow: var(--shadow-slip);
+  animation: settlein .35s cubic-bezier(.2, .9, .3, 1.2); }
+.settlecard.won { border-color: var(--fair); }
+.settlecard.lost { border-color: color-mix(in srgb, var(--house) 60%, transparent); }
+.settlecard strong { font-family: var(--font-num); font-size: 24px; line-height: 26px; font-weight: 800; }
+.settlecard p { margin: 4px 0 0; font-size: 14px; line-height: 20px; }
+.settlecard .sc-money { font-weight: 800; }
+.settlecard.won .sc-money { color: var(--fair); }
+.settlecard .x { min-height: 32px; width: 32px; padding: 0; border: 0; background: transparent; font-size: 22px; color: var(--ink-muted); }
+.settlecard .legicon { margin-top: 3px; }
+@media (min-width: 641px) { .settlecard { bottom: 24px; } }
+@keyframes settlein { from { opacity: 0; transform: translateY(24px) scale(.98); } to { opacity: 1; transform: none; } }
+
+.lostline { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin: -4px 0 10px; font-size: 13px; line-height: 18px; color: var(--house); }
+.lostline b { color: var(--ink); }
+
+.swipeable { touch-action: pan-y; transition: transform .25s cubic-bezier(.2, .9, .3, 1); }
+.swipeable.dragging { transition: none; user-select: none; }
+.swipeable.swipe-l { box-shadow: inset -6px 0 0 color-mix(in srgb, var(--house) calc(var(--k) * 100%), transparent); }
+.swipeable.swipe-r { box-shadow: inset 6px 0 0 color-mix(in srgb, var(--fair) calc(var(--k) * 100%), transparent); }
+.swipehint { position: absolute; top: 50%; z-index: 3; transform: translateY(-50%); padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 800;
+  pointer-events: none; opacity: calc(var(--k) * 1); color: var(--paper); }
+.swipehint.l { right: 12px; background: var(--house); }
+.swipehint.r { left: 12px; background: var(--fair); }
+.swipeable.armed .swipehint { transform: translateY(-50%) scale(1.08); }
+@media (prefers-reduced-motion: reduce) { .swipeable, .livestrip, .settlecard { transition: none; animation: none; } }
+.swipetip { margin: 0 0 10px; font-size: 13px; color: var(--ink-muted); }

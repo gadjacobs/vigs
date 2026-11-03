@@ -4,13 +4,15 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { hideCode, saveLimit, syncCodes, syncMoney } from "./profile-actions";
 import { LimitSheet, MoneyPanel, StakeChip, StakeSheet, useMoney } from "./money";
 import { putEntry, readMoney, writeLimit, writeMoney } from "./money-store";
-import { settleEntry, todayAgainst, type MoneyEntry } from "@/lib/money";
+import { lagosDay, naira, settleEntry, signed, tally, todayAgainst, type MoneyEntry } from "@/lib/money";
 import { ShareButton, ShareSheet } from "./share-sheet";
 import { createPortal } from "react-dom";
 import { alertState, followMatch, repriceCode, setCodeAlertAction, trackCodes } from "./push-actions";
 import { liveCodes } from "./live-actions";
 import { HedgeSheet, type HedgeLeg } from "./hedge-sheet";
 import type { LiveLeg } from "@/lib/live";
+import { SWIPED_KEY, SwipeLi } from "./swipe";
+import { codeChance, codeIn, effective, legKey, breakingLeg } from "./code-live";
 import { CopyButton } from "./copy-button";
 import { lagos } from "./pick-row";
 import type { Tracked } from "@/lib/codes";
@@ -46,6 +48,7 @@ export function rememberCode(c: Saved) {
 type Swing = Record<string, [number, number][]>;
 const SWING_KEY = "vig_swing";
 const CHEER_KEY = "vig_cheered";
+const SETTLED_KEY = "vig_settled_seen";
 function readSwing(): Swing {
   try {
     return JSON.parse(localStorage.getItem(SWING_KEY) ?? "{}") as Swing;
@@ -56,31 +59,6 @@ function readSwing(): Swing {
 function saveSwing(sw: Swing) {
   const keep = Object.entries(sw).sort((a, b) => (b[1].at(-1)?.[0] ?? 0) - (a[1].at(-1)?.[0] ?? 0)).slice(0, 40);
   try { localStorage.setItem(SWING_KEY, JSON.stringify(Object.fromEntries(keep))); } catch { /* full or private */ }
-}
-
-const legKey = (l: { eventId: string; market: string }) => `${l.eventId}|${l.market}`;
-
-/** A leg's status with live scores applied: an over that has gone over has landed. */
-function effective(l: Tracked["legs"][number], live: Record<string, LiveLeg>): Tracked["legs"][number]["status"] {
-  const x = live[legKey(l)];
-  if (l.status === "won" || l.status === "lost" || !x) return l.status;
-  if (x.chance === 1 && x.state === "playing") return "won";
-  if (x.chance === 0 && x.state === "playing") return "lost";
-  return x.state === "playing" ? "playing" : l.status;
-}
-
-/** Chance the whole code lands now; null until every open leg has one. */
-function codeChance(t: Tracked, live: Record<string, LiveLeg>): number | null {
-  let p = 1;
-  for (const l of t.legs) {
-    const st = effective(l, live);
-    if (st === "won") continue;
-    if (st === "lost") return 0;
-    const c = live[legKey(l)]?.chance;
-    if (c === undefined || c === null) return null;
-    p *= c;
-  }
-  return p;
 }
 
 /** Each leg's chance for Flex: 1 or 0 once decided, else its live or market chance. */
@@ -502,6 +480,43 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     setTimeout(() => setCheer((c) => new Set([...c].filter((x) => !fresh.includes(x)))), 4200);
   }, [status]);
 
+  // Settle-up: when a code is decided while you watch (or within 6 hours), one card says how it
+  // ended, which leg broke it, and where today's money stands. Once per code.
+  const [settled, setSettled] = useState<{ code: string; won: boolean; head: string; why: string; money: string | null; day: string | null } | null>(null);
+  useEffect(() => {
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(SETTLED_KEY) ?? "[]") as string[]; } catch { /* private mode */ }
+    const now = Date.now();
+    const done = Object.values(status).filter((t): t is Tracked => "legs" in t && !t.foreign && !seen.includes(t.code)
+      && now - t.lastKickoff < 6 * 3600_000 && (t.state === "won" || t.legs.some((l) => effective(l, live) === "lost")));
+    if (!done.length) return;
+    try { localStorage.setItem(SETTLED_KEY, JSON.stringify([...done.map((t) => t.code), ...seen].slice(0, 300))); } catch { /* private mode */ }
+    const t = done.sort((a, b) => b.lastKickoff - a.lastKickoff)[0];
+    const won = t.state === "won";
+    const e = readMoney().find((x) => x.code === t.code && x.stake > 0);
+    let why = "";
+    if (won) why = `All ${t.legs.length} legs landed${t.odds ? ` at ${t.odds.toFixed(2)} odds` : ""}.`;
+    else {
+      const b = breakingLeg(t, live);
+      if (b) {
+        const x = live[legKey(b.leg)];
+        const sc = (b.leg.status === "lost" ? b.leg.score : x?.score) ?? b.leg.score;
+        const min = b.leg.status !== "lost" && x?.minute !== null && x?.minute !== undefined ? ` at ${x.minute}'` : "";
+        why = `Broke on leg ${b.at} of ${b.of}: ${b.leg.home} v ${b.leg.away}, ${b.leg.label.toLowerCase()}${sc ? `, ${sc.replace(":", "–")}${min}` : ""}.`;
+      }
+    }
+    const money = e ? (won ? (e.back !== null ? `Paid ${naira(e.back)}: ${signed(e.back - e.stake)}` : null) : `Stake ${naira(e.stake)} lost`) : null;
+    const today = readMoney();
+    const net = tally(today, lagosDay(now)).net + (e && !won && e.back === null ? -e.stake : 0);
+    const day = today.some((x) => x.stake > 0 && x.at >= lagosDay(now)) ? `Today ${signed(net)}` : null;
+    setSettled({ code: t.code, won, head: won ? `${t.code} landed` : `${t.code} lost`, why, money, day });
+  }, [status, live]);
+  useEffect(() => {
+    if (!settled) return;
+    const x = setTimeout(() => setSettled(null), 12_000);
+    return () => clearTimeout(x);
+  }, [settled]);
+
   const chooseMode = (code: string, mode: "goals" | "off" | "default", lastKickoff: number) => {
     if (!endpoint) return;
     setModes((m) => { const n = { ...m }; if (mode === "default") delete n[code]; else n[code] = mode; return n; });
@@ -570,10 +585,49 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     });
   };
 
+  // Paste to track: a booking code on the clipboard (from WhatsApp, a tipster, SportyBet's share link) in one tap.
+  // The swipe tip shows on touch screens until a swipe is used once.
+  const [swipeTip, setSwipeTip] = useState(false);
+  useEffect(() => {
+    const upd = () => { try { setSwipeTip(matchMedia("(pointer: coarse)").matches && !localStorage.getItem(SWIPED_KEY)); } catch { setSwipeTip(false); } };
+    upd();
+    addEventListener("vig-swiped", upd);
+    return () => removeEventListener("vig-swiped", upd);
+  }, []);
+  const [clip, setClip] = useState<string | null>(null);
+  const dismissed = useRef<Set<string>>(new Set());
+  const known = useRef<Set<string>>(new Set());
+  known.current = new Set(codes.map((c) => c.code));
+  useEffect(() => {
+    // Only where the browser already lets Vig read the clipboard without asking (after one Paste, on Android);
+    // elsewhere the Paste button does it on a tap.
+    const peek = async () => {
+      try {
+        const perm = await navigator.permissions?.query({ name: "clipboard-read" as PermissionName });
+        if (perm?.state !== "granted") return;
+        const c = codeIn(await navigator.clipboard.readText());
+        setClip(c && !known.current.has(c) && !dismissed.current.has(c) ? c : null);
+      } catch { /* not allowed here */ }
+    };
+    peek();
+    addEventListener("focus", peek);
+    return () => removeEventListener("focus", peek);
+  }, []);
+  const paste = async () => {
+    try {
+      const c = codeIn(await navigator.clipboard.readText());
+      if (!c) { say("No booking code on the clipboard."); return; }
+      if (known.current.has(c)) { say(`${c} is already here.`); return; }
+      trackOne(c);
+    } catch { say("Vig couldn't read the clipboard. Paste into the box instead."); }
+  };
   const track = (e: React.FormEvent) => {
     e.preventDefault();
-    const code = entry.trim().toUpperCase();
+    trackOne(codeIn(entry) ?? entry.trim().toUpperCase());
+  };
+  const trackOne = (code: string) => {
     if (!/^[A-Z0-9]{4,12}$/.test(code)) return;
+    setClip(null);
     start(async () => {
       const [r] = await trackCodes([code]);
       setStatus((s) => ({ ...s, [code]: r }));
@@ -632,10 +686,18 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
       {clock > 0 && <MoneyPanel entries={money.entries} limit={money.limit} now={clock} onLimit={() => setLimitOpen(true)} />}
       <form className="trackbar" onSubmit={track}>
         <label className="sr-only" htmlFor="track-code">Track any code</label>
-        <input id="track-code" type="text" value={entry} onChange={(e) => setEntry(e.target.value)} placeholder="Track any code, e.g. GGQH9D"
+        <input id="track-code" type="text" value={entry} onChange={(e) => setEntry(e.target.value)} placeholder="Track a code"
           autoCapitalize="characters" autoComplete="off" spellCheck={false} />
+        {!entry.trim() && !pending && <button type="button" className="pastebtn" onClick={paste}>Paste</button>}
         <button type="submit" disabled={pending || !entry.trim()}>{pending ? "Checking…" : "Track"}</button>
       </form>
+      {clip && !pending && (
+        <div className="clipoffer" role="status">
+          <span>Track <b className="num">{clip}</b> from your clipboard?</span>
+          <button type="button" className="primary" onClick={() => trackOne(clip)}>Track</button>
+          <button type="button" className="x" aria-label="No thanks" onClick={() => { dismissed.current.add(clip); setClip(null); }}>×</button>
+        </div>
+      )}
 
       <div className="codetabs" role="tablist" aria-label="Codes">
         <button type="button" role="tab" aria-selected={tab === "open"} onClick={() => { setTab("open"); setPages(1); }}>
@@ -670,6 +732,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
           </div>
         )}
       </div>
+      {swipeTip && loaded && list.length > 0 && <p className="hint swipetip">Tip: swipe a card right to add your stake, left to remove it.</p>}
       {undo && <p className="note undo" role="status">Removed {undo.code}. <button type="button" onClick={restore}>Undo</button></p>}
       {!loaded && <ul className="codecards" aria-busy="true" aria-label="Loading codes"><SkeletonCard /><SkeletonCard /></ul>}
       {loaded && tab === "open" && !openAll.length && <p className="note">No open codes. Book a slip on Tonight or Our picks, or track any code above.</p>}
@@ -735,7 +798,8 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
             ) : null;
           if (compact && !expanded.has(c.code)) {
             return (
-              <li key={c.code} className={`codecard compact ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${cheer.has(c.code) ? "cheer" : ""}`}>
+              <SwipeLi key={c.code} className={`codecard compact ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${cheer.has(c.code) ? "cheer" : ""}`} leftLabel="Remove" rightLabel={money.entries.some((e) => e.code === c.code && e.stake) ? "Stake" : "Add stake"}
+                onLeft={() => remove(c)} onRight={foreign ? undefined : () => setStakeFor(c.code)}>
                 {cheer.has(c.code) && <Confetti />}
                 <button type="button" className="compactrow" onClick={() => flipCard(c.code)} aria-expanded={false}
                   aria-label={`${c.code}: show the full card`}>
@@ -753,11 +817,12 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   <span className="cr-chance">{chanceEl}</span>
                 </button>
                 {legs.length > 0 && !foreign && <LegBar legs={legs} eff={eff} flash={goalFlash} thin />}
-              </li>
+              </SwipeLi>
             );
           }
           return (
-            <li key={c.code} className={`codecard ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""} ${cheer.has(c.code) ? "cheer" : ""}`}>
+            <SwipeLi key={c.code} className={`codecard ${foreign ? "is-foreign" : shownState ? `is-${shownState}` : ""} ${isOpen ? "open" : ""} ${cheer.has(c.code) ? "cheer" : ""}`} leftLabel="Remove" rightLabel={money.entries.some((e) => e.code === c.code && e.stake) ? "Stake" : "Add stake"}
+              onLeft={() => remove(c)} onRight={foreign ? undefined : () => setStakeFor(c.code)}>
               {cheer.has(c.code) && <Confetti />}
               <div className="codetop">
                 <div className="codeleft">
@@ -823,6 +888,12 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                 {t ? <><b>{wonN}</b> won · <b>{lostN}</b> lost{nPlay > 0 ? <> · <b className="livecount">{nPlay}</b> in play</> : null}{nSettle > 0 ? <> · <b>{nSettle}</b> settling</> : null} · <b>{nWait}</b> not started{next ? <span className="muted"> · next {lagos(next.kickoff)}{until(next.kickoff, now) ? ` (${until(next.kickoff, now)})` : ""}</span> : null}</>
                   : err ? (c.last + DAY < now ? "No longer available from SportyBet." : "SportyBet did not return this code.") : <span className="skel skel-line" aria-label="Loading" />}
               </p>
+              {t && lostN > 0 && (() => {
+                const b = breakingLeg(t, live);
+                if (!b) return null;
+                const sc = b.leg.score ?? live[legKey(b.leg)]?.score ?? null;
+                return <p className="lostline"><LegMark st="lost" /> Lost on leg {b.at}: <b>{b.leg.home} v {b.leg.away}</b>, {b.leg.label.toLowerCase()}{sc ? <> · <span className="num">{sc.replace(":", "–")}</span></> : null}</p>;
+              })()}
               {hist.length > 1 && chance !== null && !lostN && <Spark points={hist} />}
               {t && !foreign && legs.length >= 3 && lostN <= Math.max(...flexLevels(legs.length)) && (() => {
                 const ps = legProbs(t, live);
@@ -914,11 +985,21 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
                   })}
                 </ol>
               )}
-            </li>
+            </SwipeLi>
           );
         })}
       </ul>
       <p className={`savedtoast ${note ? "on" : ""}`} role="status" aria-live="polite">{note}</p>
+      {settled && createPortal(
+        <div className={`settlecard ${settled.won ? "won" : "lost"}`} role="status" aria-live="polite">
+          <LegMark st={settled.won ? "won" : "lost"} />
+          <div>
+            <strong>{settled.head}</strong>
+            {settled.why && <p>{settled.why}</p>}
+            {(settled.money || settled.day) && <p className="sc-money">{[settled.money, settled.day].filter(Boolean).join(" · ")}</p>}
+          </div>
+          <button type="button" className="x" aria-label="Close" onClick={() => setSettled(null)}>×</button>
+        </div>, document.body)}
       {shareFor && createPortal(<ShareSheet code={shareFor} onClose={() => setShareFor(null)} />, document.body)}
       {alertFor && <AlertSheet code={alertFor.code} mode={modes[alertFor.code] ?? "default"} onClose={closeAlerts}
         onPick={(m) => { chooseMode(alertFor.code, m, alertFor.lastKickoff); closeAlerts(); }} />}

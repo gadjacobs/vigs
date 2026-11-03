@@ -75,6 +75,11 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   because SportyBet pays the in-play price for a slip placed then. The multi-bet bonus on a card is an estimate (`lib/bonus.ts` `legPayback`: what SportyBet's own chance pays back at a leg's odds, measured in
   docs/research-2026-11-02.md; the old flat 1.04 cut showed +35% on 11 legs where SportyBet paid +25%, the curve +27%); typing SportyBet's Pot. Win in the stake sheet (`MoneyEntry.pot`)
   replaces it with the exact figure and shows the implied bonus (`lib/money.ts` `impliedBonus`).
+  Codes UX (`app/code-live.ts`, `live-strip.tsx`, `swipe.tsx`): Paste / clipboard offer tracks a code (`codeIn`: share link or a
+  5-10 char token with a letter and a digit; auto-offer only where clipboard-read is already granted); a live strip under the
+  header on other pages while a leg plays (fresh `liveCodes` every 15 s from the open-code cache, never an old reading);
+  swipe a card right for its stake, left to remove; a settle-up card once per code (`vig_settled_seen`) with the leg that broke
+  it (`breakingLeg`) and today's net, and a "Lost on leg k" line on lost cards.
   Never show an old reading: open codes load fresh, and back from > 60 s in the background a veil covers the page until
   it refreshes (`app/resume.tsx`). "Open in SportyBet" is the plain share link (an Android intent opened SportyBet's in-app browser). Flex odds follow SportyBet's own rule
   (`lib/flex.ts` `flexQuote`: payback 0.65 for virtual games ÷ chance at least k land); Our picks
