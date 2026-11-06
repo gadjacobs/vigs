@@ -26,11 +26,11 @@ function Check({ tick, refused, failed, mem }: { tick: number | null; refused: n
       <ul>
         {row(Boolean(store), "Store", store ? `found (${store}).`
           : related.length ? `not usable. The server sees ${related.join(", ")} but needs a REST URL and token pair, e.g. KV_REST_API_URL and KV_REST_API_TOKEN.`
-          : "not found. Connect Upstash for Redis to this Vercel project for Production, then redeploy.")}
-        {row(secret, "Tick secret", secret ? "set (PUSH_TICK_SECRET)." : "missing. Add PUSH_TICK_SECRET in Vercel, then redeploy.")}
+          : "not found. In Netlify → Environment variables, add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN from your Upstash database, then redeploy.")}
+        {row(secret, "Tick secret", secret ? "set (PUSH_TICK_SECRET)." : "missing. Add PUSH_TICK_SECRET in Netlify, then redeploy.")}
         {row(ago !== null && ago <= 15, "Collector tick", refused && (!tick || refused > tick)
-          ? `a call arrived ${Math.round((Date.now() - refused) / 60000)} min ago with the wrong secret: PUSH_TICK_SECRET in GitHub must match Vercel's exactly.`
-          : ago === null ? "not seen yet. In GitHub → Settings → Secrets and variables → Actions, add PUSH_TICK_URL and PUSH_TICK_SECRET (either tab works); the next collector run picks them up and its log says whether each is set."
+          ? `a call arrived ${Math.round((Date.now() - refused) / 60000)} min ago with the wrong secret: PUSH_TICK_SECRET in GitHub must match Netlify's exactly.`
+          : ago === null ? "not seen yet. In GitHub → Settings → Secrets and variables → Actions, add the same UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN as secrets (or PUSH_TICK_URL and PUSH_TICK_SECRET). A collector run uses the secrets it started with, so the next run (each lasts about 6 hours) picks them up; its log says which it found."
           : `last seen ${ago} min ago${ago > 15 ? "; the collector may be between runs" : ""}.`)}
         {mem && row((full ?? 0) <= 0.85, "Store space", mem.max
           ? `${mb(mem.used)} of ${mb(mem.max)} MB used (${Math.round(full! * 100)}%).${full! > 0.85 ? " Nearly full: the tick clears old code keys a few pages at a time." : ""}`
@@ -39,7 +39,7 @@ function Check({ tick, refused, failed, mem }: { tick: number | null; refused: n
           ? `the last call ${failedAgo} min ago hit: ${failed.error}`
           : `none in the last hour (the last was ${failedAgo} min ago).`)}
       </ul>
-      <p className="status">Environment variables only reach new deployments: after changing them in Vercel, redeploy.</p>
+      <p className="status">Environment variables only reach new deployments: after changing them in Netlify, redeploy.</p>
     </details>
   );
 }

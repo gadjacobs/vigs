@@ -11,7 +11,7 @@ const authorised = (request: Request) => {
 };
 
 // The fallback way in: the collector calls this with PUSH_TICK_SECRET when it
-// can't run the pass itself (no REDIS_URL secret in GitHub). Each call uses Vercel CPU.
+// can't run the pass itself (no store secrets in GitHub). Each call uses the host's function allowance.
 export async function POST(request: Request) {
   if (!authorised(request)) {
     // Note that a call arrived with the wrong secret, for the Alerts setup check.

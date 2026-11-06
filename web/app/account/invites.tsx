@@ -30,7 +30,7 @@ export function Invites({ list }: { list: Invite[] }) {
           ))}
         </ul>
       )}
-      <p className="hint">Removing an invite stops new sign-ins; to end sessions already open, change AUTH_SECRET in Vercel.</p>
+      <p className="hint">Removing an invite stops new sign-ins; to end sessions already open, change AUTH_SECRET in Netlify.</p>
     </section>
   );
 }
