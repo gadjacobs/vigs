@@ -10,8 +10,6 @@ import { BUILD } from "@/lib/build";
 import { BetaLink } from "./beta-link";
 import { Resume } from "./resume";
 import { LiveStrip } from "./live-strip";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 const text = Atkinson_Hyperlegible_Next({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-text" });
@@ -62,8 +60,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {children}
         <UpdateToast build={BUILD} />
         <Resume />
-        <Analytics />
-        <SpeedInsights />
       </body>
     </html>
   );

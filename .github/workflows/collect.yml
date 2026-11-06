@@ -39,7 +39,7 @@ jobs:
           python-version: "3.12"
 
       # Node runs the background pass here (web/tools/tick.mts) when a REDIS_URL
-      # secret is set, so it uses GitHub's CPU rather than the Vercel plan's.
+      # secret is set, so it uses GitHub's CPU rather than the web host's.
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -69,9 +69,10 @@ jobs:
           # Either may be saved as a variable or a secret.
           PUSH_TICK_URL: ${{ vars.PUSH_TICK_URL || secrets.PUSH_TICK_URL }}
           PUSH_TICK_SECRET: ${{ secrets.PUSH_TICK_SECRET || vars.PUSH_TICK_SECRET }}
-          # The store, so the pass runs here: copy REDIS_URL from Vercel's
-          # environment variables. If Vercel also has VAPID_PUBLIC_KEY and
-          # VAPID_PRIVATE_KEY, copy those too (else both read the store's keys).
+          # The store, so the pass runs here: the same REDIS_URL as the web app's
+          # (Netlify). VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY only if the web app
+          # has the same pair; leave both unset in both places to share the
+          # keys kept in the store.
           REDIS_URL: ${{ secrets.REDIS_URL }}
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}

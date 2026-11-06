@@ -1,0 +1,16 @@
+# Netlify builds the web app from web/ (Next.js, through Netlify's Next.js runtime).
+[build]
+  base = "web"
+  command = "npm run build"
+  publish = ".next"
+  # The data branch is written every 30 minutes by the collector; it has no app to build.
+  # (Exit 0 = skip this build.)
+  ignore = 'test "$BRANCH" = "data"'
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Netlify's Next.js runtime (server functions for pages, server actions, proxy.ts and API routes).
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

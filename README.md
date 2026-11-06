@@ -60,12 +60,13 @@ to the website). Theme: Auto, Day or Floodlit, remembered per device. It fetches
 from SportyBet on each load and reads `model.json`, which the collector
 publishes hourly to the `data` branch. No database.
 
-Deploy on Vercel:
-1. vercel.com → Add New → Project → import `gadjacobs/vigs`.
-2. Root Directory: `web` (framework detected as Next.js).
+Deploy on Netlify (free; `netlify.toml` at the repo root holds the build settings):
+1. netlify.com → Add new project → Import an existing project → GitHub → `gadjacobs/vigs`.
+2. Branch to deploy: `claude/sportybets-football-patterns-7egyzf`. Base directory,
+   build command and publish directory come from `netlify.toml` (base `web`).
 3. Environment variable `APP_PASSWORD`: anything you choose. Every page sits
    behind it, with an 18+ confirmation. Optional: `MODEL_URL` to read the model elsewhere.
-4. Deploy. Pushes to the branch redeploy automatically.
+4. Deploy. Pushes to the branch redeploy automatically; the `data` branch is skipped.
 
 Local: `cd web && npm install && MODEL_PATH=../data/model.json npm run dev`
 (`npm test` checks the TypeScript model against the Python one).
@@ -238,14 +239,14 @@ its estimate, and Record breaks the account's legs down by market.
 
 **Google sign-in** (recommended): create an OAuth client (Google Cloud Console →
 APIs & Services → Credentials → OAuth client ID → Web application) with the
-redirect URI `https://<your app>/api/auth/google/callback`, then set in Vercel
+redirect URI `https://<your app>/api/auth/google/callback`, then set in Netlify
 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_SECRET` (a long random
 string) and `GOOGLE_ACCOUNTS="you@gmail.com=me,friend@gmail.com=ada"`. Only
 listed addresses get in, each as the named account (map yours to `me` to keep
 what that account already has). Password sign-in keeps working alongside.
 
 Signing in picks the account. `ACCOUNTS="name:password,name2:password2"` in
-Vercel lists them (passwords must differ: the form asks only for the
+Netlify lists them (passwords must differ: the form asks only for the
 password); without it, `APP_PASSWORD` is one account called "me". With the
 store connected, an account's booked codes, last filters, Chance/Full view and
 theme sync across every device signed in to it; the first sync merges what
@@ -323,22 +324,24 @@ On iPhone, add Vig to the Home
 Screen first. The app also offers a reload, in a toast, when a new version is
 deployed or a new round is published. Setup, once:
 
-1. Vercel → the project → Storage → connect a Redis store (Upstash for Redis or
-   Redis, free plans) to the Production environment. Either its REST pair
+1. A free Redis database at upstash.com (Create database, any region near
+   Europe/Africa), and its `rediss://` URL as `REDIS_URL` in Netlify → Project
+   configuration → Environment variables (Vig talks to Upstash over its REST
+   API, worked out from that URL). Either a REST pair
    (`KV_REST_API_URL` and `KV_REST_API_TOKEN`, any prefix, or
    `UPSTASH_REDIS_REST_*`) or a `redis://` / `rediss://` `REDIS_URL` works. The
    Alerts page's setup check shows what it found.
-2. Vercel → Settings → Environment Variables: `PUSH_TICK_SECRET`, any long
+2. Netlify → Environment variables: `PUSH_TICK_SECRET`, any long
    random string. Redeploy.
 3. GitHub → Settings → Secrets and variables → Actions: secret
    `PUSH_TICK_SECRET` (the same string) and variable `PUSH_TICK_URL`
    (`https://<your app>/api/push/tick`).
-4. Recommended, to keep the background work off Vercel's CPU allowance (the
-   free plan's 4 hours a month ran out once): GitHub → Settings → Secrets and
-   variables → Actions, secret `REDIS_URL` (the same value as in Vercel's
-   environment variables). The collector then runs the pass itself
-   (`web/tools/tick.mts`) instead of calling `PUSH_TICK_URL`. If Vercel has
-   `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, add them as secrets too.
+4. Recommended, to keep the background work off the host's function allowance:
+   GitHub → Settings → Secrets and variables → Actions, secret `REDIS_URL`
+   (the same value as in Netlify). The collector then runs the pass itself
+   (`web/tools/tick.mts`) instead of calling `PUSH_TICK_URL`. Push keys are made
+   once and kept in the store; set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` only
+   if you set the same pair in Netlify too (else leave both unset in both places).
 5. Open Alerts on the phone, turn notifications on, and send a test.
 
 **Slip alerts** (Alerts and Settings, per account) tell you when a saved
