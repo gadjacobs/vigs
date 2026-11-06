@@ -20,7 +20,7 @@ export type ModelFile = {
 };
 
 export const MODEL_URL =
-  process.env.MODEL_URL ?? "https://raw.githubusercontent.com/gadjacobs/vigs/data/model.json";
+  process.env.MODEL_URL || "https://raw.githubusercontent.com/gadjacobs/vigs/data/model.json";
 
 let cached: { at: number; model: ModelFile } | null = null;
 

@@ -17,7 +17,7 @@ export type Insights = {
 export type LeanRow = { market: string; lo: number; hi: number; n: number; landed: number; priced: number; z: number; held?: boolean; held_gain?: number };
 
 export const INSIGHTS_URL =
-  process.env.INSIGHTS_URL ?? "https://raw.githubusercontent.com/gadjacobs/vigs/data/insights.json";
+  process.env.INSIGHTS_URL || "https://raw.githubusercontent.com/gadjacobs/vigs/data/insights.json";
 
 let cached: { at: number; v: Insights | null } | null = null;
 

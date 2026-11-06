@@ -34,7 +34,7 @@ export type RecordFile = {
 };
 
 export const RECORD_URL =
-  process.env.RECORD_URL ?? "https://raw.githubusercontent.com/gadjacobs/vigs/data/record.json";
+  process.env.RECORD_URL || "https://raw.githubusercontent.com/gadjacobs/vigs/data/record.json";
 
 let cached: { at: number; rec: RecordFile } | null = null;
 

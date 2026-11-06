@@ -39,7 +39,8 @@ export type Watch = {
 export type NoteKind = "landed" | "lost" | "goal" | "swing" | "last" | "match" | "hot";
 export type Payload = { title: string; body: string; url: string; tag?: string; cheer?: boolean; kind?: NoteKind; code?: string };
 
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? "mailto:vig@example.com";
+// `||`, not `??`: GitHub passes an unset secret as an empty string.
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:vig@example.com";
 type Vapid = { publicKey: string; privateKey: string };
 
 export const pushReady = storeReady;

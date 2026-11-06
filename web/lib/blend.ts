@@ -56,7 +56,7 @@ export function blendEstimate(
 }
 
 export const BLEND_URL =
-  process.env.BLEND_URL ?? "https://raw.githubusercontent.com/gadjacobs/vigs/data/blend.json";
+  process.env.BLEND_URL || "https://raw.githubusercontent.com/gadjacobs/vigs/data/blend.json";
 
 let cached: { at: number; blend: BlendFile | null } | null = null;
 
