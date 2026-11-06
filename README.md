@@ -325,9 +325,9 @@ Screen first. The app also offers a reload, in a toast, when a new version is
 deployed or a new round is published. Setup, once:
 
 1. A free Redis database at upstash.com (Create database, any region near
-   Europe/Africa), and its `rediss://` URL as `REDIS_URL` in Netlify → Project
-   configuration → Environment variables (Vig talks to Upstash over its REST
-   API, worked out from that URL). Either a REST pair
+   Europe/Africa), and its REST pair, `UPSTASH_REDIS_REST_URL` and
+   `UPSTASH_REDIS_REST_TOKEN`, in Netlify → Project configuration → Environment
+   variables. Either a REST pair
    (`KV_REST_API_URL` and `KV_REST_API_TOKEN`, any prefix, or
    `UPSTASH_REDIS_REST_*`) or a `redis://` / `rediss://` `REDIS_URL` works. The
    Alerts page's setup check shows what it found.
@@ -337,8 +337,9 @@ deployed or a new round is published. Setup, once:
    `PUSH_TICK_SECRET` (the same string) and variable `PUSH_TICK_URL`
    (`https://<your app>/api/push/tick`).
 4. Recommended, to keep the background work off the host's function allowance:
-   GitHub → Settings → Secrets and variables → Actions, secret `REDIS_URL`
-   (the same value as in Netlify). The collector then runs the pass itself
+   GitHub → Settings → Secrets and variables → Actions, secrets
+   `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (or `REDIS_URL`), the
+   same values as in Netlify. The collector then runs the pass itself
    (`web/tools/tick.mts`) instead of calling `PUSH_TICK_URL`. Push keys are made
    once and kept in the store; set `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` only
    if you set the same pair in Netlify too (else leave both unset in both places).

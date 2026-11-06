@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 355
     env:
-      HAS_STORE: ${{ secrets.REDIS_URL != '' }}
+      HAS_STORE: ${{ secrets.REDIS_URL != '' || secrets.UPSTASH_REDIS_REST_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,6 +74,9 @@ jobs:
           # has the same pair; leave both unset in both places to share the
           # keys kept in the store.
           REDIS_URL: ${{ secrets.REDIS_URL }}
+          # Or Upstash's REST pair, the same two values as the web app's.
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}

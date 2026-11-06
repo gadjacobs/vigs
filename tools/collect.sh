@@ -45,14 +45,15 @@ publish() {
 }
 
 # The background pass (follow watched codes, settle them, send notifications,
-# cook and book the slips, slip alerts). With REDIS_URL and Node it runs right
+# cook and book the slips, slip alerts). With the store (REDIS_URL, or Upstash's
+# UPSTASH_REDIS_REST_URL and _TOKEN) and Node it runs right
 # here, on GitHub's CPU (web/tools/tick.mts), waiting as long as each pass asks:
 # about every 20 seconds while a watched leg is in play, 2 minutes otherwise.
 # Without them it asks the web app (PUSH_TICK_URL and PUSH_TICK_SECRET) on the
-# same schedule; each call there uses the Vercel plan's CPU (fine on Pro).
+# same schedule; each call there uses the web host's function allowance.
 TICK_UNTIL=$(( $(date +%s) + CHUNKS * MINUTES * 60 ))
-if [ -n "${REDIS_URL:-}" ] && [ -x "$(command -v node)" ] && [ -d "$VIG_REPO/web/node_modules" ]; then
-  echo "push tick: running here (REDIS_URL set)"
+if { [ -n "${REDIS_URL:-}" ] || [ -n "${UPSTASH_REDIS_REST_TOKEN:-}" ]; } && [ -x "$(command -v node)" ] && [ -d "$VIG_REPO/web/node_modules" ]; then
+  echo "push tick: running here (store set)"
   ( cd "$VIG_REPO/web" && TICK_UNTIL=$TICK_UNTIL exec node node_modules/tsx/dist/cli.mjs tools/tick.mts ) &
   TICKER=$!
 elif [ -n "${PUSH_TICK_URL:-}" ] && [ -n "${PUSH_TICK_SECRET:-}" ]; then

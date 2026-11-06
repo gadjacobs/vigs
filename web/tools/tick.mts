@@ -1,7 +1,7 @@
 // The background pass, run by the collector inside GitHub Actions instead of
 // on Vercel: same work as /api/push/tick, but its CPU is GitHub's. Loops until
 // TICK_UNTIL (unix seconds), waiting as long as each pass asks: about 20 s while
-// a watched leg plays, 2 minutes otherwise. Needs REDIS_URL (the store).
+// a watched leg plays, 2 minutes otherwise. Needs the store (REDIS_URL, or UPSTASH_REDIS_REST_URL and _TOKEN).
 import { runTickOnce } from "../lib/ticker.ts";
 
 const until = Number(process.env.TICK_UNTIL ?? 0) * 1000 || Date.now() + 55 * 60_000;

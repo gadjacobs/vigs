@@ -40,7 +40,7 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 
 ## Web app
 - `web/` is Next.js 16, hosted on Netlify (`netlify.toml`, base `web`, `@netlify/plugin-nextjs`; the data branch is skipped;
-  Vercel's team was deleted 4 Nov 2026). Store: Upstash Redis via `REDIS_URL`. (Read `web/node_modules/next/dist/docs` before changing
+  Vercel's team was deleted 4 Nov 2026). Store: Upstash Redis via its REST pair (`UPSTASH_REDIS_REST_URL`/`_TOKEN`) or `REDIS_URL`, in Netlify and as GitHub secrets. (Read `web/node_modules/next/dist/docs` before changing
   framework code: `proxy.ts` replaces middleware; `searchParams` and `cookies()` are async).
 - `web/lib` ports the model maths from `vigs/model.py`; `web/tests` pins it to
   Python output. Change both together.
@@ -94,8 +94,8 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   when a league's round scores ≥ 0.2 goals a match over its saved prices (`pre:`/`prefx:`, results from `eventResultList`),
   overs in its next round looked +1.2%, but it did not hold with errors clustered by round (docs/research-2026-10-31.md),
   so `HOT_ON` (`lib/hotflag.ts`) is false: no boost, no alert; the tick still books and logs its overs slip with no stake. The multi-bet bonus is confirmed on vFootball: the keep meter leads with it. Hedge only does arithmetic and books a code; never bets.
-  The tick (`lib/ticker.ts` `runTickOnce`) runs inside the collector in GitHub Actions (`web/tools/tick.mts`, needs a
-  `REDIS_URL` secret) to keep it off the host's function allowance; `/api/push/tick` is the fallback on the same schedule.
+  The tick (`lib/ticker.ts` `runTickOnce`) runs inside the collector in GitHub Actions (`web/tools/tick.mts`, needs the store's
+  secrets) to keep it off the host's function allowance; `/api/push/tick` is the fallback on the same schedule.
   It watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
   One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no
   result is sent > 45 min after a code's last kickoff. Collector cron is every 30 min (runs chain).
