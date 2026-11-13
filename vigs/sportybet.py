@@ -322,7 +322,7 @@ def capture_odds(client: Client, data_dir: str, last: dict[str, dict] | None = N
 
 
 # ---- Real football (a separate test, nothing in the app reads it) -----------------
-# vFootball prices are a fixed cut on known chances (docs/research-2026-11-13.md), so
+# vFootball prices are one set cut on known chances (docs/research-2026-11-13.md), so
 # no model can beat them. Real-football prices are set against a market: this collects
 # SportyBet's 1X2 and over/under 2.5 prices, with the probability it publishes beside
 # them, for leagues whose Betfair Exchange closing odds and results football-data.co.uk
