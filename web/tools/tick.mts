@@ -8,7 +8,7 @@
 // TICK_GUARD=1 (a scheduled safety-net run): if another run ticked in the last
 // 90 seconds the chain is alive, so this one leaves with exit code 78.
 import { lastTick } from "../lib/push.ts";
-import { runTickOnce } from "../lib/ticker.ts";
+import { runChores, runFollow } from "../lib/ticker.ts";
 
 const LIVE_EVERY = 12; // seconds between pass starts while something plays
 const until = Number(process.env.TICK_UNTIL ?? 0) * 1000 || Date.now() + 55 * 60_000;
@@ -22,12 +22,28 @@ if (process.env.TICK_GUARD === "1") {
   }
 }
 
+// Housekeeping on its own loop (cooking slips and saving prices can take 20 s or
+// more): it must never hold up the next check for goals and results.
+(async () => {
+  while (Date.now() < until) {
+    let next = 60;
+    try {
+      const out = await runChores() as { next?: number; error?: string };
+      next = Number(out.next) || 60;
+      if (out.error) console.log(`chores: ${out.error}`);
+    } catch (e) {
+      console.log(`chores failed: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300));
+    }
+    await sleep(Math.min(60, Math.max(20, next)) * 1000);
+  }
+})();
+
 let passes = 0, took = 0, slowest = 0;
 while (Date.now() < until) {
   const started = Date.now();
   let next = 120;
   try {
-    const out = await runTickOnce() as { next?: number; error?: string };
+    const out = await runFollow() as { next?: number; error?: string };
     next = Number(out.next) || 120;
     if (out.error) console.log(`tick: ${out.error}`);
   } catch (e) {

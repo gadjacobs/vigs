@@ -14,22 +14,42 @@ import { runHot } from "./hotalert";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 200);
 
-export async function runTickOnce(now = Date.now()) {
+const fail = async (errors: string[], now: number) => {
+  const error = errors.length ? errors.join("; ").slice(0, 600) : undefined;
+  if (error) {
+    console.error(`push tick: ${error}`);
+    await setJson("tickError", { at: now, error } satisfies TickError, 7 * 86400).catch(() => undefined);
+  }
+  return error;
+};
+// Every step is guarded: one failing step must not stop the others or the
+// answer, which tells the caller when to call again.
+const guard = (errors: string[]) => async <T,>(name: string, run: () => Promise<T>, fallback: T): Promise<T> => {
+  try {
+    return await run();
+  } catch (e) {
+    errors.push(`${name}: ${message(e)}`);
+    return fallback;
+  }
+};
+
+/** The urgent part: follow watched codes and matches, settle them, send the news. */
+export async function runFollow(now = Date.now()) {
   if (!pushReady()) return { error: "push not configured", next: 300 };
-  // Every step is guarded: one failing step must not stop the others or the
-  // answer, which tells the collector when to call again.
   const errors: string[] = [];
-  const step = async <T,>(name: string, run: () => Promise<T>, fallback: T): Promise<T> => {
-    try {
-      return await run();
-    } catch (e) {
-      errors.push(`${name}: ${message(e)}`);
-      return fallback;
-    }
-  };
-  // Following codes is the urgent part (goals, results), so it never waits for
-  // the housekeeping: every step runs side by side.
-  const [tidy, cooked, rounds, hot, out, alerts] = await Promise.all([
+  const out = await guard(errors)("tick", () => tick(buildTip, now, buildOurs), null);
+  if (out?.error) errors.push(`tick: ${out.errors} failed, first: ${out.error}`);
+  return { ...(out ?? {}), next: out?.next ?? 60, error: await fail(errors, now) };
+}
+
+/** The housekeeping: cook and book slips, save prematch prices, judge hot rounds,
+ * slip alerts, tidy the store. Each is gated to about once a minute or less, and
+ * some take 20 seconds or more, so the collector runs them on their own loop. */
+export async function runChores(now = Date.now()) {
+  if (!pushReady()) return { error: "push not configured", next: 300 };
+  const errors: string[] = [];
+  const step = guard(errors);
+  const [tidy, cooked, rounds, hot, alerts] = await Promise.all([
     step("tidy", tidyStore, null),
     // Cook (and book) the slips as soon as a round is published, so codes are ready.
     // At most once a minute: each check reads SportyBet's upcoming list.
@@ -40,19 +60,19 @@ export async function runTickOnce(now = Date.now()) {
       (await claim("scan:prematch", 50).catch(() => true)) ? await snapshotRounds(now) : null, null),
     // Hot rounds: judge rounds that have just finished (lib/hotround.ts).
     step("hot", () => runHot(now), null),
-    step("tick", () => tick(buildTip, now, buildOurs), null),
     // Slip alerts on saved filters and templates (each account at most every 10 minutes).
     step("alerts", () => runWatches(now), null),
   ]);
-  if (out?.error) errors.push(`tick: ${out.errors} failed, first: ${out.error}`);
   if (alerts?.error) errors.push(`alerts: ${alerts.errors} failed, first: ${alerts.error}`);
-  const error = errors.length ? errors.join("; ").slice(0, 600) : undefined;
-  if (error) {
-    console.error(`push tick: ${error}`);
-    await setJson("tickError", { at: now, error } satisfies TickError, 7 * 86400).catch(() => undefined);
-  }
   // While a round is about to finish, check every 20 s: its result is known only
   // a few minutes before the league's next round kicks off.
-  const next = Math.min(out?.next ?? 60, hot?.due ? 20 : 300);
-  return { ...(out ?? {}), next, cooked, rounds, hot, alerts, tidy, error };
+  return { cooked, rounds, hot, alerts, tidy, next: hot?.due ? 20 : 60, error: await fail(errors, now) };
+}
+
+/** Both at once, for /api/push/tick (one call does everything). */
+export async function runTickOnce(now = Date.now()) {
+  if (!pushReady()) return { error: "push not configured", next: 300 };
+  const [follow, chores] = await Promise.all([runFollow(now), runChores(now)]);
+  const error = [follow.error, chores.error].filter(Boolean).join("; ") || undefined;
+  return { ...chores, ...follow, next: Math.min(follow.next, chores.next === 20 ? 20 : 300), error };
 }
