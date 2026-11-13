@@ -346,6 +346,9 @@ def cmd_fetch(a) -> None:
     elif a.what == "odds":
         n = sb.capture_odds(client, a.data)
         print(f"captured odds for {n} upcoming matches")
+    elif a.what == "football":
+        n = sb.capture_football(client, a.data)
+        print(f"real football: {n} new or changed price snapshots in {client.requests} requests")
     else:
         sb.watch(client, a.data, a.minutes, a.interval, log=lambda m: print(m, flush=True))
 
@@ -656,7 +659,7 @@ def main(argv: list[str] | None = None) -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("fetch", help="pull SportyBet vFootball results or odds")
-    p.add_argument("what", choices=("results", "odds", "watch", "backfill"))
+    p.add_argument("what", choices=("results", "odds", "watch", "backfill", "football"))
     p.add_argument("--data", default="data")
     p.add_argument("--days", type=float, default=7, help="results: how far back")
     p.add_argument("--minutes", type=float, default=60, help="watch: how long")

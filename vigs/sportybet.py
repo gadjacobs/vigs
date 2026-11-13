@@ -321,6 +321,109 @@ def capture_odds(client: Client, data_dir: str, last: dict[str, dict] | None = N
     return len(snaps)
 
 
+# ---- Real football (a separate test, nothing in the app reads it) -----------------
+# vFootball prices are a fixed cut on known chances (docs/research-2026-11-13.md), so
+# no model can beat them. Real-football prices are set against a market: this collects
+# SportyBet's 1X2 and over/under 2.5 prices, with the probability it publishes beside
+# them, for leagues whose Betfair Exchange closing odds and results football-data.co.uk
+# publishes, to test afterwards whether SportyBet is ever above the sharp closing price.
+FOOTBALL = "sr:sport:1"
+FOOTBALL_COUNTRIES = {"England", "Scotland", "Germany", "Italy", "Spain", "France", "Netherlands",
+                      "Belgium", "Portugal", "Turkiye", "Turkey", "Greece"}
+FOOTBALL_DAYS = 4  # kickoffs this far ahead
+
+
+def football_snapshot(e: dict, captured_ms: int) -> dict | None:
+    """A real-football match's 1X2 and over/under 2.5 prices and published probabilities."""
+    sport = e.get("sport") or {}
+    cat = sport.get("category") or {}
+    if sport.get("id") != FOOTBALL or cat.get("name") not in FOOTBALL_COUNTRIES:
+        return None
+    odds: dict[str, float] = {}
+    prob: dict[str, float] = {}
+    for m in e.get("markets") or []:
+        mid, spec = str(m.get("id")), m.get("specifier") or ""
+        if str(m.get("status", 0)) != "0":
+            continue
+        if mid == "1":
+            names = {"Home": "1", "Draw": "X", "Away": "2"}
+        elif mid == "18" and spec == "total=2.5":
+            names = {"Over 2.5": "O25", "Under 2.5": "U25"}
+        else:
+            continue
+        for o in m.get("outcomes") or []:
+            k = names.get(o.get("desc"))
+            try:
+                price = float(o["odds"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if k and o.get("isActive") and price > 1.0:
+                odds[k] = price
+                try:
+                    prob[k] = round(float(o["probability"]), 6)
+                except (KeyError, TypeError, ValueError):
+                    pass
+    if not {"1", "X", "2"} <= odds.keys():
+        return None
+    return {"event_id": e["eventId"], "captured_at": _iso(captured_ms),
+            "kickoff": _iso(int(e["estimateStartTime"])), "country": cat["name"],
+            "league": (cat.get("tournament") or {}).get("name", ""),
+            "home": e["homeTeamName"], "away": e["awayTeamName"], "odds": odds, "prob": prob}
+
+
+def football_path(data_dir: str, ms: int) -> str:
+    return os.path.join(data_dir, "football", "odds", _iso(ms)[:10] + ".jsonl")
+
+
+def _football_last(data_dir: str, now_ms: int) -> dict[str, dict]:
+    """The last prices written for each match, from the past week's files."""
+    last: dict[str, dict] = {}
+    for d in range(7, -1, -1):
+        path = football_path(data_dir, now_ms - d * 86400000)
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    s = json.loads(line)
+                    last[s["event_id"]] = s["odds"]
+                except (ValueError, KeyError):
+                    continue
+    return last
+
+
+def capture_football(client: Client, data_dir: str) -> int:
+    """Append a snapshot for every listed real-football match kicking off within
+    FOOTBALL_DAYS whose prices are new or changed since the last one written."""
+    now = int(time.time() * 1000)
+    last = _football_last(data_dir, now)
+    snaps, page = [], 1
+    while True:
+        data = client.get("pcUpcomingEvents", sportId=FOOTBALL, marketId="1,18", pageSize=PAGE, pageNum=page, option=1)
+        events = [e for t in data.get("tournaments") or [] for e in t.get("events", [])]
+        for e in events:
+            try:
+                start = int(e.get("estimateStartTime") or 0)
+            except (TypeError, ValueError):
+                continue
+            if not now < start <= now + FOOTBALL_DAYS * 86400000:
+                continue
+            s = football_snapshot(e, now)
+            if s and last.get(s["event_id"]) != s["odds"]:
+                last[s["event_id"]] = s["odds"]
+                snaps.append(s)
+        if not events or page * PAGE >= int(data.get("totalNum") or 0) or page >= 40:
+            break
+        page += 1
+    if snaps:
+        path = football_path(data_dir, now)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            for s in snaps:
+                fh.write(json.dumps(s, sort_keys=True) + "\n")
+    return len(snaps)
+
+
 LIVE_KEEP = ("1", "X", "2", "O05", "U05", "O15", "U15", "O25", "U25", "O35", "U35", "O45", "U45")
 
 

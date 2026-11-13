@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from vigs.data import load_csv
+import vigs.sportybet as sb
 from vigs.sportybet import append_results, build, live_row, parse_odds, parse_result, snapshot
 
 # Shapes follow SportyBet's factsCenter API; values are made up for the test.
@@ -52,6 +53,28 @@ class Parsing(unittest.TestCase):
         r = parse_result(RESULT)
         self.assertEqual((r["hg"], r["ag"], r["ht_hg"], r["ht_ag"]), (2, 1, 1, 0))
         self.assertIsNone(parse_result(dict(RESULT, matchStatus="Live")))
+
+
+class Football(unittest.TestCase):
+    def event(self, country="England", sport="sr:sport:1"):
+        out = lambda d, o, p, on=1: {"desc": d, "odds": o, "probability": p, "isActive": on}
+        return {"eventId": "sr:match:1", "estimateStartTime": 1795264200000, "homeTeamName": "Man City", "awayTeamName": "Fulham",
+                "sport": {"id": sport, "category": {"name": country, "tournament": {"name": "Premier League"}}},
+                "markets": [
+                    {"id": "1", "status": 0, "outcomes": [out("Home", "1.43", "0.68"), out("Draw", "5.18", "0.18"), out("Away", "6.73", "0.14")]},
+                    {"id": "18", "specifier": "total=2.5", "status": 0, "outcomes": [out("Over 2.5", "1.55", "0.62"), out("Under 2.5", "2.40", "0.38")]},
+                    {"id": "18", "specifier": "total=3.5", "status": 0, "outcomes": [out("Over 3.5", "2.5", "0.38")]},
+                ]}
+
+    def test_keeps_1x2_and_the_2_5_line_for_listed_countries(self):
+        s = sb.football_snapshot(self.event(), 1795000000000)
+        self.assertEqual(s["odds"], {"1": 1.43, "X": 5.18, "2": 6.73, "O25": 1.55, "U25": 2.4})
+        self.assertEqual(s["prob"]["1"], 0.68)
+        self.assertEqual((s["country"], s["league"], s["home"]), ("England", "Premier League", "Man City"))
+
+    def test_skips_other_countries_and_other_sports(self):
+        self.assertIsNone(sb.football_snapshot(self.event(country="Brazil"), 0))
+        self.assertIsNone(sb.football_snapshot(self.event(sport="sr:sport:202120001"), 0))
 
 
 class Build(unittest.TestCase):

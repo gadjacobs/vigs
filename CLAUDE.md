@@ -33,6 +33,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   extends `archive/results-YYYY-MM.csv` back a year. Each snapshot also stores `extra`
   prices (FH 1X2/DC/handicap, handicap, correct score, 1X2&GG, team goals, odd/even) from
   16 Oct 2026; nothing prices picks from them yet.
+- Real football test (`vigs fetch football`, hourly from `publish.sh`, `football/odds/YYYY-MM-DD.jsonl` on the data branch): SportyBet's
+  1X2 and over/under 2.5 prices and published probabilities for the main European countries, to compare with Betfair Exchange
+  closing odds from football-data.co.uk once two to three weeks are in. Nothing in the app reads it. vFootball itself is closed:
+  every price is a fixed cut on the true chance (docs/research-2026-11-13.md).
 - `vigs/sportybet.py` fetches (1.2 s between requests, browser User-Agent) and
   `build` joins results to the last odds snapshot taken **before** kickoff.
 - The `data` branch is written only by `.github/workflows/collect.yml`. Never

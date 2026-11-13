@@ -12,6 +12,9 @@ if ! { [ -f /tmp/vigs-backfill.pid ] && kill -0 "$(cat /tmp/vigs-backfill.pid)" 
   echo $! > /tmp/vigs-backfill.pid
 fi
 tail -n 1 /tmp/vigs-backfill.log 2>/dev/null | sed 's/^/backfill: /' || true
+# Real football (a separate test): SportyBet's 1X2 and over/under 2.5 prices for the
+# main European leagues, hourly, to compare later with Betfair Exchange closing odds.
+python -m vigs fetch football --data "$DATA" || true
 python -m vigs export-model --data "$DATA" --out "$DATA/model.json" || true
 # Past 40 MB the ledger file is sealed, unchanged, as ledger.NNN.jsonl and the
 # hash chain carries on in a fresh ledger.jsonl (git hosts refuse files over 100 MB).
