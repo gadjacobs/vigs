@@ -45,7 +45,11 @@ export const OUR_DEFAULT = 0.88;
 export const TARGETS = [2, 5, 10, 20] as const;
 export const COUNTS = [2, 3, 4, 5, 6] as const;
 export const BEST_COUNTS = [5, 10, 20, 30, 50] as const;
-export const TOP_COUNTS = [10, 20, 30, 40, 50] as const;
+// Short first: the account's own record to 13 Nov 2026 (323 settled codes) had legs
+// winning as priced (77.5% against 77.9%) but 239 codes under a 10% chance, of which 4
+// landed; its 22 codes at 50% or more landed 14. Length, not selection, loses slips.
+export const TOP_COUNTS = [2, 3, 5, 10, 20, 50] as const;
+export const TOP_DEFAULT = 3;
 export const FLOORS = [1.05, 1.1, 1.2, 1.3] as const; // lowest price a leg may have
 // 1.20: SportyBet's multi-bet bonus counts only legs priced 1.20 or more (lib/bonus.ts).
 export const FLOOR_DEFAULT = 1.2;
@@ -55,7 +59,8 @@ export const FLOOR_DEFAULT = 1.2;
 // 2026), and its bonus keeps a slip's payback near its legs' at any length up to
 // 50 (lib/bonus.ts). No market at these prices landed apart from its price once
 // errors were clustered by round (docs/research-2026-10-31.md).
-export const BONUS_COUNTS = [10, 20, 30, 33, 35] as const;
+export const BONUS_COUNTS = [5, 10, 20, 30, 35] as const;
+export const BONUS_DEFAULT = 5; // the bonus starts at 5 legs (+5% at least)
 export const BONUS_BAND: [number, number] = [1.2, 1.25];
 const BONUS_WIDER = [1.3, 1.35]; // when the band runs short of matches
 // Goal: what the stake should become, as a multiple of it.

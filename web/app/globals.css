@@ -1642,3 +1642,9 @@ ol.legs li.legsep.state-waiting, ol.legs li.legsep.state-done { color: var(--ink
 .swipeable.armed .swipehint { transform: translateY(-50%) scale(1.08); }
 @media (prefers-reduced-motion: reduce) { .swipeable, .livestrip, .settlecard { transition: none; animation: none; } }
 .swipetip { margin: 0 0 10px; font-size: 13px; color: var(--ink-muted); }
+
+/* Cooked slips in groups by how often they land; a one-tap shorter slip on long ones. */
+.slategroup > h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 22px 0 10px; font-family: var(--font-num); font-weight: 800; font-size: 26px; line-height: 28px; }
+.slategroup > h2 small { font-family: var(--font-text), sans-serif; font-weight: 400; font-size: 13px; line-height: 18px; color: var(--ink-muted); }
+.note.shorten p { margin: 0 0 8px; }
+.note.shorten button { width: 100%; min-height: 44px; background: var(--ink); color: var(--paper); border: 0; }

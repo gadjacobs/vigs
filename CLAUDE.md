@@ -61,6 +61,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   user "vig" (Most likely / Most confident templates too, as `template:top`/`template:trusted`). Steady and Tight
   games pick markets from `lean` (`web/lib/lean.ts`; seven chance levels; only markets whose lean `held` on later days), falling back to fixed under lists. Never show share-endpoint odds after kickoff as a *prematch* price (they are in-play prices); Vig's picks, the code log and the record never use them.
 - Google sign-in (`/api/auth/google`): `GOOGLE_ACCOUNTS` allowlist maps emails to accounts.
+- Length, not selection, loses slips: the owner's 323 settled codes to 13 Nov 2026 had legs winning as priced (77.5% v 77.9%) but 239
+  under a 10% chance (4 landed), while 22 at 50%+ landed 14. So defaults are short (Most likely / Most confident 3 legs, Bonus slip 5),
+  cooked slips are listed likeliest first in groups (Likely to land / Could go either way / Long shots), and a slip under 35% offers
+  "Keep the k likeliest" (the legs that still land about half the time).
 - Our picks (`web/lib/ourpicks.ts`, `/picks`): templates top/trusted (Most likely / Most confident, leaning on
   `insights.json` `lean`, per-market landed vs priced by chance level), sets safe/odds/bold/draws; `vigs ourpicks`
   logs the safe set hourly. Booked codes go to the store's `codelog` with the server's

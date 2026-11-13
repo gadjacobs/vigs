@@ -11,7 +11,7 @@ import { SlipBuilder } from "../slip-builder";
 import { loadBlend } from "@/lib/blend";
 import { MARKET_LABELS } from "@/lib/markets";
 import { loadModel, type ModelFile } from "@/lib/model";
-import { BONUS_COUNTS, BEST_COUNTS, buildSet, GOALS, COUNTS, FLEX_FLOORS, FLEX_MISSES, FLEX_TARGETS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, type SetId } from "@/lib/ourpicks";
+import { BONUS_COUNTS, BEST_COUNTS, buildSet, GOALS, COUNTS, FLEX_FLOORS, FLEX_MISSES, FLEX_TARGETS, FLOOR_DEFAULT, FLOORS, OUR_BARS, OUR_DEFAULT, SETS, TARGETS, TOP_COUNTS, TOP_DEFAULT, BONUS_DEFAULT, type SetId } from "@/lib/ourpicks";
 import { applyFh } from "@/lib/fhusual";
 import { FLEX_PAYBACK, flexQuote } from "@/lib/flex";
 import { multiBonus } from "@/lib/bonus";
@@ -31,10 +31,10 @@ type SP = { set?: string; goal?: string; bar?: string; odds?: string; n?: string
 
 const ABOUT: Record<SetId, string> = {
   goal: "One slip to turn your stake into a goal in a single bet. Every bet gives SportyBet its cut, about ₦23 per ₦1,000 on the legs used here, so spreading the money over many small bets pays that cut again and again and reaches the goal less often. One straight slip of legs priced 1.20 to 1.25 (the cheapest legs that count for SportyBet's multi-bet bonus), with the bonus on top, gets close to the best chance any plan of bets has. It is still a long shot for big goals, and losing the stake is the usual result. Check that SportyBet shows the bonus on your slip before you place it.",
-  top: "The likeliest selection in each match, at the price floor or above, best first. Edit freely; Flex shows the chance with a miss or two.",
+  top: "The likeliest selection in each match, at the price floor or above, best first. Three legs to start, which land about half the time; every leg you add multiplies the odds and the risk.",
   bonus: "A straight slip built for SportyBet's multi-bet bonus: the likeliest leg in each match priced 1.20 to 1.25, just over the bonus line (double chance left out, as it earns less bonus). These are the cheapest legs that count for the bonus: SportyBet's prices pay back about ₦0.977 per ₦1 on them, against about ₦0.969 at 1.50 to 1.70, and the bonus keeps the whole slip close to that at any length. No market at these prices has landed more often than its price in our data, so this is the cheapest long slip, not one that beats the bookmaker. Each slip usually loses: 10 legs land about 1 in 8, 33 legs about 1 in 1,000. Check that SportyBet shows the bonus on your slip before you place it.",
   flex: "A long slip played with Flex, built to reach the Flex odds you pick: the likeliest leg per match at your lowest price, added until the odds with your misses allowed reach the target. SportyBet sets Flex odds so they return about ₦0.65 per ₦1 on vFootball whichever legs you pick (a straight slip returns about ₦0.96 per leg: ₦0.66 at 10 legs, ₦0.44 at 20), so Flex only beats a straight slip on long slips, and a higher lowest price just means fewer legs.",
-  trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely. 20 legs to start; up to 50 if that many qualify.",
+  trusted: "Likely selections (60% or more) where the bookmaker's price and the model agree closely. Three legs to start: every leg you add multiplies the odds and the risk.",
   best: "One leg per match: its likeliest selection at odds of 1.2 or more, by the bookmaker's own chance, with no market filling more than 40% of the slip, so you get a spread of markets.",
   safe: "For every published match, the best-paying selection with a chance at or above the bar.",
   odds: "The likeliest slip near your total odds, built from legs priced 1.25 to 2.2 that the market and model broadly agree on. In the settled data, prices under 2 lost 1-2% of stakes on average while prices over 5 lost 24-48%, so several short legs keep more value than one long shot.",
@@ -83,8 +83,8 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const bar = OUR_BARS.find((b) => String(Math.round(b * 100)) === sp.bar) ?? OUR_DEFAULT;
   const goalSet = set === "goal";
   const target = goalSet ? GOALS.find((g) => String(g) === sp.goal) ?? 10 : flexSet ? FLEX_TARGETS.find((t) => String(t) === sp.odds) ?? 100 : TARGETS.find((t) => String(t) === sp.odds) ?? 10;
-  const n = set === "bonus" ? BONUS_COUNTS.find((c) => String(c) === sp.n) ?? 10
-    : top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? (set === "trusted" ? 20 : 50)
+  const n = set === "bonus" ? BONUS_COUNTS.find((c) => String(c) === sp.n) ?? BONUS_DEFAULT
+    : top ? TOP_COUNTS.find((c) => String(c) === sp.n) ?? TOP_DEFAULT
     : set === "best"
     ? BEST_COUNTS.find((c) => String(c) === sp.n) ?? 10
     : COUNTS.find((c) => String(c) === sp.n) ?? (set === "draws" ? 4 : 3);
@@ -129,12 +129,28 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
       {cooked && cooked.slates.length > 0 ? (
         <>
           <p className="lede">Booked and ready, cooked at {lagos(cooked.cooked_at)} for the rounds published now. Open one in SportyBet or edit it first; new ones come with each round.</p>
-          <nav className="slipjump" aria-label="Jump to a slip">
-            {cooked.slates.map((s) => (
-              <a key={s.id} href={`#slip-${s.style}`}><span>{s.name}</span><b className="num">{s.odds < 100 ? s.odds.toFixed(2) : Math.round(s.odds).toLocaleString("en-NG")}</b></a>
-            ))}
-          </nav>
-          <ul className="slates">{cooked.slates.map((s) => <SlateCard key={s.id} s={s} />)}</ul>
+          {(() => {
+            // Likeliest first, in three groups by how often the price says each lands.
+            const sorted = [...cooked.slates].sort((x, y) => y.chance - x.chance);
+            const groups = [
+              { title: "Likely to land", hint: "More often than not, by the price.", list: sorted.filter((x) => x.chance >= 0.5) },
+              { title: "Could go either way", hint: "Between 1 in 2 and 1 in 10.", list: sorted.filter((x) => x.chance < 0.5 && x.chance >= 0.1) },
+              { title: "Long shots", hint: "Under 1 in 10. Fun money only: to 13 Nov, 131 of 37,692 cooked slips priced under 3% landed.", list: sorted.filter((x) => x.chance < 0.1) },
+            ].filter((g) => g.list.length);
+            return (<>
+              <nav className="slipjump" aria-label="Jump to a slip">
+                {sorted.map((s) => (
+                  <a key={s.id} href={`#slip-${s.style}`}><span>{s.name}</span><b className="num">{chance(s.chance)}</b></a>
+                ))}
+              </nav>
+              {groups.map((g) => (
+                <section key={g.title} className="slategroup" aria-label={g.title}>
+                  <h2>{g.title} <small>{g.hint}</small></h2>
+                  <ul className="slates">{g.list.map((s) => <SlateCard key={s.id} s={s} />)}</ul>
+                </section>
+              ))}
+            </>);
+          })()}
         </>
       ) : (
         <p className="note">Nothing published right now is good enough to cook a slip. Check back when the next round is published.</p>

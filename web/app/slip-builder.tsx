@@ -20,7 +20,7 @@ import { chance, CONFIDENCE_WHY, oneIn, slipConfidence } from "@/lib/plain";
 import type { Query } from "@/lib/query";
 import { cheaperSwap, slipStats, smartSwitch, toTarget, topN, MAX_LEGS } from "@/lib/slip";
 
-const LOW_CHANCE = 0.2;
+const LOW_CHANCE = 0.35; // below this the slip says so and offers a shorter one
 
 
 
@@ -207,9 +207,25 @@ export function SlipBuilder({ cands, q, now, initialView, initialIds, title = "Y
             </button>
           );
         })()}
-        {legs.length > 1 && s.model < LOW_CHANCE && (
-          <p className="note warn">As one accumulator this lands {pct(s.model)} of the time on Vig's estimate. Most slips like this lose; singles keep each leg's own odds.</p>
-        )}
+        {legs.length > 1 && s.model < LOW_CHANCE && (() => {
+          // The likeliest legs that together still land about half the time.
+          const ranked = [...legs].sort((a, b) => b.estimate - a.estimate);
+          let keep = 1, p = ranked[0].estimate;
+          while (keep < ranked.length && p * ranked[keep].estimate >= 0.5) p *= ranked[keep++].estimate;
+          const kept = ranked.slice(0, keep);
+          const odds = kept.reduce((a, x) => a * x.odds, 1);
+          return (
+            <div className="note warn shorten">
+              <p>All {legs.length} legs land {oneIn(s.model)} ({pct(s.model)}). Each leg is likely; it is the number of them that sinks a slip.</p>
+              {kept.length < legs.length && (
+                <button type="button" onClick={() => edit(ids.filter((i) => kept.some((k) => k.id === i)),
+                  `Kept the ${kept.length} likeliest leg${kept.length > 1 ? "s" : ""}: lands ${chance(p)} of the time at ${odds.toFixed(2)} odds.`)}>
+                  Keep the {kept.length} likeliest: lands {oneIn(p)}, pays {odds.toFixed(2)}
+                </button>
+              )}
+            </div>
+          );
+        })()}
         <div ref={bookRef}>
           {result?.ok ? (
             <div className="booked flash" aria-live="polite">
