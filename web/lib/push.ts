@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { summary, trackWithPrematch, type Tracked } from "./codes";
-import { liveLegs, slipChance, type LiveLeg } from "./live";
+import { liveLegs, pooled, slipChance, type LiveLeg } from "./live";
 import { eventMarkets, liveBoard } from "./sportybet";
 import type { Profile } from "./profile";
 import { addTo, claim, del, getJson, members, removeFrom, setJson, setJsonIfAbsent, storeReady } from "./store";
@@ -342,10 +342,9 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
   out.catchUp = prev !== null && now - prev > 4 * MIN;
   await setJson("lastTick", now).catch(fail);
   const subs = new Map<string, Sub>();
-  for (const id of await members("subs").catch((e) => (fail(e), [] as string[]))) {
-    const s = await loadSub(id).catch((e) => (fail(e), null));
-    if (s) subs.set(id, s);
-  }
+  const subIds = await members("subs").catch((e) => (fail(e), [] as string[]));
+  for (const s of await pooled(subIds, (id) => loadSub(id).catch((e) => (fail(e), null))))
+    if (s) subs.set(s.id, s);
   // Every open code on a subscribed account is watched, however it was booked.
   // Accounts are re-read at most every two minutes: the tick runs every 20
   // seconds while something plays, and each re-read costs store commands.
@@ -385,25 +384,27 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
       ? { title: `🎉 ${w.code} landed!`, body: summary(t), url: "/codes", tag: `code-${w.code}`, cheer: true, kind: "landed", code: w.code }
       : { title: `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}`, kind: "lost", code: w.code });
 
-  for (const code of await members("watches").catch((e) => (fail(e), [] as string[]))) {
+  // Codes are followed side by side (six at a time), so one slow read of
+  // SportyBet doesn't hold up the news on every other code.
+  const followCode = async (code: string) => {
     out.watches++;
     try {
       const w = await getJson<Watch>(`watch:${code}`);
       if (!w || now > w.lastKickoff + 6 * 60 * MIN) {
         await drop(code);
-        continue;
+        return;
       }
       if (!w.legs) {
         const t = await trackWithPrematch(code, now);
         // Vig follows vFootball only: a code with other sports is never announced.
-        if (t.foreign) { await claim(`done:${code}`, DONE_SECONDS); await drop(code); continue; }
-        if (t.state !== "open") { await final(w, t); continue; }
+        if (t.foreign) { await claim(`done:${code}`, DONE_SECONDS); await drop(code); return; }
+        if (t.state !== "open") { await final(w, t); return; }
         w.legs = t.legs.map((l) => ({ eventId: l.eventId, market: l.market, kickoff: l.kickoff, home: l.home, away: l.away, label: l.label }));
         w.settled = Object.fromEntries(t.legs.filter((l) => l.status === "won" || l.status === "lost").map((l) => [legKey(l), l.status === "won"]));
         w.lastKickoff = t.lastKickoff;
       }
       const open = w.legs.filter((l) => !(legKey(l) in (w.settled ?? {})));
-      if (!open.some((l) => l.kickoff <= now + MIN)) { await setJson(`watch:${code}`, w); continue; }
+      if (!open.some((l) => l.kickoff <= now + MIN)) { await setJson(`watch:${code}`, w); return; }
       out.live++;
       out.next = 20;
       const live = await liveLegs(open, now);
@@ -412,7 +413,7 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
       const beaten = open.some((l) => live[legKey(l)]?.state === "playing" && live[legKey(l)]?.chance === 0);
       if (beaten || open.some((l) => live[legKey(l)]?.state === "ended")) {
         const t = await trackWithPrematch(code, now);
-        if (t.state !== "open") { await final(w, t); continue; }
+        if (t.state !== "open") { await final(w, t); return; }
         w.settled = { ...w.settled, ...Object.fromEntries(t.legs.filter((l) => l.status === "won" || l.status === "lost").map((l) => [legKey(l), l.status === "won"])) };
       }
       const news = liveNews(w, live);
@@ -420,7 +421,7 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
         const l = open.find((x) => live[legKey(x)]?.chance === 0)!;
         const x = live[legKey(l)];
         await settle(w, { title: `✗ ${code} lost`, body: `${l.home} v ${l.away}: ${l.label.toLowerCase()} is beaten at ${x.score}${x.minute !== null ? ` (${x.minute}')` : ""}.`, url: "/codes", tag: `code-${code}`, kind: "lost", code });
-        continue;
+        return;
       }
       if (news.payload) {
         out.swings++;
@@ -434,7 +435,8 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
     } catch (e) {
       fail(e);
     }
-  }
+  };
+  await pooled(await members("watches").catch((e) => (fail(e), [] as string[])), followCode, 6);
   // Followed matches.
   for (const id of await members("fixtures").catch((e) => (fail(e), [] as string[]))) {
     try {

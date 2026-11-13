@@ -1,0 +1,93 @@
+name: Background tick
+
+# Follows every open code and sends notifications (web/tools/tick.mts), all day.
+# GitHub starts scheduled runs late, sometimes by hours, so this does not rely on
+# the schedule: each run starts its successor itself four minutes before it ends
+# (a dispatch starts within seconds), and the two overlap, so there is no window
+# with nothing ticking. Successive runs alternate between two concurrency slots
+# (a, b) so the successor can start while its predecessor is still running; the
+# store's tick:running lock keeps their passes from colliding.
+# The schedule is only a safety net: a scheduled (or hand-started) run leaves at
+# once if a tick happened in the last 90 seconds, and otherwise restarts the chain.
+on:
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "Concurrency slot, a or b (set by the chain)"
+        default: "a"
+      chained:
+        description: "true when started by the previous run"
+        default: "false"
+  schedule:
+    - cron: "11,41 * * * *"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: tick-${{ inputs.slot || 'a' }}
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      HAS_STORE: ${{ secrets.REDIS_URL != '' || secrets.UPSTASH_REDIS_REST_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_STORE == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_STORE == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install the web app's packages
+        if: env.HAS_STORE == 'true'
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Tick
+        if: env.HAS_STORE == 'true'
+        working-directory: web
+        env:
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          GH_TOKEN: ${{ github.token }}
+          SLOT: ${{ inputs.slot || 'a' }}
+          # Only a run started by its predecessor skips the "is one alive?" check.
+          TICK_GUARD: ${{ inputs.chained == 'true' && '0' || '1' }}
+        run: |
+          MINUTES=335
+          export TICK_UNTIL=$(( $(date +%s) + MINUTES * 60 ))
+          node node_modules/tsx/dist/cli.mjs tools/tick.mts &
+          TICK=$!
+          # Four minutes before the end, start the successor in the other slot.
+          (
+            sleep $(( (MINUTES - 4) * 60 ))
+            kill -0 "$TICK" 2>/dev/null || exit 0
+            next=$([ "$SLOT" = a ] && echo b || echo a)
+            for try in 1 2 3 4 5; do
+              if gh workflow run tick.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f slot="$next" -f chained=true; then
+                echo "started the next run in slot $next"
+                exit 0
+              fi
+              echo "could not start the next run (try $try)"
+              sleep 20
+            done
+          ) &
+          HANDOFF=$!
+          code=0
+          wait "$TICK" || code=$?
+          if [ "$code" = 78 ]; then
+            kill "$HANDOFF" 2>/dev/null || true
+            echo "A tick is already running elsewhere; nothing to do."
+            exit 0
+          fi
+          wait "$HANDOFF" 2>/dev/null || true
+          exit "$code"

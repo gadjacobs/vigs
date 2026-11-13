@@ -52,7 +52,9 @@ publish() {
 # Without them it asks the web app (PUSH_TICK_URL and PUSH_TICK_SECRET) on the
 # same schedule; each call there uses the web host's function allowance.
 TICK_UNTIL=$(( $(date +%s) + CHUNKS * MINUTES * 60 ))
-if { [ -n "${REDIS_URL:-}" ] || [ -n "${UPSTASH_REDIS_REST_TOKEN:-}" ]; } && [ -x "$(command -v node)" ] && [ -d "$VIG_REPO/web/node_modules" ]; then
+if [ "${TICK_ELSEWHERE:-}" = 1 ]; then
+  echo "push tick: runs in its own workflow (tick.yml)"
+elif { [ -n "${REDIS_URL:-}" ] || [ -n "${UPSTASH_REDIS_REST_TOKEN:-}" ]; } && [ -x "$(command -v node)" ] && [ -d "$VIG_REPO/web/node_modules" ]; then
   echo "push tick: running here (store set)"
   ( cd "$VIG_REPO/web" && TICK_UNTIL=$TICK_UNTIL exec node node_modules/tsx/dist/cli.mjs tools/tick.mts ) &
   TICKER=$!

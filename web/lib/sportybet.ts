@@ -156,18 +156,28 @@ export function parseLive(e: ApiEvent): LiveEvent {
 }
 
 let boardCache: { at: number; data: Map<string, LiveEvent> } | null = null;
+let boardLoading: Promise<Map<string, LiveEvent>> | null = null;
 
 /** Every match in play (1X2 and totals only). SportyBet reprices about every
  * 13 seconds, so 8 seconds of caching loses nothing. */
 export async function liveBoard(): Promise<Map<string, LiveEvent>> {
   if (boardCache && Date.now() - boardCache.at < 8_000) return boardCache.data;
-  const data = await call<{ events?: ApiEvent[] }[]>(`${BASE}/liveOrPrematchEvents?sportId=${SPORT}`);
-  const map = new Map((data ?? []).flatMap((t) => t.events ?? []).map((e) => [e.eventId, parseLive(e)]));
-  boardCache = { at: Date.now(), data: map };
-  return map;
+  // Codes are followed side by side: they share one read in flight.
+  boardLoading ??= (async () => {
+    try {
+      const data = await call<{ events?: ApiEvent[] }[]>(`${BASE}/liveOrPrematchEvents?sportId=${SPORT}`);
+      const map = new Map((data ?? []).flatMap((t) => t.events ?? []).map((e) => [e.eventId, parseLive(e)]));
+      boardCache = { at: Date.now(), data: map };
+      return map;
+    } finally {
+      boardLoading = null;
+    }
+  })();
+  return boardLoading;
 }
 
 const eventCache = new Map<string, { at: number; data: LiveEvent | null }>();
+const eventLoading = new Map<string, Promise<LiveEvent | null>>();
 
 /** One match with every market (first half, both teams score, double chance).
  * live: in play (productId 1); otherwise before kickoff (productId 3). */
@@ -175,12 +185,22 @@ export async function eventMarkets(eventId: string, live: boolean): Promise<Live
   const key = `${eventId}|${live}`;
   const hit = eventCache.get(key);
   if (hit && Date.now() - hit.at < (live ? 8_000 : 30_000)) return hit.data;
-  const q = new URLSearchParams({ eventId, productId: live ? "1" : "3" });
-  const e = await call<ApiEvent | null>(`${BASE}/event?${q}`).catch(() => null);
-  const data = e?.eventId ? parseLive(e) : null;
-  if (eventCache.size > 300) eventCache.clear();
-  eventCache.set(key, { at: Date.now(), data });
-  return data;
+  const going = eventLoading.get(key);
+  if (going) return going;
+  const load = (async () => {
+    try {
+      const q = new URLSearchParams({ eventId, productId: live ? "1" : "3" });
+      const e = await call<ApiEvent | null>(`${BASE}/event?${q}`).catch(() => null);
+      const data = e?.eventId ? parseLive(e) : null;
+      if (eventCache.size > 300) eventCache.clear();
+      eventCache.set(key, { at: Date.now(), data });
+      return data;
+    } finally {
+      eventLoading.delete(key);
+    }
+  })();
+  eventLoading.set(key, load);
+  return load;
 }
 
 export type Result = { eventId: string; league: string; home: string; away: string; kickoff: number; hg: number; ag: number };

@@ -27,21 +27,24 @@ export async function runTickOnce(now = Date.now()) {
       return fallback;
     }
   };
-  const tidy = await step("tidy", tidyStore, null);
-  // Cook (and book) the slips as soon as a round is published, so codes are ready.
-  // At most once a minute: each check reads SportyBet's upcoming list.
-  const cooked = await step("cook", async () =>
-    (await claim("scan:cook", 55).catch(() => true)) ? (await currentSlates()).slates.length : null, -1);
-  // The last prematch prices of the next rounds, for codes first opened after kickoff.
-  const rounds = await step("prices", async () =>
-    (await claim("scan:prematch", 50).catch(() => true)) ? await snapshotRounds(now) : null, null);
-  // Hot rounds: judge rounds that have just finished; alert with an overs slip
-  // for the next round of any league that ran hot (lib/hotround.ts).
-  const hot = await step("hot", () => runHot(now), null);
-  const out = await step("tick", () => tick(buildTip, now, buildOurs), null);
+  // Following codes is the urgent part (goals, results), so it never waits for
+  // the housekeeping: every step runs side by side.
+  const [tidy, cooked, rounds, hot, out, alerts] = await Promise.all([
+    step("tidy", tidyStore, null),
+    // Cook (and book) the slips as soon as a round is published, so codes are ready.
+    // At most once a minute: each check reads SportyBet's upcoming list.
+    step("cook", async () =>
+      (await claim("scan:cook", 55).catch(() => true)) ? (await currentSlates()).slates.length : null, -1),
+    // The last prematch prices of the next rounds, for codes first opened after kickoff.
+    step("prices", async () =>
+      (await claim("scan:prematch", 50).catch(() => true)) ? await snapshotRounds(now) : null, null),
+    // Hot rounds: judge rounds that have just finished (lib/hotround.ts).
+    step("hot", () => runHot(now), null),
+    step("tick", () => tick(buildTip, now, buildOurs), null),
+    // Slip alerts on saved filters and templates (each account at most every 10 minutes).
+    step("alerts", () => runWatches(now), null),
+  ]);
   if (out?.error) errors.push(`tick: ${out.errors} failed, first: ${out.error}`);
-  // Slip alerts on saved filters and templates (each account at most every 10 minutes).
-  const alerts = await step("alerts", () => runWatches(now), null);
   if (alerts?.error) errors.push(`alerts: ${alerts.errors} failed, first: ${alerts.error}`);
   const error = errors.length ? errors.join("; ").slice(0, 600) : undefined;
   if (error) {

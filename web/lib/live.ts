@@ -65,7 +65,7 @@ const BOARD_MARKETS = /^([1X2]|O\d\d|U\d\d)$/; // what the live list carries; th
 const MAX_FEEDS = 150; // matches read one by one per call (several 50-leg codes)
 
 /** Run `f` over items, a few at a time. */
-async function pooled<T, R>(items: T[], f: (x: T) => Promise<R>, width = 8): Promise<R[]> {
+export async function pooled<T, R>(items: T[], f: (x: T) => Promise<R>, width = 8): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(width, items.length) }, async () => {

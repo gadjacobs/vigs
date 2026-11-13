@@ -94,9 +94,12 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   when a league's round scores ≥ 0.2 goals a match over its saved prices (`pre:`/`prefx:`, results from `eventResultList`),
   overs in its next round looked +1.2%, but it did not hold with errors clustered by round (docs/research-2026-10-31.md),
   so `HOT_ON` (`lib/hotflag.ts`) is false: no boost, no alert; the tick still books and logs its overs slip with no stake. The multi-bet bonus is confirmed on vFootball: the keep meter leads with it. Hedge only does arithmetic and books a code; never bets.
-  The tick (`lib/ticker.ts` `runTickOnce`) runs inside the collector in GitHub Actions (`web/tools/tick.mts`, needs the store's
-  secrets) to keep it off the host's function allowance; `/api/push/tick` is the fallback on the same schedule.
-  It watches every open code on subscribed accounts and returns `next` (20 s live, 120 s idle).
+  The tick (`lib/ticker.ts` `runTickOnce`, steps and codes side by side) runs in its own workflow (`.github/workflows/tick.yml`,
+  `web/tools/tick.mts`, needs the store's secrets): each run dispatches its successor 4 min before it ends into the other
+  concurrency slot (a/b) so they overlap and nothing is ever between runs (GitHub's schedule starts hours late; it is only the
+  safety net, and a non-chained run exits if a tick happened in the last 90 s). The collector chains itself the same way.
+  `/api/push/tick` is the fallback. It watches every open code on subscribed accounts; a pass starts every 12 s while a leg
+  plays (counted from the last start), else as `next` says (120 s idle).
   One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no
   result is sent > 45 min after a code's last kickoff. Collector cron is every 30 min (runs chain).
 - Markets include double chance (DC1X/DC12/DCX2: market chance = sum of the two de-vigged 1X2

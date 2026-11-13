@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: collect
@@ -30,6 +31,7 @@ jobs:
     env:
       HAS_STORE: ${{ secrets.REDIS_URL != '' || secrets.UPSTASH_REDIS_REST_TOKEN != '' }}
     steps:
+      - run: echo "RUN_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           path: code
@@ -80,4 +82,22 @@ jobs:
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          # The background tick has its own workflow (tick.yml), which never has
+          # a gap between runs; the collector no longer runs one.
+          TICK_ELSEWHERE: "1"
         run: code/tools/collect.sh store "${{ inputs.chunks || '6' }}"
+
+      # GitHub starts scheduled runs late (gaps of two to three hours most days),
+      # so a run that finished normally starts the next one itself: a dispatch
+      # starts within seconds. The schedule stays as the safety net.
+      - name: Start the next run
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Only after a full-length run, so a run that ends early can never loop.
+          if [ $(( $(date +%s) - RUN_START )) -ge 1800 ]; then
+            gh workflow run collect.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" || true
+          else
+            echo "Run ended early; leaving the next start to the schedule."
+          fi
