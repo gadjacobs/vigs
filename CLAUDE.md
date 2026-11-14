@@ -46,6 +46,11 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
 - `web/` is Next.js 16, hosted on Netlify (`netlify.toml`, base `web`, `@netlify/plugin-nextjs`; the data branch is skipped;
   Vercel's team was deleted 4 Nov 2026). Store: Upstash Redis via its REST pair (`UPSTASH_REDIS_REST_URL`/`_TOKEN`) or `REDIS_URL`, in Netlify and as GitHub secrets. (Read `web/node_modules/next/dist/docs` before changing
   framework code: `proxy.ts` replaces middleware; `searchParams` and `cookies()` are async).
+- Speed: pages start every load at once (`Promise.all`; Our picks loads only its open tab's data); the tick's chores rewrite the shared
+  `upcoming` list every ~40 s (`refreshUpcoming`) so a cold serverless instance reads one store key, not SportyBet (a copy up to 150 s is
+  served; kicked-off matches are filtered on read); the client keeps a screen for 30 s (`experimental.staleTimes`), so switching back to a
+  tab is instant; Codes reads through plain routes (`/api/codes/track`, `/api/codes/live`, `app/codes-api.ts`) because server actions queue
+  one behind another.
 - `web/lib` ports the model maths from `vigs/model.py`; `web/tests` pins it to
   Python output. Change both together.
 - Blend (`vigs/blend.py`, `web/lib/blend.ts`): market price + model, per market,

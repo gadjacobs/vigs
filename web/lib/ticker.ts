@@ -2,6 +2,7 @@ import { pushReady, tick, type TickError } from "./push";
 import { currentSlates } from "./kitchen";
 import { snapshotRounds } from "./prematch";
 import { claim, setJson } from "./store";
+import { refreshUpcoming } from "./sportybet";
 import { tidyStore } from "./tidy";
 import { buildOurs, buildTip } from "./tips";
 import { runWatches } from "./watches";
@@ -49,6 +50,10 @@ export async function runChores(now = Date.now()) {
   if (!pushReady()) return { error: "push not configured", next: 300 };
   const errors: string[] = [];
   const step = guard(errors);
+  // The upcoming list first, shared for every page (and the steps below), so no
+  // page load has to read SportyBet's list itself.
+  await step("upcoming", async () =>
+    (await claim("scan:upcoming", 40).catch(() => true)) ? await refreshUpcoming() : null, null);
   const [tidy, cooked, rounds, hot, alerts] = await Promise.all([
     step("tidy", tidyStore, null),
     // Cook (and book) the slips as soon as a round is published, so codes are ready.

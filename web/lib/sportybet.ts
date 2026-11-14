@@ -82,23 +82,27 @@ export function parseOdds(e: Partial<ApiEvent>, field: "odds" | "probability" = 
 let upcomingCache: { at: number; data: Fixture[] } | null = null;
 let inflight: Promise<Fixture[]> | null = null;
 const LOCAL_SECONDS = 30;
-const SHARED_SECONDS = 90;
+// The background tick rewrites the shared copy every 40 s or so (refreshUpcoming),
+// so a page almost never pages through SportyBet's list itself; a copy up to
+// 150 s old is still served (prices don't move before kickoff, and matches that
+// have kicked off are filtered out on every read).
+const SHARED_SECONDS = 150;
 
 /**
  * Published fixtures with odds. Odds don't move before kickoff, so 30 s of
- * caching is safe. Kept in this server instance for 30 s and in the store for 90 s, so
- * a fresh instance (most first loads on Vercel) reads one key instead of paging
- * through SportyBet's list; the collector's tick refreshes it every few minutes.
+ * caching is safe. Kept in this server instance for 30 s and in the store for 150 s, so
+ * a fresh instance (most first loads on a serverless host) reads one key instead of paging
+ * through SportyBet's list; the tick rewrites it about every 40 s.
  */
 export async function upcoming(): Promise<Fixture[]> {
   if (upcomingCache && Date.now() - upcomingCache.at < LOCAL_SECONDS * 1000) return upcomingCache.data;
   inflight ??= (async () => {
     const { getJson, setJson, storeReady } = await import("./store");
     const shared = storeReady() ? await getJson<{ at: number; data: Fixture[] }>("upcoming").catch(() => null) : null;
-    // A shared copy up to 90 s old: a round published since then shows on the next load.
+    // A shared copy: a round published since it was written shows within a minute.
     if (shared && Date.now() - shared.at < SHARED_SECONDS * 1000) {
-      // Held here until the shared copy itself is 90 s old.
-      upcomingCache = { at: shared.at + (SHARED_SECONDS - LOCAL_SECONDS) * 1000, data: shared.data };
+      // Held here for 30 s at most.
+      upcomingCache = { at: Math.min(Date.now(), shared.at + (SHARED_SECONDS - LOCAL_SECONDS) * 1000), data: shared.data };
       return shared.data.filter((f) => f.kickoff > Date.now());
     }
     const data = await fetchUpcoming();
@@ -109,29 +113,32 @@ export async function upcoming(): Promise<Fixture[]> {
   return inflight;
 }
 
+/** Read SportyBet's list now and share it, whatever the copy's age. Run by the tick. */
+export async function refreshUpcoming(): Promise<number> {
+  const { setJson, storeReady } = await import("./store");
+  const data = await fetchUpcoming();
+  upcomingCache = { at: Date.now(), data };
+  if (storeReady()) await setJson("upcoming", upcomingCache, SHARED_SECONDS + 30);
+  return data.length;
+}
+
 async function fetchUpcoming(): Promise<Fixture[]> {
-  const out: Fixture[] = [];
-  for (let page = 1; page < 10; page++) {
-    const q = new URLSearchParams({
-      sportId: SPORT, marketId: "1,18,68,29,10,19,20", pageSize: "100", pageNum: String(page), option: "1",
-    });
-    const data = await call<{ totalNum?: number; tournaments?: { events: ApiEvent[] }[] }>(
-      `${BASE}/pcUpcomingEvents?${q}`,
-    );
-    const events = (data.tournaments ?? []).flatMap((t) => t.events);
-    for (const e of events) {
-      out.push({
-        eventId: e.eventId,
-        league: e.sport.category.name,
-        home: e.homeTeamName,
-        away: e.awayTeamName,
-        kickoff: Number(e.estimateStartTime),
-        odds: parseOdds(e),
-      });
-    }
-    if (!events.length || page * 100 >= Number(data.totalNum ?? 0)) break;
-  }
-  return out;
+  type Page = { totalNum?: number; tournaments?: { events: ApiEvent[] }[] };
+  const page = (n: number) => call<Page>(`${BASE}/pcUpcomingEvents?${new URLSearchParams({
+    sportId: SPORT, marketId: "1,18,68,29,10,19,20", pageSize: "100", pageNum: String(n), option: "1",
+  })}`);
+  // The first page says how many there are; the rest are read side by side.
+  const first = await page(1);
+  const pages = Math.min(9, Math.ceil(Number(first.totalNum ?? 0) / 100));
+  const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) => page(i + 2)));
+  return [first, ...rest].flatMap((data) => (data.tournaments ?? []).flatMap((t) => t.events)).map((e) => ({
+    eventId: e.eventId,
+    league: e.sport.category.name,
+    home: e.homeTeamName,
+    away: e.awayTeamName,
+    kickoff: Number(e.estimateStartTime),
+    odds: parseOdds(e),
+  }));
 }
 
 /** A match in play, as the live feed shows it. */

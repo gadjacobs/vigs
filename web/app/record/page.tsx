@@ -497,15 +497,9 @@ export default async function RecordPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const tab: Tab = TABS.find(([t]) => t === sp.tab)?.[0] ?? "summary";
   const n = Math.min(500, Math.max(30, Number(sp.n) || 30));
-  let rec: RecordFile | null = null;
-  try {
-    rec = await loadRecord();
-  } catch {
-    rec = null;
-  }
-  const blend = await loadBlend();
-  const ins = await loadInsights();
-  const { user, profile } = await myProfile();
+  const [rec, blend, ins, { user, profile }] = await Promise.all([
+    loadRecord().catch(() => null) as Promise<RecordFile | null>, loadBlend(), loadInsights(), myProfile(),
+  ]);
   const stake = profile?.prefs?.stake ?? DEFAULT_STAKE;
   return (
     <main>

@@ -68,12 +68,6 @@ function lighter(pool: Pick[], slip: Pick[]): Pick[] {
 
 export default async function OurPicks({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  let cooked: Cooked | null = null;
-  try {
-    cooked = await currentSlates();
-  } catch {
-    cooked = null;
-  }
   const set: SetId = SETS.find((x) => x.id === sp.set)?.id ?? "top";
   const top = set === "top" || set === "trusted";
   const flexSet = set === "flex";
@@ -91,22 +85,26 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
   const link = (o: Partial<Record<keyof SP, string | number>>) =>
     `/picks?${new URLSearchParams(Object.entries({ tab: "build", set, bar: Math.round(bar * 100), ...(goalSet ? { goal: target } : { odds: target }), n, floor, miss, ...o }).map(([k, v]) => [k, String(v)]))}`;
 
-  const { profile } = await myProfile();
-  const view = viewOf(profile, (await cookies()).get("vig_view")?.value);
+  // Each tab loads only what it shows, all at once: the cooked slips need no
+  // model, and the builder needs the slips only for the tab's count.
+  const building = tab === "build";
   const now = Date.now();
-  let model: ModelFile | null = null;
-  let fixtures: Fixture[] = [];
-  let error = "";
-  try {
-    model = await loadModel();
-    fixtures = await upcoming();
-  } catch {
-    error = "SportyBet or the model file did not answer. Try again in a minute.";
-  }
-  const blend = await loadBlend();
+  const [cooked, { profile }, jar, data] = await Promise.all([
+    currentSlates().catch(() => null) as Promise<Cooked | null>,
+    myProfile(),
+    cookies(),
+    building
+      ? Promise.all([loadModel(), upcoming(), loadBlend(), loadInsights(), currentHot(now).catch(() => [])])
+          .then(([model, fixtures, blend, insights, hot]) => ({ model, fixtures, blend, insights, hot }), () => null)
+      : Promise.resolve(undefined),
+  ]);
+  const view = viewOf(profile, jar.get("vig_view")?.value);
+  const model: ModelFile | null = data?.model ?? null;
+  const fixtures: Fixture[] = data?.fixtures ?? [];
+  const error = data === null ? "SportyBet or the model file did not answer. Try again in a minute." : "";
   const q: Query = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 24, mode: "count", count: MAX_ON_SLIP, sort: "likely" };
-  const insights = await loadInsights();
-  const cands = model ? applyHot(applyFh(candidates(model, fixtures, { ...q, now }, blend).candidates, fixtures, insights?.fh_usual, false), await currentHot(now).catch(() => [])) : [];
+  const insights = data?.insights ?? null;
+  const cands = data ? applyHot(applyFh(candidates(data.model, fixtures, { ...q, now }, data.blend).candidates, fixtures, insights?.fh_usual, false), data.hot) : [];
   const lean = insights?.lean;
   const built = buildSet(set, cands, { bar, target, n, maxSlip: MAX_ON_SLIP, floor, lean, misses: miss });
   const fq = flexSet && built.slip.length > miss + 1 ? flexQuote(built.slip.map((p) => p.marketChance), built.slip.length - miss) : null;

@@ -21,9 +21,16 @@ export const dynamic = "force-dynamic";
 type Params = Record<string, string | string[] | undefined>;
 
 export default async function Tonight({ searchParams }: { searchParams: Promise<Params> }) {
+  // Everything the page needs starts at once; nothing waits its turn.
+  const loading = {
+    model: loadModel().catch(() => null),
+    fixtures: upcoming().then((f) => ({ ok: true as const, f }), () => ({ ok: false as const, f: [] as Fixture[] })),
+    blend: loadBlend(),
+    insights: loadInsights(),
+    hot: currentHot().catch(() => []),
+  };
   let sp = await searchParams;
-  const jar = await cookies();
-  const { user, profile } = await myProfile();
+  const [jar, { user, profile }] = await Promise.all([cookies(), myProfile()]);
   if (needsTour(user, profile, jar.get("vig_onb")?.value)) redirect("/onboarding");
   const view = viewOf(profile, jar.get("vig_view")?.value);
   // No filters in the URL: reuse the account's last ones, else this device's.
@@ -36,20 +43,14 @@ export default async function Tonight({ searchParams }: { searchParams: Promise<
   let model: ModelFile | null = null;
   let fixtures: Fixture[] = [];
   let error = "";
-  try {
-    model = await loadModel();
-  } catch {
-    error = "The model file is not published yet. The collector writes it every hour; try again shortly.";
-  }
-  try {
-    fixtures = await upcoming();
-  } catch {
-    error = error || "SportyBet did not answer. Try again in a minute.";
-  }
-  const [blend, insights] = await Promise.all([loadBlend(), loadInsights()]);
+  const [m, fx, blend, insights, hot] = await Promise.all([loading.model, loading.fixtures, loading.blend, loading.insights, loading.hot]);
+  model = m;
+  fixtures = fx.f;
+  if (!m) error = "The model file is not published yet. The collector writes it every hour; try again shortly.";
+  else if (!fx.ok) error = "SportyBet did not answer. Try again in a minute.";
   const r = model ? candidates(model, fixtures, { ...q, now }, blend) : null;
   if (r) r.candidates = applyFh(r.candidates, fixtures, insights?.fh_usual, q.fhLikelier);
-  if (r) r.candidates = applyHot(r.candidates, await currentHot(now).catch(() => []));
+  if (r) r.candidates = applyHot(r.candidates, hot.filter((h) => h.next > now));
   const blended = q.markets.filter((m) => blend?.markets[m]?.active).map((m) => MARKET_LABELS[m]);
 
   return (

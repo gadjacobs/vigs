@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Tracked } from "@/lib/codes";
 import type { LiveLeg } from "@/lib/live";
-import { liveCodes } from "./live-actions";
+import { liveCodes } from "./codes-api";
 import { isFinal, readHidden, readOpen } from "./code-store";
 import { codeChance, effective, legKey } from "./code-live";
 
