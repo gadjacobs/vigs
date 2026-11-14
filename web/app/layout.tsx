@@ -10,6 +10,7 @@ import { BUILD } from "@/lib/build";
 import { BetaLink } from "./beta-link";
 import { Resume } from "./resume";
 import { LiveStrip } from "./live-strip";
+import { PullRefresh } from "./pull-refresh";
 import "./globals.css";
 
 const text = Atkinson_Hyperlegible_Next({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-text" });
@@ -34,6 +35,9 @@ const savedTheme = async () => {
 export async function generateViewport(): Promise<Viewport> {
   const theme = await savedTheme();
   return {
+    // The Home Screen app draws under the status bar (black-translucent) and the
+    // home indicator; "cover" makes iOS report those areas so the CSS keeps clear of them.
+    viewportFit: "cover",
     colorScheme: theme === "light" ? "only light" : theme === "dark" ? "dark" : "light dark",
     themeColor: theme
       ? theme === "light" ? "#fbfbf6" : "#133629"
@@ -60,6 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {children}
         <UpdateToast build={BUILD} />
         <Resume />
+        <PullRefresh />
       </body>
     </html>
   );

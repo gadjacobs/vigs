@@ -508,7 +508,7 @@ export function CodesPanel({ stake = 1000, view = "simple" }: { stake?: number; 
     const money = e ? (won ? (e.back !== null ? `Paid ${naira(e.back)}: ${signed(e.back - e.stake)}` : null) : `Stake ${naira(e.stake)} lost`) : null;
     const today = readMoney();
     const net = tally(today, lagosDay(now)).net + (e && !won && e.back === null ? -e.stake : 0);
-    const day = today.some((x) => x.stake > 0 && x.at >= lagosDay(now)) ? `Today ${signed(net)}` : null;
+    const day = e && today.some((x) => x.stake > 0 && x.at >= lagosDay(now)) ? `Today ${signed(net)}` : null;
     setSettled({ code: t.code, won, head: won ? `${t.code} landed` : `${t.code} lost`, why, money, day });
   }, [status, live]);
   useEffect(() => {

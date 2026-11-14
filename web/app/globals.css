@@ -1648,3 +1648,39 @@ ol.legs li.legsep.state-waiting, ol.legs li.legsep.state-done { color: var(--ink
 .slategroup > h2 small { font-family: var(--font-text), sans-serif; font-weight: 400; font-size: 13px; line-height: 18px; color: var(--ink-muted); }
 .note.shorten p { margin: 0 0 8px; }
 .note.shorten button { width: 100%; min-height: 44px; background: var(--ink); color: var(--paper); border: 0; }
+
+/* ── iOS: safe areas, no input zoom, Safari's own disclosure arrows ───────── */
+/* The header grows by the status bar's height, which is painted dark green in
+   both themes: iOS draws the clock and battery in white over it. */
+:root { --notch: #0f3d2e; --top: calc(56px + env(safe-area-inset-top)); }
+.topbar { height: var(--top); padding-top: env(safe-area-inset-top);
+  padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right));
+  background: linear-gradient(var(--notch) 0 env(safe-area-inset-top), var(--paper) env(safe-area-inset-top)); }
+.livestrip { top: var(--top); }
+body:has(.tabpending.on)::before { top: var(--top); }
+/* iOS zooms the page when a field under 16px is tapped. */
+@supports (-webkit-touch-callout: none) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: max(16px, 1em); }
+}
+/* Chrome hides the marker on a flex summary; Safari draws its own triangle. */
+.legsbox summary::-webkit-details-marker, details.more-filters summary::-webkit-details-marker,
+ul.codes li summary::-webkit-details-marker { display: none; }
+/* No grey flash on tap, no long-press callout on buttons and cards. */
+button, .button, nav a, .codecard, .slate { -webkit-touch-callout: none; }
+
+/* Pull to refresh (app/pull-refresh.tsx). */
+.ptr { position: fixed; left: 50%; top: calc(var(--top) + 8px); z-index: 45; width: 40px; height: 40px; margin-left: -20px;
+  display: grid; place-items: center; border-radius: 50%; background: var(--paper); color: var(--ink);
+  box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--rule); pointer-events: none;
+  transform: translateY(calc(var(--pull, 0) * 1px - 60px)); opacity: var(--o, 0); transition: transform .2s ease-out, opacity .2s; }
+.ptr.dragging { transition: none; }
+.ptr svg { transform: rotate(calc(var(--pull, 0) * 3deg)); transition: transform .2s; }
+.ptr.armed { color: var(--on-signal); background: var(--signal); }
+.ptr.busy svg { animation: ptrspin .8s linear infinite; }
+@keyframes ptrspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ptr, .ptr svg { transition: none; } .ptr.busy svg { animation-duration: 2s; } }
+/* iOS rubber-band: overscrolling past the top shows the status band's colour, past the bottom the tab bar's. */
+html { background: linear-gradient(var(--notch) 50%, var(--paper) 50%); }
+body { min-height: 100dvh; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --notch: #0a241b; } }
+:root[data-theme="dark"] { --notch: #0a241b; }

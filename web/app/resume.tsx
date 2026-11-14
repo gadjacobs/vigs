@@ -14,20 +14,37 @@ export function Resume() {
   const [pending, start] = useTransition();
   const [veil, setVeil] = useState(false);
   useEffect(() => {
-    let hiddenAt = 0;
-    const wake = (cover: boolean) => {
-      if (cover) setVeil(true);
+    // A heartbeat every 5 s. iOS freezes timers while a Home Screen app is in the
+    // background and doesn't always say when it comes back, so the gap between
+    // beats is what tells us the app was away, whichever event (or none) arrives.
+    let beat = Date.now();
+    let busyUntil = 0;
+    const check = () => {
+      const now = Date.now(), away = now - beat;
+      beat = now;
+      if (document.visibilityState !== "visible" || away < 15_000 || now < busyUntil) return;
+      busyUntil = now + 5_000; // focus, visibility and pageshow often fire together
+      if (away > VEIL_AFTER) setVeil(true);
       start(() => router.refresh());
       window.dispatchEvent(new Event("vig-resume"));
     };
-    const vis = () => {
-      if (document.visibilityState === "hidden") hiddenAt = Date.now();
-      else if (hiddenAt && Date.now() - hiddenAt > 15_000) wake(Date.now() - hiddenAt > VEIL_AFTER);
-    };
-    const show = (e: PageTransitionEvent) => { if (e.persisted) wake(true); };
-    document.addEventListener("visibilitychange", vis);
+    const t = setInterval(check, 5_000);
+    const hide = () => { if (document.visibilityState === "hidden") beat = Date.now(); };
+    // Back from the browser's page cache counts as away, however short.
+    const show = (e: PageTransitionEvent) => { if (e.persisted) { beat = 0; check(); } };
+    document.addEventListener("visibilitychange", check);
+    document.addEventListener("visibilitychange", hide);
+    addEventListener("focus", check);
+    addEventListener("online", check);
     addEventListener("pageshow", show);
-    return () => { document.removeEventListener("visibilitychange", vis); removeEventListener("pageshow", show); };
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", check);
+      document.removeEventListener("visibilitychange", hide);
+      removeEventListener("focus", check);
+      removeEventListener("online", check);
+      removeEventListener("pageshow", show);
+    };
   }, [router]);
   // The veil lifts when the refresh lands (or after 15 s, so a dead connection never traps the page).
   useEffect(() => {

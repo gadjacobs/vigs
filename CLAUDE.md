@@ -51,6 +51,10 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   served; kicked-off matches are filtered on read); the client keeps a screen for 30 s (`experimental.staleTimes`), so switching back to a
   tab is instant; Codes reads through plain routes (`/api/codes/track`, `/api/codes/live`, `app/codes-api.ts`) because server actions queue
   one behind another.
+- iOS: `viewportFit: "cover"` with the black-translucent status bar; the sticky header grows by `env(safe-area-inset-top)` over a dark
+  `--notch` band (white clock in both themes), `--top` is the header height for anything sticky below it; inputs are ≥ 16px on iOS (no zoom);
+  pull to refresh (`app/pull-refresh.tsx`, installed app on touch screens only); `app/resume.tsx` detects time away from a 5 s heartbeat
+  gap (iOS freezes timers and doesn't always fire visibilitychange) plus focus / pageshow / online.
 - `web/lib` ports the model maths from `vigs/model.py`; `web/tests` pins it to
   Python output. Change both together.
 - Blend (`vigs/blend.py`, `web/lib/blend.ts`): market price + model, per market,
