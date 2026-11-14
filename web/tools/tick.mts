@@ -6,9 +6,15 @@
 // or UPSTASH_REDIS_REST_URL and _TOKEN).
 //
 // TICK_GUARD=1 (a scheduled safety-net run): if another run ticked in the last
-// 90 seconds the chain is alive, so this one leaves with exit code 78.
-import { lastTick } from "../lib/push.ts";
-import { runChores, runFollow } from "../lib/ticker.ts";
+// 3 minutes (the lease stamps lastTick every 2) the chain is alive, so this one leaves with exit code 78.
+//
+// TICK_PROCESS=1 lets this long-lived process keep its own clocks and copies of
+// store values, so it spends a few store commands a minute instead of a hundred
+// (lib/gate.ts).
+process.env.TICK_PROCESS = "1";
+const { lastTick } = await import("../lib/push.ts");
+const { runChores, runFollow } = await import("../lib/ticker.ts");
+const { releaseLease } = await import("../lib/gate.ts");
 
 const LIVE_EVERY = 12; // seconds between pass starts while something plays
 const until = Number(process.env.TICK_UNTIL ?? 0) * 1000 || Date.now() + 55 * 60_000;
@@ -16,7 +22,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 if (process.env.TICK_GUARD === "1") {
   const at = await lastTick().catch(() => null);
-  if (at && Date.now() - at < 90_000) {
+  if (at && Date.now() - at < 180_000) {
     console.log(`tick: another run ticked ${Math.round((Date.now() - at) / 1000)}s ago; leaving it to that one`);
     process.exit(78);
   }
@@ -62,4 +68,5 @@ while (Date.now() < until) {
   const every = next <= 20 ? LIVE_EVERY : Math.min(300, next);
   await sleep(Math.min(Math.max(3000, every * 1000 - ms), Math.max(0, until - Date.now())));
 }
+await releaseLease();
 process.exit(0);

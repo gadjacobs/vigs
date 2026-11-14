@@ -8,7 +8,7 @@ name: Background tick
 # (a, b) so the successor can start while its predecessor is still running; the
 # store's tick:running lock keeps their passes from colliding.
 # The schedule is only a safety net: a scheduled (or hand-started) run leaves at
-# once if a tick happened in the last 90 seconds, and otherwise restarts the chain.
+# once if a tick happened in the last 3 minutes, and otherwise restarts the chain.
 on:
   workflow_dispatch:
     inputs:

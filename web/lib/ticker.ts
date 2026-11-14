@@ -1,7 +1,8 @@
 import { pushReady, tick, type TickError } from "./push";
 import { currentSlates } from "./kitchen";
 import { snapshotRounds } from "./prematch";
-import { claim, setJson } from "./store";
+import { setJson } from "./store";
+import { gate, holdLease, tickProcess } from "./gate";
 import { refreshUpcoming } from "./sportybet";
 import { tidyStore } from "./tidy";
 import { buildOurs, buildTip } from "./tips";
@@ -48,21 +49,21 @@ export async function runFollow(now = Date.now()) {
  * some take 20 seconds or more, so the collector runs them on their own loop. */
 export async function runChores(now = Date.now()) {
   if (!pushReady()) return { error: "push not configured", next: 300 };
+  // Two background runs overlap while one hands over: only the lease holder does chores.
+  if (tickProcess() && !(await holdLease(now).catch(() => false))) return { busy: true, next: 30 };
   const errors: string[] = [];
   const step = guard(errors);
   // The upcoming list first, shared for every page (and the steps below), so no
   // page load has to read SportyBet's list itself.
-  await step("upcoming", async () =>
-    (await claim("scan:upcoming", 40).catch(() => true)) ? await refreshUpcoming() : null, null);
+  await step("upcoming", async () => (await gate("scan:upcoming", 40, now)) ? await refreshUpcoming() : null, null);
   const [tidy, cooked, rounds, hot, alerts] = await Promise.all([
-    step("tidy", tidyStore, null),
+    // Every 10 minutes is plenty (each sweep costs a few store commands).
+    step("tidy", async () => (await gate("scan:tidy", 600, now)) ? await tidyStore() : null, null),
     // Cook (and book) the slips as soon as a round is published, so codes are ready.
     // At most once a minute: each check reads SportyBet's upcoming list.
-    step("cook", async () =>
-      (await claim("scan:cook", 55).catch(() => true)) ? (await currentSlates()).slates.length : null, -1),
+    step("cook", async () => (await gate("scan:cook", 55, now)) ? (await currentSlates()).slates.length : null, -1),
     // The last prematch prices of the next rounds, for codes first opened after kickoff.
-    step("prices", async () =>
-      (await claim("scan:prematch", 50).catch(() => true)) ? await snapshotRounds(now) : null, null),
+    step("prices", async () => (await gate("scan:prematch", 50, now)) ? await snapshotRounds(now) : null, null),
     // Hot rounds: judge rounds that have just finished (lib/hotround.ts).
     step("hot", () => runHot(now), null),
     // Slip alerts on saved filters and templates (each account at most every 10 minutes).

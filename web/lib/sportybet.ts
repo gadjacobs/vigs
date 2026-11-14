@@ -114,11 +114,18 @@ export async function upcoming(): Promise<Fixture[]> {
 }
 
 /** Read SportyBet's list now and share it, whatever the copy's age. Run by the tick. */
+let sharedJson = "", sharedAt = 0; // what refreshUpcoming last wrote, and when
 export async function refreshUpcoming(): Promise<number> {
   const { setJson, storeReady } = await import("./store");
   const data = await fetchUpcoming();
   upcomingCache = { at: Date.now(), data };
-  if (storeReady()) await setJson("upcoming", upcomingCache, SHARED_SECONDS + 30);
+  // Rewritten when the list changed, else once it is 90 s old (readers take it up to 150 s).
+  const json = JSON.stringify(data);
+  if (storeReady() && (json !== sharedJson || Date.now() - sharedAt > 90_000)) {
+    await setJson("upcoming", upcomingCache, SHARED_SECONDS + 30);
+    sharedJson = json;
+    sharedAt = Date.now();
+  }
   return data.length;
 }
 

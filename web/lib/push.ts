@@ -4,6 +4,7 @@ import { liveLegs, pooled, slipChance, type LiveLeg } from "./live";
 import { eventMarkets, liveBoard } from "./sportybet";
 import type { Profile } from "./profile";
 import { addTo, claim, del, getJson, members, removeFrom, setJson, setJsonIfAbsent, storeReady } from "./store";
+import { cachedJson, cachedMembers, dropMember, forget, gate, holdLease, setIfChanged, tickProcess } from "./gate";
 
 // Push notifications: booked codes that win or lose, and tips at chosen times.
 // The collector (GitHub Actions) calls /api/push/tick every few minutes.
@@ -98,14 +99,15 @@ const DONE_SECONDS = 3 * 86_400;
 const isDone = async (code: string) => (await getJson<number>(`done:${code}`)) !== null;
 
 export async function watchCode(code: string, subIdValue: string, lastKickoff: number) {
-  if (await isDone(code)) return;
-  const old = await getJson<Watch>(`watch:${code}`);
+  const old = await cachedJson<Watch>(`watch:${code}`, 300);
   if (old && old.subs.includes(subIdValue) && old.lastKickoff >= lastKickoff) return;
+  if (await isDone(code)) return;
   const w = old ?? { code, subs: [], lastKickoff, created: Date.now() };
   if (!w.subs.includes(subIdValue)) w.subs.push(subIdValue);
   w.lastKickoff = Math.max(w.lastKickoff, lastKickoff);
-  await setJson(`watch:${code}`, w);
+  await setIfChanged(`watch:${code}`, w);
   await addTo("watches", code);
+  forget("watches");
 }
 
 const legKey = (l: { eventId: string; market: string }) => `${l.eventId}|${l.market}`;
@@ -316,7 +318,14 @@ export type OursBuilder = (set: string, now: number) => Promise<Payload>;
  * (short while a watched leg is in play). */
 export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: OursBuilder) {
   const out: TickOut = { watches: 0, live: 0, settled: 0, swings: 0, tips: 0, sent: 0, errors: 0, next: 120, busy: false, catchUp: false };
-  // One tick at a time: the collector and a backup heartbeat may both call.
+  // One tick at a time: two background runs overlap while one hands over, and
+  // /api/push/tick is a fallback. The background tick holds a lease renewed once a
+  // minute (lib/gate.ts); a fallback call leaves while that lease is held.
+  if (tickProcess()) {
+    if (!(await holdLease(now).catch(() => false))) return { ...out, busy: true, next: 30 };
+    return await runTick(out, buildTip, now, buildOurs);
+  }
+  if (await getJson("tick:lease").catch(() => null)) return { ...out, busy: true, next: 60 };
   if (!(await claim("tick:running", 50).catch(() => true))) return { ...out, busy: true, next: 20 };
   try {
     return await runTick(out, buildTip, now, buildOurs);
@@ -328,6 +337,8 @@ export async function tick(buildTip: TipBuilder, now = Date.now(), buildOurs?: O
 /** A code's result is worth a push only while it is news: within 45 minutes of
  * its last kickoff (a match takes about 30). After that the app still settles
  * it when opened, but the phone isn't woken for something long over. */
+let lastPass: number | null = null; // the background tick's previous pass
+
 export const freshResult = (lastKickoff: number, now: number) => now - lastKickoff <= 45 * MIN;
 
 async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOurs?: OursBuilder) {
@@ -338,17 +349,20 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
     out.errors++;
     out.error ??= e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200);
   };
-  const prev = await getJson<number>("lastTick").catch((e) => (fail(e), null));
+  // The background tick knows when it last passed (the lease stamps lastTick every 2 minutes).
+  const prev = tickProcess() ? lastPass ?? (await getJson<number>("lastTick").catch(() => null)) : await getJson<number>("lastTick").catch((e) => (fail(e), null));
   out.catchUp = prev !== null && now - prev > 4 * MIN;
-  await setJson("lastTick", now).catch(fail);
+  if (tickProcess()) lastPass = now;
+  else await setJson("lastTick", now).catch(fail);
+  // Devices change rarely: the background tick re-reads them every 5 minutes.
   const subs = new Map<string, Sub>();
-  const subIds = await members("subs").catch((e) => (fail(e), [] as string[]));
-  for (const s of await pooled(subIds, (id) => loadSub(id).catch((e) => (fail(e), null))))
+  const subIds = await cachedMembers("subs", 300).catch((e) => (fail(e), [] as string[]));
+  for (const s of await pooled(subIds, (id) => cachedJson<Sub>(`sub:${id}`, 300).catch((e) => (fail(e), null))))
     if (s) subs.set(s.id, s);
   // Every open code on a subscribed account is watched, however it was booked.
-  // Accounts are re-read at most every two minutes: the tick runs every 20
-  // seconds while something plays, and each re-read costs store commands.
-  if (await claim("scan:accounts", 110).catch(() => true))
+  // Accounts are re-read at most every three minutes (codes booked in Vig are
+  // watched as they are booked; this catches the ones added on another device).
+  if (await gate("scan:accounts", 170, now))
     for (const { sub, code, last } of await accountCodes([...subs.values()], now).catch(() => []))
       await watchCode(code, sub.id, last).catch(() => undefined);
 
@@ -372,6 +386,8 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
   const drop = async (code: string) => {
     await del(`watch:${code}`);
     await removeFrom("watches", code);
+    forget(`watch:${code}`);
+    dropMember("watches", code);
   };
   // The result goes out once: claiming done:{code} fails if it was already sent.
   const settle = async (w: Watch, p: Payload) => {
@@ -399,7 +415,8 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
   const followCode = async (code: string) => {
     out.watches++;
     try {
-      const w = await getJson<Watch>(`watch:${code}`);
+      // The tick's own copy, re-read every 5 minutes (another device may add itself to it).
+      const w = await cachedJson<Watch>(`watch:${code}`, 300);
       if (!w || now > w.lastKickoff + 6 * 60 * MIN) {
         await drop(code);
         return;
@@ -414,7 +431,7 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
         w.lastKickoff = t.lastKickoff;
       }
       const open = w.legs.filter((l) => !(legKey(l) in (w.settled ?? {})));
-      if (!open.some((l) => l.kickoff <= now + MIN)) { await setJson(`watch:${code}`, w); return; }
+      if (!open.some((l) => l.kickoff <= now + MIN)) { await setIfChanged(`watch:${code}`, w); return; }
       out.live++;
       out.next = 20;
       const live = await liveLegs(open, now);
@@ -442,23 +459,25 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
         await tell(w, news.payload, "swings");
       }
       if (news.goal && !/^[▲▼]/.test(news.payload?.title ?? "")) await tell(w, news.goal, "goals", news.goalKey);
-      await setJson(`watch:${code}`, {
+      // The live chance moves every pass; alone it is written at most once a minute.
+      await setIfChanged(`watch:${code}`, {
         ...w, scores: news.scores, chance: news.chance ?? w.chance, decided: news.decided,
         told: news.last ? [...(w.told ?? []), "last"] : w.told,
-      });
+      }, { ignore: ["chance"], every: 60 });
     } catch (e) {
       fail(e);
     }
   };
-  await pooled(await members("watches").catch((e) => (fail(e), [] as string[])), followCode, 6);
+  await pooled(await cachedMembers("watches", 60).catch((e) => (fail(e), [] as string[])), followCode, 6);
   // Followed matches.
-  for (const id of await members("fixtures").catch((e) => (fail(e), [] as string[]))) {
+  for (const id of await cachedMembers("fixtures", 300).catch((e) => (fail(e), [] as string[]))) {
     try {
-      const f = await getJson<FollowedFixture>(`fixture:${id}`);
+      const f = await cachedJson<FollowedFixture>(`fixture:${id}`, 300);
       if (!f || now > f.kickoff + 3 * 60 * MIN) {
         for (const sid of f?.subs ?? []) await removeFrom(`follows:${sid}`, id);
         await del(`fixture:${id}`);
         await removeFrom("fixtures", id);
+        forget(`fixture:${id}`); dropMember("fixtures", id);
         continue;
       }
       if (f.kickoff > now + MIN) continue;
@@ -477,7 +496,8 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
         for (const sid of f.subs) await removeFrom(`follows:${sid}`, id);
         await del(`fixture:${id}`);
         await removeFrom("fixtures", id);
-      } else await setJson(`fixture:${id}`, { ...f, score: news.score, told: news.told });
+        forget(`fixture:${id}`); dropMember("fixtures", id);
+      } else await setIfChanged(`fixture:${id}`, { ...f, score: news.score, told: news.told });
     } catch (e) {
       fail(e);
     }
@@ -488,7 +508,7 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
       if (!buildOurs || !s.ours || !dueOurs(s, now)) continue;
       out.tips++;
       if (await send(s, await buildOurs(s.ours.set, now))) out.sent++;
-      await setJson(`sub:${s.id}`, { ...s, lastOurs: now });
+      await setIfChanged(`sub:${s.id}`, { ...s, lastOurs: now });
       s.lastOurs = now;
     } catch (e) {
       fail(e);
@@ -500,7 +520,8 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
       out.tips++;
       const query = (s.user && (await getJson<{ query?: string }>(`profile:${s.user}`))?.query) || s.query;
       if (await send(s, await buildTip(query, now))) out.sent++;
-      await setJson(`sub:${s.id}`, { ...(await loadSub(s.id)) ?? s, lastTip: now });
+      await setIfChanged(`sub:${s.id}`, { ...(await loadSub(s.id)) ?? s, lastTip: now });
+      s.lastTip = now;
     } catch (e) {
       fail(e);
     }

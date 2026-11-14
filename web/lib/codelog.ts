@@ -1,4 +1,4 @@
-import { addTo, push, storeReady, trim } from "./store";
+import { addTo, push, storeReady } from "./store";
 
 /** Entries kept in the store's code log. The collector copies the newest 1,000
  * every hour (about 150 arrive an hour), so older ones are already in the ledger. */
@@ -23,7 +23,8 @@ export async function logBooking(code: string, legs: BookedLeg[], origin: string
       home: String(l.home ?? ""), away: String(l.away ?? ""), league: String(l.league ?? ""),
     })),
   });
-  await trim("codelog", CODELOG_KEEP).catch(() => undefined);
+  // Trimmed to CODELOG_KEEP by the tick's tidy step (lib/tidy.ts) every 10 minutes,
+  // not here: a trim per booking was a store command per code for nothing.
 }
 
 /** Log a code to the record once per account, however it reached them

@@ -126,7 +126,12 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   safety net, and a non-chained run exits if a tick happened in the last 90 s). The collector chains itself the same way.
   `/api/push/tick` is the fallback. It watches every open code on subscribed accounts; a pass starts every 12 s while a leg
   plays (counted from the last start), else as `next` says (120 s idle).
-  One tick at a time (`tick:running`); after a gap > 4 min it catches up without sending, and no
+  Store commands are billed (Upstash free plan: 500k a month; the old tick used it up in 8 days): `web/lib/gate.ts` lets the tick process
+  (`TICK_PROCESS=1`) gate by its own clock, keep copies of what it read or wrote (subs/profiles 5 min, `watches` 1 min, watch objects
+  written only on change, the live chance at most once a minute, `pre:`/`prefx:` only on change), and hold a lease (`tick:lease`, renewed
+  with `lastTick` every 2 min) instead of a claim per pass; tidy runs every 10 min; a cooked slip's prices and estimates live in its
+  `slatecode:` claim (one command per new code, plus the code-log push; no per-push LTRIM). Measure with `redis-cli monitor` before adding store calls to the tick.
+  One tick at a time (`tick:lease` in the tick process, `tick:running` for `/api/push/tick`); after a gap > 4 min it catches up without sending, and no
   result is sent > 45 min after a code's last kickoff. Collector cron is every 30 min (runs chain).
 - Markets include double chance (DC1X/DC12/DCX2: market chance = sum of the two de-vigged 1X2
   outcomes) and team goals (H_/A_ over/under 0.5–3.5); Python and web settle and price them the same.

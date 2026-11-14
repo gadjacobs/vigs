@@ -1,5 +1,5 @@
 import { loadBlend } from "./blend";
-import { rememberEstimates, rememberPrematch, SLATE_CODE_SECONDS } from "./codes";
+import { SLATE_CODE_SECONDS, type SlateCode } from "./codes";
 import { logBooking } from "./codelog";
 import { MARKET_LABELS } from "./markets";
 import { loadInsights } from "./insights";
@@ -10,7 +10,8 @@ import { DEFAULT_QUERY } from "./query";
 import { buildSet } from "./ourpicks";
 import { cookSlates, type Slate } from "./slates";
 import { book, selection, upcoming } from "./sportybet";
-import { claim, getJson, setJson, storeReady } from "./store";
+import { claim, claimWith, del, getJson, setJson, storeReady } from "./store";
+import { tickProcess } from "./gate";
 
 // Cooks the named slips once per newly published round, books each one, and
 // keeps them in the store so every viewer (and the notifications) see the same
@@ -26,6 +27,19 @@ async function roundKey(now: number) {
   return Array.from(new Uint8Array(buf).slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Codes the background tick has already seen today: no store command for them at all.
+const seen = new Set<string>();
+// The first sight keeps the code's prices and estimates in the claim itself (lib/codes.ts
+// reads them from there), one store command where it took four.
+async function firstSight(code: string, legs: { eventId: string; odds: number; estimate?: number }[]): Promise<boolean> {
+  if (tickProcess() && seen.has(code)) return false;
+  if (seen.size > 5000) seen.clear();
+  seen.add(code);
+  const v: SlateCode = { o: Object.fromEntries(legs.map((p) => [p.eventId, p.odds])) };
+  if (legs.every((p) => typeof p.estimate === "number")) v.e = Object.fromEntries(legs.map((p) => [p.eventId, p.estimate as number]));
+  return claimWith(`slatecode:${code}`, v, SLATE_CODE_SECONDS);
+}
+
 async function cook(round: string, now: number, bookCodes: boolean): Promise<Cooked> {
   const [model, fixtures, blend, insights] = await Promise.all([loadModel(), upcoming(), loadBlend(), loadInsights()]);
   const q = { ...DEFAULT_QUERY, markets: Object.keys(MARKET_LABELS), hours: 4, now };
@@ -38,11 +52,11 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
         const res = await book(s.legs.map((p) => selection(p.market, p.eventId)));
         if (res.verified !== s.legs.length) continue;
         s.code = res.code;
-        await rememberPrematch(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.odds])), SLATE_CODE_SECONDS);
-        await rememberEstimates(res.code, Object.fromEntries(s.legs.map((p) => [p.eventId, p.estimate])), SLATE_CODE_SECONDS);
         // Same legs give the same code (only within a round: later rounds have other
-        // matches), so a day-long claim logs each code to the record once.
-        if (await claim(`slatecode:${res.code}`, 86400)) await logBooking(res.code, s.legs, `slate:${s.style}`, "vig");
+        // matches; the list changes about every minute and most slips stay), so a
+        // day-long claim saves and logs each code to the record once.
+        if (!(await firstSight(res.code, s.legs))) continue;
+        await logBooking(res.code, s.legs, `slate:${s.style}`, "vig");
       } catch { /* leave this slip without a code; it can still be booked from the editor */ }
     }
   }
@@ -56,8 +70,8 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
         const res = await book(legs.map((p) => selection(p.market, p.eventId)));
         if (res.verified !== legs.length) continue;
         templates.push({ set, code: res.code, legs: legs.length });
-        await rememberPrematch(res.code, Object.fromEntries(legs.map((p) => [p.eventId, p.odds])), SLATE_CODE_SECONDS);
-        if (await claim(`slatecode:${res.code}`, 86400)) await logBooking(res.code, legs, `template:${set}`, "vig");
+        if (!(await firstSight(res.code, legs))) continue;
+        await logBooking(res.code, legs, `template:${set}`, "vig");
       } catch { /* try again next round */ }
     }
   }
@@ -65,6 +79,7 @@ async function cook(round: string, now: number, bookCodes: boolean): Promise<Coo
 }
 
 /** The current cooked slips, cooking (and booking) them if the round changed. */
+let tickSeen: Cooked | null = null;
 export async function currentSlates(now = Date.now()): Promise<Cooked> {
   const round = await roundKey(now);
   if (!storeReady()) {
@@ -72,8 +87,10 @@ export async function currentSlates(now = Date.now()): Promise<Cooked> {
     memory = await cook(round, now, false);
     return memory;
   }
+  // The background tick remembers the round it last saw cooked: no read until the next round.
+  if (tickProcess() && tickSeen?.round === round) return tickSeen;
   const stored = await getJson<Cooked>("slates").catch(() => null);
-  if (stored?.round === round) return stored;
+  if (stored?.round === round) return (tickSeen = stored);
   if (!(await claim("slates:cooking", 90).catch(() => false))) {
     // Another viewer (or the tick) is cooking this round: wait for it rather
     // than show the last round's slips, whose legs may have kicked off.
@@ -87,5 +104,8 @@ export async function currentSlates(now = Date.now()): Promise<Cooked> {
   }
   const fresh = await cook(round, now, true);
   await setJson("slates", fresh).catch(() => undefined);
-  return fresh;
+  // Free the claim at once: the list changes again within a minute or so, and a
+  // claim left to expire made the next cook wait 18 s and then skip booking.
+  await del("slates:cooking").catch(() => undefined);
+  return (tickSeen = fresh);
 }

@@ -104,6 +104,11 @@ export const setJson = (key: string, v: unknown, seconds?: number) =>
 export const setJsonIfAbsent = (key: string, v: unknown) => cmd("SET", P + key, JSON.stringify(v), "NX");
 /** A short-lived claim: true if this caller got it. */
 export const claim = async (key: string, seconds: number) => (await cmd<string | null>("SET", P + key, "1", "NX", "EX", seconds)) === "OK";
+/** A claim that carries a value: true if this caller set it. */
+export const claimWith = async (key: string, v: unknown, seconds: number) =>
+  (await cmd<string | null>("SET", P + key, JSON.stringify(v), "NX", "EX", seconds)) === "OK";
+/** Set a plain string (with an expiry) and return what was there. */
+export const swap = (key: string, v: string, seconds: number) => cmd<string | null>("SET", P + key, v, "EX", seconds, "GET");
 export const del = (key: string) => cmd("DEL", P + key);
 export const push = (list: string, v: unknown) => cmd<number>("RPUSH", P + list, JSON.stringify(v));
 /** Keep only the last `keep` entries of a list. */

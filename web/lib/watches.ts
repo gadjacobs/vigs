@@ -12,7 +12,8 @@ import { send, type Payload, type Sub } from "./push";
 import { DEFAULT_QUERY, parseQuery, queryString } from "./query";
 import { slipStats, toTarget, topN, MAX_LEGS } from "./slip";
 import { upcoming } from "./sportybet";
-import { claim, getJson, members, setJson } from "./store";
+import { getJson, setJson } from "./store";
+import { cachedJson, cachedMembers, gate } from "./gate";
 import { impossible } from "./watch-rules";
 
 export { impossible };
@@ -114,17 +115,18 @@ async function evaluate(w: SlipWatch, p: Profile, ctx: Ctx, now: number): Promis
 /** One pass over every account with slip alerts and a device to send to. */
 export async function runWatches(now = Date.now()): Promise<{ checked: number; sent: number; errors: number; error?: string }> {
   const out: { checked: number; sent: number; errors: number; error?: string } = { checked: 0, sent: 0, errors: 0 };
-  const ids = await members("subs").catch(() => [] as string[]);
+  // The background tick re-reads devices and profiles every 5 minutes (lib/gate.ts).
+  const ids = await cachedMembers("subs", 300).catch(() => [] as string[]);
   const byUser = new Map<string, Sub[]>();
   for (const id of ids) {
-    const s = await getJson<Sub>(`sub:${id}`).catch(() => null);
+    const s = await cachedJson<Sub>(`sub:${id}`, 300).catch(() => null);
     if (s?.user) byUser.set(s.user, [...(byUser.get(s.user) ?? []), s]);
   }
   let ctx: Ctx | null = null;
   for (const [user, subs] of byUser) {
-    const p = await getJson<Profile>(`profile:${user}`).catch(() => null);
+    const p = await cachedJson<Profile>(`profile:${user}`, 300).catch(() => null);
     if (!p?.watches?.length) continue;
-    if (!(await claim(`scan:watch:${user}`, SCAN_SECONDS).catch(() => false))) continue;
+    if (!(await gate(`scan:watch:${user}`, SCAN_SECONDS, now))) continue;
     ctx ??= await context(now);
     for (const w of p.watches) {
       if (impossible(w)) continue;

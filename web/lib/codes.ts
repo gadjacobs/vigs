@@ -101,11 +101,19 @@ export const SLATE_CODE_SECONDS = 36 * 3600;
  * three days: a code's deadline is its last kickoff plus 24 hours. */
 export const LIVE_KEEP_SECONDS = 3 * 86400;
 
+/** A cooked slip's code as the kitchen first saw it: its legs' prematch odds and Vig's estimates. */
+export type SlateCode = { o: Record<string, number>; e?: Record<string, number> };
+const slateCode = async (code: string) => {
+  const v = await getJson<SlateCode | number>(`slatecode:${code}`).catch(() => null);
+  return v && typeof v === "object" ? v : null;
+};
+
 export async function trackWithPrematch(code: string, now = Date.now()): Promise<Tracked> {
   const key = `codeodds:${code}`;
   const liveKey = `codelive:${code}`;
   const ready = storeReady();
-  const pre = (ready ? await getJson<Record<string, number>>(key).catch(() => null) : null) ?? {};
+  // A cooked slip's prices live with its claim (lib/kitchen.ts) until someone tracks it.
+  const pre = (ready ? (await getJson<Record<string, number>>(key).catch(() => null)) ?? (await slateCode(code))?.o : null) ?? {};
   const seen = (ready ? await getJson<Record<string, number>>(liveKey).catch(() => null) : null) ?? {};
   const t = await trackCode(code, now, pre, seen);
   const fresh = t.legs.filter((l) => !(l.eventId in pre) && l.kickoff > now && l.shareOdds > 1);
@@ -151,7 +159,7 @@ export async function rememberEstimates(code: string, est: Record<string, number
   await setJson(`codeest:${code}`, { ...est, ...pre }, seconds);
 }
 export const loadEstimates = async (code: string) =>
-  (storeReady() ? await getJson<Record<string, number>>(`codeest:${code}`).catch(() => null) : null) ?? {};
+  (storeReady() ? (await getJson<Record<string, number>>(`codeest:${code}`).catch(() => null)) ?? (await slateCode(code))?.e : null) ?? {};
 
 export async function rememberPrematch(code: string, odds: Record<string, number>, seconds = CODE_KEEP_SECONDS) {
   if (!storeReady()) return;
