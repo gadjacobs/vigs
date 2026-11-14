@@ -44,7 +44,7 @@ export function Nav() {
   return (
     <nav aria-label="Main" className="mainnav">
       {LINKS.map((l) => (
-        <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}>
+        <Link key={l.href} href={l.href} aria-current={path === l.href || (l.href === "/picks" && path.startsWith("/rollover")) ? "page" : undefined}>
           <span className="navicon">
             {l.icon}
             {l.href === "/codes" && open > 0 && <b className="navbadge" aria-label={`${open} open`}>{open > 99 ? "99+" : open}</b>}

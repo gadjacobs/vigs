@@ -74,6 +74,12 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   under a 10% chance (4 landed), while 22 at 50%+ landed 14. So defaults are short (Most likely / Most confident 3 legs, Bonus slip 5),
   cooked slips are listed likeliest first in groups (Likely to land / Could go either way / Long shots), and a slip under 35% offers
   "Keep the k likeliest" (the legs that still land about half the time).
+- Rollover (`/rollover`, third tab of Our picks; `lib/rollover.ts` pure + tests, `app/rollover-actions.ts` `nextStep`,
+  `app/rollover/rollover-panel.tsx`, profile `rollovers` via `syncRollovers`): start stake, aim ×10/×100/×1,000, price band
+  (Safer 1.08-1.25 / Balanced 1.20-1.40 / Bolder 1.30-1.60), 1-3 legs a step. Each step = the likeliest selections in the band in the
+  soonest round ≥ 2 min away (swap a leg, skip a round); the whole pot rides; booked as origin "rollover" and added to Codes (so the
+  tick notifies); settled from the share endpoint (won rolls stake × odds into the pot, lost ends it, "Didn't place it?" voids).
+  Bank and stop between steps; Go again. The setup and hero show steps, time and the honest chance (`plan`: payback^steps / target).
 - Our picks (`web/lib/ourpicks.ts`, `/picks`): templates top/trusted (Most likely / Most confident, leaning on
   `insights.json` `lean`, per-market landed vs priced by chance level), sets safe/odds/bold/draws; `vigs ourpicks`
   logs the safe set hourly. Booked codes go to the store's `codelog` with the server's

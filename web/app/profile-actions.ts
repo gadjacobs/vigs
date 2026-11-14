@@ -1,5 +1,6 @@
 "use server";
 import { mergeMoney, type MoneyEntry } from "@/lib/money";
+import { mergeRollovers, type Rollover } from "@/lib/rollover";
 import { currentUser, loadProfile, mergeCodes, updateProfile, type Prefs, type SavedCode, type SavedFilter } from "@/lib/profile";
 import { impossible, type SlipWatch } from "@/lib/watches";
 import { storeReady } from "@/lib/store";
@@ -134,4 +135,12 @@ export async function saveLimit(limit: number) {
   const clean = Number.isFinite(limit) ? Math.min(10_000_000, Math.max(0, Math.round(limit))) : 0;
   await updateProfile(user, (p) => ({ ...p, prefs: { ...p.prefs, limit: clean } }));
   return true;
+}
+
+/** Rollover runs on every device: this device's merged with the account's. */
+export async function syncRollovers(local: Rollover[]): Promise<Rollover[] | null> {
+  const user = await me();
+  if (!user) return null;
+  const p = await updateProfile(user, (p) => ({ ...p, rollovers: mergeRollovers(p.rollovers ?? [], Array.isArray(local) ? local.slice(0, 20) : []) }));
+  return p.rollovers ?? [];
 }

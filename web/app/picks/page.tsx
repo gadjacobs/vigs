@@ -122,6 +122,7 @@ export default async function OurPicks({ searchParams }: { searchParams: Promise
           Cooked slips {cooked?.slates.length ? <span className="count">{cooked.slates.length}</span> : null}<TabPending />
         </Link>
         <Link href={`/picks?tab=build&set=${set}`} aria-current={tab === "build" ? "page" : undefined}>Build your own<TabPending /></Link>
+        <Link href="/rollover">Rollover<TabPending /></Link>
       </nav>
       {tab === "cooked" && (<>
       {cooked && cooked.slates.length > 0 ? (

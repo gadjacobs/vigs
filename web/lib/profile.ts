@@ -16,6 +16,7 @@ export type Profile = {
   prefs?: Prefs;
   watches?: import("./watches").SlipWatch[]; // slip alerts on saved filters and templates
   money?: import("./money").MoneyEntry[];   // stakes and returns you entered (My money)
+  rollovers?: import("./rollover").Rollover[]; // rollover runs (Our picks → Rollover)
   updated: number;
 };
 
