@@ -80,6 +80,9 @@ Avoid) are in README.md and `vigs/grading.py`; keep code and copy consistent wit
   soonest round ≥ 2 min away (swap a leg, skip a round); the whole pot rides; booked as origin "rollover" and added to Codes (so the
   tick notifies); settled from the share endpoint (won rolls stake × odds into the pot, lost ends it, "Didn't place it?" voids).
   Bank and stop between steps; Go again. The setup and hero show steps, time and the honest chance (`plan`: payback^steps / target).
+  Auto-bank (`keep` 0/25/50%): passing a ×10 milestone sets that share of the pot aside once (`kept`, `keptAt`, `Step.aside`), kept if a
+  later step loses; `total` = pot + kept. Booked steps are stored as `rostep:{code}` (`markStep`, 2 days) so the tick's result notification
+  says "Rollover step N landed / ended" and opens /rollover. Share card: `/api/rollover/card?d=` (base64url JSON, drawn ₦ sign).
 - Our picks (`web/lib/ourpicks.ts`, `/picks`): templates top/trusted (Most likely / Most confident, leaning on
   `insights.json` `lean`, per-market landed vs priced by chance level), sets safe/odds/bold/draws; `vigs ourpicks`
   logs the safe set hourly. Booked codes go to the store's `codelog` with the server's

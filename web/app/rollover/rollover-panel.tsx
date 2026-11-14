@@ -7,13 +7,13 @@ import { CopyButton } from "../copy-button";
 import { OpenInSportyBet } from "../open-sporty";
 import { lagos } from "../pick-row";
 import { syncRollovers } from "../profile-actions";
-import { nextStep, type StepOffer } from "../rollover-actions";
+import { markStep, nextStep, type StepOffer } from "../rollover-actions";
 import { Teams } from "../teams";
 import type { LiveLeg } from "@/lib/live";
 import { naira } from "@/lib/money";
 import { chance as pctText, oneIn } from "@/lib/plain";
 import {
-  addStep, again, bank, BANDS, milestones, newRollover, openStep, PER_STEP, plan, progress, settleStep, stepChance, stepOdds,
+  addStep, again, bank, BANDS, KEEPS, milestones, newRollover, openStep, PER_STEP, plan, progress, settleStep, stepChance, stepOdds, total,
   type RLeg, type Rollover,
 } from "@/lib/rollover";
 
@@ -69,6 +69,7 @@ function Setup({ defaultStake, from, onStart, onCancel }: { defaultStake: number
   const [goal, setGoal] = useState(from ? Math.round(from.target / from.start) : 1000);
   const [band, setBand] = useState(BANDS.find((b) => b.lo === from?.lo && b.hi === from?.hi)?.id ?? "balanced");
   const [perStep, setPerStep] = useState(from?.perStep ?? 1);
+  const [keep, setKeep] = useState<number>(from?.keep ?? 0.25);
   const b = BANDS.find((x) => x.id === band)!;
   const p = plan(start, start * goal, b.lo, b.hi, perStep);
   return (
@@ -101,6 +102,12 @@ function Setup({ defaultStake, from, onStart, onCancel }: { defaultStake: number
           {PER_STEP.map((k) => <button key={k} type="button" role="radio" aria-checked={perStep === k} onClick={() => setPerStep(k)}>{k === 1 ? "Single" : `${k} legs`}</button>)}
         </div>
       </div>
+      <div className="ro-field"><span>At each ×10, set aside</span>
+        <div className="seg2" role="radiogroup" aria-label="Set aside at each ×10">
+          {KEEPS.map((k) => <button key={k} type="button" role="radio" aria-checked={keep === k} onClick={() => setKeep(k)}>{k ? `${k * 100}%` : "Nothing"}</button>)}
+        </div>
+        <small className="ro-help">{keep ? `When the pot passes ${milestones(start, start * goal).map(short).join(", ") || "each ×10"}, ${keep * 100}% of it comes out and stays yours, even if a later step loses.` : "The whole pot rides every step until you bank it."}</small>
+      </div>
       <div className="ro-plan" aria-live="polite">
         <div><b className="num">{p.steps}</b><small>steps</small></div>
         <div><b className="num">~{hours(p.hours)}</b><small>of rounds</small></div>
@@ -109,7 +116,7 @@ function Setup({ defaultStake, from, onStart, onCancel }: { defaultStake: number
           {" "}Each step gives SportyBet its cut, so a run is most likely to end on a lost step. Bank the pot whenever it&apos;s a sum you&apos;d be glad to keep.</p>
       </div>
       <div className="sheet-actions">
-        <button type="button" className="button primary" onClick={() => onStart(newRollover({ start, target: start * goal, lo: b.lo, hi: b.hi, perStep }))}>Start · {short(start)} → {short(start * goal)}</button>
+        <button type="button" className="button primary" onClick={() => onStart(newRollover({ start, target: start * goal, lo: b.lo, hi: b.hi, perStep, keep }))}>Start · {short(start)} → {short(start * goal)}</button>
         {onCancel && <button type="button" className="linkish" onClick={onCancel}>Cancel</button>}
       </div>
     </section>
@@ -119,7 +126,7 @@ function Setup({ defaultStake, from, onStart, onCancel }: { defaultStake: number
 /** A run in progress: the climb, the step to book (or the one playing), and the ladder so far. */
 function Run({ r, save, onNew }: { r: Rollover; save: (r: Rollover) => void; onNew: () => void }) {
   const open = openStep(r);
-  const p = plan(r.pot, r.target, r.lo, r.hi, r.perStep);
+  const p = plan(r.pot, r.target - (r.kept ?? 0), r.lo, r.hi, r.perStep);
   const ms = milestones(r.start, r.target);
   const done = r.steps.filter((s) => s.state === "won").length;
   const status = open ? `Step ${open.n} ${open.legs.some((l) => l.kickoff <= Date.now()) ? "playing" : "booked"}`
@@ -131,13 +138,15 @@ function Run({ r, save, onNew }: { r: Rollover; save: (r: Rollover) => void; onN
           <small>Pot now</small>
           <b className="num">{naira(r.pot)}</b>
           <span>{status} · started {short(r.start)} · aim {short(r.target)}</span>
+          {(r.kept ?? 0) > 0 && <span className="ro-kept">+ {naira(r.kept ?? 0)} set aside, yours whatever happens</span>}
         </div>
+        <ShareRun r={r} />
         <Climb r={r} ms={ms} />
         <p className="ro-odds">From here: about {p.steps} more step{p.steps === 1 ? "" : "s"}, ~{hours(p.hours)}, reaching {short(r.target)} <strong>{oneIn(p.chance)}</strong>.</p>
       </div>
       {open ? <OpenStep r={r} s={open} save={save} /> : <Offer r={r} save={save} />}
       <div className="ro-tools">
-        {!open && r.steps.length > 0 && <button type="button" className="button" onClick={() => save(bank(r))}>Bank {short(r.pot)} and stop</button>}
+        {!open && r.steps.length > 0 && <button type="button" className="button" onClick={() => save(bank(r))}>Bank {short(total(r))} and stop</button>}
         <button type="button" className="linkish" onClick={onNew}>New rollover</button>
       </div>
       {r.steps.length > 0 && <Ladder r={r} />}
@@ -147,7 +156,7 @@ function Run({ r, save, onNew }: { r: Rollover; save: (r: Rollover) => void; onN
 
 /** The pot's climb on a log scale, with ×10 milestones and the target flag. */
 function Climb({ r, ms }: { r: Rollover; ms: number[] }) {
-  const at = progress(r.start, r.pot, r.target), best = progress(r.start, r.best, r.target);
+  const at = progress(r.start, total(r), r.target), best = progress(r.start, r.best, r.target);
   return (
     <div className="ro-climb" role="img" aria-label={`${Math.round(at * 100)}% of the way to ${naira(r.target)}`}>
       <span className="ro-track"><i className="ro-best" style={{ width: `${best * 100}%` }} /><i className="ro-fill" style={{ width: `${at * 100}%` }} /></span>
@@ -193,11 +202,14 @@ function Offer({ r, save }: { r: Rollover; save: (r: Rollover) => void }) {
     const res = await bookSlip(legs.map((l) => ({ eventId: l.eventId, market: l.market, kickoff: l.kickoff, odds: l.odds, marketChance: l.chance, home: l.home, away: l.away, league: l.league })), "rollover");
     if (!res.ok) { setErr(res.error); return; }
     rememberCode({ code: res.code, at: Date.now(), legs: legs.length, odds, last: res.lastKickoff });
+    markStep(res.code, { n: r.steps.length + 1, stake: r.pot, odds, kept: r.kept ?? 0, target: r.target }).catch(() => undefined);
     save(addStep(r, { code: res.code, legs }));
   });
   const mins = Math.max(0, Math.round((offer.kickoff - now) / 60000));
+  const prev = r.steps.at(-1);
   return (
     <div className="ro-step">
+      {prev?.aside ? <p className="ro-aside">Step {prev.n} passed a milestone: <b className="num">{naira(prev.aside)}</b> is set aside. Withdraw it, or just keep it out of this stake.</p> : null}
       <div className="ro-step-head">
         <h3>Step {r.steps.length + 1}</h3>
         <span className="ro-when">Kicks off <b className="num">{lagos(offer.kickoff)}</b> · in {mins} min</span>
@@ -311,7 +323,8 @@ function Ladder({ r }: { r: Rollover }) {
             <span className="ro-rung-head"><b>Step {s.n}</b><span className="num">{s.odds.toFixed(2)}</span></span>
             <small>{s.legs.map((l) => `${l.home} v ${l.away}, ${l.label.toLowerCase()}`).join(" · ")}</small>
           </span>
-          <span className="ro-rung-pot num">{s.state === "won" ? naira(s.back ?? 0) : s.state === "lost" ? "₦0" : s.state === "void" ? "not placed" : "playing"}</span>
+          <span className="ro-rung-pot num">{s.state === "won" ? naira(s.back ?? 0) : s.state === "lost" ? "₦0" : s.state === "void" ? "not placed" : "playing"}
+            {s.aside ? <small className="ro-rung-aside">{naira(s.aside)} set aside</small> : null}</span>
         </li>
       ))}
     </ol>
@@ -321,14 +334,17 @@ function Ladder({ r }: { r: Rollover }) {
 /** A finished run: how far it went, and one tap to go again. */
 function Ended({ r, save, onNew }: { r: Rollover; save: (r: Rollover) => void; onNew: () => void }) {
   const landed = r.steps.filter((s) => s.state === "won").length;
-  const head = r.status === "reached" ? `Reached ${short(r.target)}` : r.status === "banked" ? `Banked ${naira(r.pot)}` : `Ended at step ${r.steps.length}`;
+  const kept = r.kept ?? 0;
+  const head = r.status === "reached" ? `Reached ${short(r.target)}` : r.status === "banked" ? `Banked ${naira(total(r))}` : kept ? `Kept ${naira(kept)}` : `Ended at step ${r.steps.length}`;
   return (
     <section className={`ro-ended is-${r.status}`} aria-label="Last rollover">
       <small>Last rollover</small>
       <h2>{head}</h2>
       <p>{landed} step{landed === 1 ? "" : "s"} landed from {short(r.start)}{r.best > r.start ? `; the pot peaked at ${naira(r.best)}` : ""}.
-        {r.status === "lost" && r.best > r.start ? " Banking at a milestone keeps a run like this." : ""}</p>
-      <Climb r={{ ...r, pot: r.status === "lost" ? r.start : r.pot }} ms={milestones(r.start, r.target)} />
+        {r.status === "lost" && kept ? ` Step ${r.steps.length} lost; the ${naira(kept)} set aside at the milestones is yours.` : ""}
+        {r.status === "lost" && !kept && r.best > r.start ? " Setting a share aside at each ×10 keeps part of a run like this." : ""}</p>
+      <ShareRun r={r} />
+      <Climb r={{ ...r, pot: r.status === "lost" ? 0 : r.pot }} ms={milestones(r.start, r.target)} />
       <div className="sheet-actions">
         <button type="button" className="button primary" onClick={() => save(again(r))}>Go again · {short(r.start)} → {short(r.target)}</button>
         <button type="button" className="linkish" onClick={onNew}>Change settings</button>
@@ -352,5 +368,43 @@ function Past({ list }: { list: Rollover[] }) {
         ))}
       </ul>
     </details>
+  );
+}
+
+/** Share the climb as an image (or save it where sharing files isn't offered). */
+function ShareRun({ r }: { r: Rollover }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const share = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const d = { s: r.status, a: r.start, p: r.pot, t: r.target, b: r.best, k: r.kept ?? 0,
+        st: r.steps.filter((x) => x.state !== "void").map((x) => [Math.round(x.odds * 100) / 100, x.state === "won" ? "w" : x.state === "lost" ? "l" : "o"]) };
+      const q = btoa(unescape(encodeURIComponent(JSON.stringify(d)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      const res = await fetch(`/api/rollover/card?d=${q}`);
+      if (!res.ok) throw new Error();
+      const file = new File([await res.blob()], "vig-rollover.png", { type: "image/png" });
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] });
+      else {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(file);
+        a.download = file.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        setMsg("Saved the image.");
+      }
+    } catch (e) {
+      if ((e as Error)?.name !== "AbortError") setMsg("Couldn't make the image. Try again.");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="ro-share">
+      <button type="button" className="ro-sharebtn" onClick={share} disabled={busy} aria-label="Share this rollover as an image">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" /></svg>
+        {busy ? "Making…" : "Share"}
+      </button>
+      {msg && <small role="status">{msg}</small>}
+    </div>
   );
 }

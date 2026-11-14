@@ -17,6 +17,8 @@ export const BANDS: Band[] = [
   { id: "bolder", label: "Bolder", lo: 1.3, hi: 1.6, hint: "About 6-7 in 10, fewer steps" },
 ];
 export const PER_STEP = [1, 2, 3] as const;
+// Auto-bank: the share of the pot set aside each time it passes a ×10 milestone.
+export const KEEPS = [0, 0.25, 0.5] as const;
 export const STEP_MINUTES = 40; // a step: wait for the round (a few minutes) + the match and its result (~33 min)
 
 export type RLeg = {
@@ -27,13 +29,20 @@ export type StepState = "open" | "won" | "lost" | "void";
 export type Step = {
   n: number; code: string; legs: RLeg[]; odds: number; chance: number; stake: number;
   booked: number; state: StepState; back?: number; settled?: number;
+  aside?: number; // set aside from this step's return (auto-bank), not staked again
 };
 export type RolloverStatus = "running" | "reached" | "lost" | "banked";
 export type Rollover = {
   id: string; start: number; target: number; lo: number; hi: number; perStep: number;
   created: number; updated: number; status: RolloverStatus; pot: number; best: number;
   steps: Step[]; skipped: number; ended?: number;
+  keep?: number;     // share of the pot set aside at each ×10 milestone (0 = off)
+  kept?: number;     // ₦ set aside so far: yours whatever happens next
+  keptAt?: number[]; // milestones already set aside at
 };
+
+/** Everything the run is worth now: the pot plus what was set aside. */
+export const total = (r: Pick<Rollover, "pot" | "kept">) => r.pot + (r.kept ?? 0);
 
 /** What a step pays per ₦1 when every leg lands (SportyBet's multi-bet bonus included on 2+ legs). */
 export const stepOdds = (legOdds: number[]) => slipReturn(legOdds);
@@ -65,8 +74,10 @@ export function milestones(start: number, target: number): number[] {
 export const progress = (start: number, pot: number, target: number) =>
   pot <= start ? 0 : pot >= target ? 1 : Math.log(pot / start) / Math.log(target / start);
 
-export function newRollover(o: { start: number; target: number; lo: number; hi: number; perStep: number }, now = Date.now()): Rollover {
+export function newRollover(o: { start: number; target: number; lo: number; hi: number; perStep: number; keep?: number }, now = Date.now()): Rollover {
+  const keep = KEEPS.find((k) => k === o.keep) ?? 0;
   return {
+    keep, kept: 0, keptAt: [],
     id: `r${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, start: Math.round(o.start), target: Math.round(o.target),
     lo: o.lo, hi: o.hi, perStep: o.perStep, created: now, updated: now, status: "running", pot: Math.round(o.start),
     best: Math.round(o.start), steps: [], skipped: 0,
@@ -92,10 +103,20 @@ export function settleStep(r: Rollover, state: Exclude<StepState, "open">, now =
   const s = openStep(r);
   if (!s) return r;
   const back = state === "won" ? Math.round(s.stake * s.odds) : state === "void" ? s.stake : 0;
-  const steps = r.steps.map((x) => (x === s ? { ...x, state, back, settled: now } : x));
-  const pot = state === "lost" ? 0 : back;
-  const status: RolloverStatus = state === "lost" ? "lost" : pot >= r.target ? "reached" : "running";
-  return { ...r, steps, pot, best: Math.max(r.best, pot), status, updated: now, ...(status !== "running" ? { ended: now } : {}) };
+  let pot = state === "lost" ? 0 : back;
+  // Auto-bank: passing a ×10 milestone sets a share of the pot aside, once per milestone.
+  let kept = r.kept ?? 0, aside = 0;
+  const keptAt = [...(r.keptAt ?? [])];
+  const crossed = state === "won" ? milestones(r.start, r.target).filter((m) => back >= m && !keptAt.includes(m)) : [];
+  if (crossed.length && r.keep && back + kept < r.target) {
+    aside = Math.round(back * r.keep);
+    pot -= aside;
+    kept += aside;
+  }
+  keptAt.push(...crossed);
+  const steps = r.steps.map((x) => (x === s ? { ...x, state, back, settled: now, ...(aside ? { aside } : {}) } : x));
+  const status: RolloverStatus = state === "lost" ? "lost" : pot + kept >= r.target ? "reached" : "running";
+  return { ...r, steps, pot, kept, keptAt, best: Math.max(r.best, pot + kept), status, updated: now, ...(status !== "running" ? { ended: now } : {}) };
 }
 
 /** Take the pot and stop (between steps only). */
@@ -105,7 +126,7 @@ export function bank(r: Rollover, now = Date.now()): Rollover {
 }
 
 /** A fresh run with the same settings. */
-export const again = (r: Rollover, now = Date.now()) => newRollover(r, now);
+export const again = (r: Rollover, now = Date.now()) => newRollover({ ...r, keep: r.keep ?? 0 }, now);
 
 /** Union of two lists by id, the latest change winning; newest first, at most 20. */
 export function mergeRollovers(a: Rollover[], b: Rollover[]): Rollover[] {

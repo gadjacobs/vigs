@@ -379,10 +379,20 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
     if (await claim(`done:${w.code}`, DONE_SECONDS)) await tell(w, p, "results");
     await drop(w.code);
   };
-  const final = (w: Watch, t: Tracked) =>
-    settle(w, t.state === "won"
+  const final = async (w: Watch, t: Tracked) => {
+    // A rollover step says so, and opens the Rollover screen where the next step waits.
+    const ro = await getJson<{ n: number; stake: number; odds: number; kept: number; target: number }>(`rostep:${w.code}`).catch(() => null);
+    if (ro) {
+      const pot = Math.round(ro.stake * ro.odds);
+      const ng = (x: number) => `₦${x.toLocaleString("en-NG")}`;
+      return settle(w, t.state === "won"
+        ? { title: `🎉 Rollover step ${ro.n} landed`, body: pot + ro.kept >= ro.target ? `The pot is ${ng(pot)}: target reached.` : `The pot is now ${ng(pot)}. Your next step is ready in Vig.`, url: "/rollover", tag: `code-${w.code}`, cheer: true, kind: "landed", code: w.code }
+        : { title: `✗ Rollover ended at step ${ro.n}`, body: `${summary(t)}${ro.kept ? ` ${ng(ro.kept)} set aside along the way is still yours.` : ""}`, url: "/rollover", tag: `code-${w.code}`, kind: "lost", code: w.code });
+    }
+    return settle(w, t.state === "won"
       ? { title: `🎉 ${w.code} landed!`, body: summary(t), url: "/codes", tag: `code-${w.code}`, cheer: true, kind: "landed", code: w.code }
       : { title: `✗ ${w.code} lost`, body: summary(t), url: "/codes", tag: `code-${w.code}`, kind: "lost", code: w.code });
+  };
 
   // Codes are followed side by side (six at a time), so one slow read of
   // SportyBet doesn't hold up the news on every other code.
@@ -420,7 +430,11 @@ async function runTick(out: TickOut, buildTip: TipBuilder, now: number, buildOur
       if (beaten && news.chance === 0) {
         const l = open.find((x) => live[legKey(x)]?.chance === 0)!;
         const x = live[legKey(l)];
-        await settle(w, { title: `✗ ${code} lost`, body: `${l.home} v ${l.away}: ${l.label.toLowerCase()} is beaten at ${x.score}${x.minute !== null ? ` (${x.minute}')` : ""}.`, url: "/codes", tag: `code-${code}`, kind: "lost", code });
+        const ro = await getJson<{ n: number; kept: number }>(`rostep:${code}`).catch(() => null);
+        const why = `${l.home} v ${l.away}: ${l.label.toLowerCase()} is beaten at ${x.score}${x.minute !== null ? ` (${x.minute}')` : ""}.`;
+        await settle(w, ro
+          ? { title: `✗ Rollover ended at step ${ro.n}`, body: `${why}${ro.kept ? ` ₦${ro.kept.toLocaleString("en-NG")} set aside along the way is still yours.` : ""}`, url: "/rollover", tag: `code-${code}`, kind: "lost", code }
+          : { title: `✗ ${code} lost`, body: why, url: "/codes", tag: `code-${code}`, kind: "lost", code });
         return;
       }
       if (news.payload) {

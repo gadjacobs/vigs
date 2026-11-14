@@ -45,3 +45,16 @@ export async function nextStep(o: { lo: number; hi: number; perStep: number; ski
     return { error: "SportyBet or the model file did not answer. Try again in a minute." };
   }
 }
+
+export type RolloverMark = { n: number; stake: number; odds: number; kept: number; target: number };
+
+/** Remember a booked step for two days, so the result notification can speak
+ * of the rollover ("Step 6 landed, next step ready") and open its screen. */
+export async function markStep(code: string, m: RolloverMark): Promise<void> {
+  if (!/^[A-Z0-9]{4,12}$/.test(code)) return;
+  const { setJson, storeReady } = await import("@/lib/store");
+  if (!storeReady()) return;
+  const n = (x: unknown) => Math.max(0, Math.round(Number(x) || 0));
+  await setJson(`rostep:${code}`, { n: n(m.n), stake: n(m.stake), odds: Math.max(1, Number(m.odds) || 1), kept: n(m.kept), target: n(m.target) }, 2 * 86400)
+    .catch(() => undefined);
+}

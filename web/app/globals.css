@@ -1794,3 +1794,15 @@ body { min-height: 100dvh; }
 .ro-code > b { grid-column: 1 / -1; }
 .ro-rung-head { display: flex; align-items: baseline; gap: 8px; }
 .ro-rung-head .num { font-family: var(--font-num); font-weight: 800; font-size: 18px; color: var(--ink-muted); }
+.ro-help { font-size: 12px; line-height: 17px; color: var(--ink-muted); }
+.ro-kept { display: inline-flex; margin-top: 6px; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; color: #0c2a20; background: #8fb8f0; width: fit-content; }
+.ro-aside { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--r); font-size: 14px; line-height: 20px; background: var(--fair-wash); }
+.ro-hero .ro-share { position: absolute; top: 14px; right: 14px; }
+.ro-share { display: grid; justify-items: end; gap: 4px; }
+.ro-ended .ro-share { justify-items: start; margin: 12px 0 0; }
+.ro-sharebtn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 14px; border-radius: 999px; font-size: 14px;
+  background: rgba(255, 255, 255, 0.12); color: inherit; border: 1px solid rgba(255, 255, 255, 0.25); }
+.ro-ended .ro-sharebtn { background: var(--paper-sunk); border-color: var(--rule); }
+.ro-share small { font-size: 12px; opacity: .8; }
+.ro-rung-pot { display: grid; justify-items: end; }
+.ro-rung-aside { font-size: 11px; font-weight: 700; color: var(--fair); }

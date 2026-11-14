@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addStep, again, bank, mergeRollovers, milestones, newRollover, openStep, plan, progress, settleStep, type RLeg } from "../lib/rollover";
+import { addStep, again, bank, total, mergeRollovers, milestones, newRollover, openStep, plan, progress, settleStep, type RLeg } from "../lib/rollover";
 
 const leg = (odds: number, chance: number): RLeg => ({ eventId: "sr:match:1", market: "U35", label: "Under 3.5", home: "A", away: "B", league: "England", kickoff: 1, odds, chance });
 
@@ -43,5 +43,16 @@ describe("rollover", () => {
     const b = { ...a, pot: 1300, updated: a.updated + 5 };
     expect(mergeRollovers([a], [b])[0].pot).toBe(1300);
     expect(mergeRollovers([{ ...a, id: "bad" }], [])).toEqual([]);
+  });
+  it("sets a share aside at each x10 milestone, kept even when the run is lost", () => {
+    let r = newRollover({ start: 1000, target: 1_000_000, lo: 1.2, hi: 1.4, perStep: 1, keep: 0.5 });
+    r = settleStep(addStep(r, { code: "AAAA11", legs: [leg(12, 0.08)] }), "won"); // 12,000: past x10
+    expect([r.pot, r.kept, r.steps[0].aside]).toEqual([6000, 6000, 6000]);
+    r = settleStep(addStep(r, { code: "BBBB22", legs: [leg(1.5, 0.6)] }), "won"); // 9,000: no new milestone
+    expect([r.pot, r.kept]).toEqual([9000, 6000]);
+    expect(total(r)).toBe(15000);
+    r = settleStep(addStep(r, { code: "CCCC33", legs: [leg(1.5, 0.6)] }), "lost");
+    expect([r.status, r.pot, r.kept, r.best]).toEqual(["lost", 0, 6000, 15000]);
+    expect(newRollover({ start: 1, target: 9, lo: 1.2, hi: 1.4, perStep: 1, keep: 0.33 }).keep).toBe(0); // only the offered shares
   });
 });
